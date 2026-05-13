@@ -29,6 +29,13 @@ These checks can be performed automatically by reading files and scanning code:
 - [ ] **`LICENSE`** file exists in project root
 - [ ] **`README.md`** exists in project root
 
+### Installation Directory
+
+- [ ] **Plugin installation path**: `<vault>/.obsidian/plugins/<plugin-name>/`
+  - Obsidian requires plugins to be in the `.obsidian/plugins` directory
+  - The `main.js`, `manifest.json`, and `styles.css` must be directly in this directory
+  - Verify the plugin can be enabled in Obsidian's plugin settings after installation
+
 ### Manifest Validation
 
 - [ ] **Required fields present**: `name`, `version`, `minAppVersion`, `description`, `author`

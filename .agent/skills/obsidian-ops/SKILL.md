@@ -21,6 +21,7 @@ This skill covers:
 
 ## Core Rules
 
+- **CRITICAL**: Plugins must be installed in `<vault>/.obsidian/plugins/<plugin-name>/`
 - **NEVER perform automatic git operations**: AI agents must never execute `git commit`, `git push`, or any command that automatically stages or commits changes without explicit user approval for each step.
 - **Verify Build**: Always run a build/lint after significant changes to ensure compatibility.
 - **Sync Status**: Keep `sync-status.json` updated when updating reference materials.

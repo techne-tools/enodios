@@ -17,6 +17,8 @@
     "moduleResolution": "NodeNext",
     "noEmit": true,
     "skipLibCheck": true,
+    "strictNullChecks": false,
+    "exactOptionalPropertyTypes": false,
     "target": "ES2024",
     "types": [
       "node",

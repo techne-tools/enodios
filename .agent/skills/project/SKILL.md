@@ -39,6 +39,18 @@ Example:
 - **Naming**: [e.g., class names use PascalCase, private methods prefixed with _]
 - **Patterns**: [e.g., use of custom stores, specific state management]
 
+## Plugin Installation
+
+**CRITICAL**: Plugins must be installed in `<vault>/.obsidian/plugins/<plugin-name>/`:
+```
+<Vault>/.obsidian/plugins/<plugin-name>/
+  ├── main.js          # Compiled JavaScript
+  ├── manifest.json    # Plugin manifest
+  └── styles.css       # Compiled CSS
+```
+
+The `.obsidian/plugins` directory is required - Obsidian will not detect plugins in other locations.
+
 ## Key Files
 
 - `manifest.json`: Plugin/theme manifest

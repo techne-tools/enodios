@@ -21,6 +21,7 @@ This skill covers:
 
 ## Core Rules
 
+- **CRITICAL**: Plugins must be installed in `<vault>/.obsidian/plugins/<plugin-name>/`
 - Follow established patterns for your project type (plugin/theme)
 - Use appropriate tools and conventions
 - Test thoroughly across different environments

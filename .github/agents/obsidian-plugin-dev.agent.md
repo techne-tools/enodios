@@ -51,6 +51,49 @@ This agent excels at:
 - **Events**: DOM and Obsidian events via `registerEvent()` and `registerDomEvent()`
 - **Intervals**: Registered intervals via `registerInterval()` for cleanup on unload
 
+### Hermes Agent Documentation
+
+- **Main Documentation**: https://hermes-agent.nousresearch.com/docs/
+- **Quickstart**: https://hermes-agent.nousresearch.com/docs/getting-started/quickstart
+- **Architecture**: https://hermes-agent.nousresearch.com/docs/developer-guide/architecture
+- **Community**: https://discord.gg/NousResearch (Discord)
+- **GitHub**: https://github.com/NousResearch/hermes-agent
+
+#### Key Features
+
+- **Autonomous Agent**: Self-improving AI agent with built-in learning loop
+- **Multi-Platform**: CLI, Telegram, Discord, Slack, WhatsApp, Signal, Email, and 20+ platforms
+- **70+ Tools**: Built-in tools for terminal, file operations, web search, browser automation
+- **Memory System**: Persistent memory that grows across sessions with FTS5 cross-session recall
+- **Skills System**: Procedural memory the agent creates and reuses, compatible with agentskills.io
+- **MCP Integration**: Connect to any MCP server for extended tool capabilities
+- **Multiple Backends**: Local, Docker, SSH, Daytona, Singularity, Modal (serverless)
+- **Voice Mode**: Real-time voice interaction in CLI and messaging platforms
+- **ACP Support**: Editor integration for VS Code, Zed, and JetBrains
+
+#### Architecture Overview
+
+- **AIAgent**: Core conversation loop in `run_agent.py`
+- **Prompt Builder**: System prompt assembly from personality, memory, skills, context
+- **Provider Resolution**: Maps providers to API modes and credentials (18+ providers)
+- **Tool Registry**: 70+ tools across ~28 toolsets with 7 terminal backends
+- **Session Storage**: SQLite with FTS5 for conversation persistence
+- **Gateway**: Messaging platform gateway with 20 platform adapters
+- **Plugin System**: User, project, and pip entry point plugin discovery
+- **Cron**: First-class agent tasks with multiple schedule formats
+- **ACP**: Editor-native agent over stdio/JSON-RPC
+
+#### Key Commands
+
+- `hermes`: Start chatting (classic CLI)
+- `hermes --tui`: Modern TUI with modal overlays
+- `hermes model`: Choose LLM provider and model
+- `hermes setup`: Full setup wizard
+- `hermes doctor`: Diagnose issues
+- `hermes gateway setup`: Connect messaging platforms
+- `hermes --continue`: Resume last session
+- `hermes skills`: Browse and install reusable workflows
+
 ## Available Skills
 
 This agent has access to the project's specialized skills:
@@ -66,7 +109,8 @@ When working on an Obsidian plugin:
 2. Follow the established conventions for file organization
 3. Use TypeScript for all new code
 4. Test changes against the Obsidian API
-5. Document important decisions and patterns
+5. **Install to correct location**: `<vault>/.obsidian/plugins/<plugin-name>/`
+6. Document important decisions and patterns
 
 ## Development Best Practices
 
@@ -81,6 +125,16 @@ When working on an Obsidian plugin:
 - `manifest.json`: Plugin metadata (id, name, version)
 - `styles.scss`: CSS styles for the plugin
 - `package.json`: Dependencies and build configuration
+
+### Plugin Installation
+**CRITICAL**: Plugins must be installed in `<vault>/.obsidian/plugins/<plugin-name>/`:
+```
+<Vault>/.obsidian/plugins/<plugin-name>/
+  ├── main.js          # Compiled JavaScript
+  ├── manifest.json    # Plugin manifest
+  └── styles.css       # Compiled CSS
+```
+The `.obsidian/plugins` directory is required - Obsidian will not detect plugins in other locations.
 
 ### Key Methods
 - `onload()`: Initialize plugin when loaded
@@ -98,6 +152,34 @@ Always register resources that need cleanup:
 - Editor extensions: `registerEditorExtension()`
 
 All registered resources are automatically cleaned up on plugin unload.
+
+## Integrating Hermes Agent into Obsidian
+
+### Sidebar Chat Interface
+To create a Hermes Agent chat interface in the Obsidian sidebar:
+
+1. **View Type**: Create a custom `ItemView` for the sidebar chat
+2. **Communication**: Use Hermes Agent's ACP (Agent Control Protocol) or API server
+3. **Session Management**: Maintain conversation history using Obsidian's vault storage
+4. **Tool Integration**: Expose Hermes tools through Obsidian's UI
+5. **Settings**: Add settings tab for Hermes API configuration
+
+### Key Considerations
+
+- **ACP Integration**: Hermes Agent supports ACP for editor integration (VS Code, Zed, JetBrains)
+- **API Server**: Hermes can run as an API server for external communication
+- **Gateway Mode**: Use Hermes gateway for messaging platform integration
+- **Context Files**: Create `.hermes.md` context files for project-specific instructions
+- **Skills**: Leverage Hermes skills system for reusable workflows
+- **Memory**: Use Hermes' persistent memory system for cross-session continuity
+
+### Implementation Patterns
+
+- **WebSocket Connection**: For real-time chat between Obsidian and Hermes
+- **REST API**: For command submission and response retrieval
+- **Event System**: Use Obsidian's event system for UI updates
+- **State Management**: Maintain chat state in plugin settings or vault files
+- **Markdown Rendering**: Display Hermes responses with proper markdown rendering
 
 ## Tool Preferences
 

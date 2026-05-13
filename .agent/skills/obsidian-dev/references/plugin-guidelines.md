@@ -10,6 +10,19 @@ This is a summary of common review comments from the official Obsidian plugin gu
 
 ## General
 
+### Plugin Installation
+
+**CRITICAL**: Plugins must be installed in `<vault>/.obsidian/plugins/<plugin-name>/`:
+
+```
+<Vault>/.obsidian/plugins/<plugin-name>/
+  ├── main.js          # Compiled JavaScript
+  ├── manifest.json    # Plugin manifest
+  └── styles.css       # Compiled CSS
+```
+
+The `.obsidian/plugins` directory is required - Obsidian will not detect plugins in other locations. After copying files, reload Obsidian and enable the plugin in Settings → Plugins.
+
 ### Avoid using global app instance
 
 Don't use the global `app` object (or `window.app`). Use the reference from your plugin instance instead.

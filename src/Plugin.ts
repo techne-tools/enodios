@@ -29,6 +29,10 @@ import { HermesModal } from './Modals/SampleModal.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
 import { PluginSettingsTab } from './PluginSettingsTab.ts';
 import {
+  HERMES_CHAT_VIEW_TYPE,
+  HermesChatView
+} from './Views/HermesChatView.tsx';
+import {
   SAMPLE_REACT_VIEW_TYPE,
   SampleReactView
 } from './Views/SampleReactView.tsx';
@@ -56,6 +60,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     await this.openView(SAMPLE_VIEW_TYPE);
     await this.openView(SAMPLE_SVELTE_VIEW_TYPE);
     await this.openView(SAMPLE_REACT_VIEW_TYPE);
+    await this.openView(HERMES_CHAT_VIEW_TYPE);
   }
 
   protected override async onloadImpl(): Promise<void> {
@@ -109,8 +114,18 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.registerView(SAMPLE_VIEW_TYPE, (leaf) => new SampleView(leaf));
     this.registerView(SAMPLE_SVELTE_VIEW_TYPE, (leaf) => new SampleSvelteView(leaf));
     this.registerView(SAMPLE_REACT_VIEW_TYPE, (leaf) => new SampleReactView(leaf));
+    this.registerView(HERMES_CHAT_VIEW_TYPE, (leaf) => new HermesChatView(leaf, this));
 
     this.registerModalCommands();
+
+    // Add command to open Hermes chat view
+    this.addCommand({
+      id: 'open-hermes-chat',
+      name: 'Open Hermes Chat',
+      callback: () => {
+        this.openView(HERMES_CHAT_VIEW_TYPE);
+      }
+    });
   }
 
   protected override async onLoadSettings(
@@ -118,9 +133,6 @@ export class Plugin extends PluginBase<PluginTypes> {
     isInitialLoad: boolean
   ): Promise<void> {
     await super.onLoadSettings(loadedSettings, isInitialLoad);
-    if (loadedSettings.settings.textSetting === 'bar') {
-      new Notice('Sample text setting is bar');
-    }
   }
 
   protected override async onSaveSettings(
@@ -129,9 +141,6 @@ export class Plugin extends PluginBase<PluginTypes> {
     context: unknown
   ): Promise<void> {
     await super.onSaveSettings(newSettings, oldSettings, context);
-    if (newSettings.settings.textSetting === 'baz' && oldSettings.settings.textSetting === 'bar') {
-      new Notice('Sample text setting is changed from bar to baz');
-    }
   }
 
   protected override async onunloadImpl(): Promise<void> {
