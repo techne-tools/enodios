@@ -1,0 +1,10 @@
+{
+  "author": "prismatic7",
+  "authorUrl": "https://github.com/prismatic7/",
+  "description": "A plugin to allow working with your Hermes agent in your Obsidian Vault.",
+
+  "id": "hermes",
+  "isDesktopOnly": true,
+  "name": "Hermes Agent for Obsidian",
+  "version": "0.0.0"
+}
