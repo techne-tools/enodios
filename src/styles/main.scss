@@ -132,18 +132,24 @@
   word-wrap: break-word;
   overflow-wrap: break-word;
   padding: 2px 0;
+  background-color: transparent !important;
 }
 
-.hermes-markdown {
+.hermes-markdown-renderer {
+  background-color: transparent !important;
   white-space: pre-wrap;
   word-wrap: break-word;
   font-size: 13px;
   line-height: 1.4;
+  
+  * {
+    background-color: transparent !important;
+  }
 }
 
 .hermes-input-wrapper {
   padding: 10px 0 12px 0;
-  background-color: var(--background-primary);
+  background-color: transparent;
 }
 
 .hermes-input-container {
@@ -152,9 +158,10 @@
   gap: 8px;
   padding: 10px 12px;
   border-radius: 8px;
-  background-color: var(--background-primary);
+  background-color: transparent;
   border: 1px solid var(--interactive-accent);
   transition: all 0.2s ease;
+  /* Cache bust: 2026-05-14-1603 */
 }
 
 .hermes-input-bottom {

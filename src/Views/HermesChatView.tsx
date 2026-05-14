@@ -184,9 +184,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
               </span>
             </div>
             <div className="hermes-message-content">
-              <div className="hermes-markdown">
-                {msg.content}
-              </div>
+              <MarkdownRenderer view={view} content={msg.content} />
             </div>
           </div>
         ))}
@@ -251,4 +249,61 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
       </div>
     </div>
   );
+}
+
+/**
+ * Renders markdown content using Obsidian's native markdown renderer.
+ * Supports Obsidian Flavored Markdown (OFM) including:
+ * - Callouts, code blocks, wikilinks
+ * - Embeds, tables, lists
+ * - MathJax, highlights, etc.
+ */
+interface MarkdownRendererProps {
+  view: HermesChatView;
+  content: string;
+}
+
+function MarkdownRenderer({ view, content }: MarkdownRendererProps): ReactElement {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) {
+      return;
+    }
+
+    // Clear previous content
+    containerRef.current.innerHTML = '';
+
+    // Use Obsidian's app.markdownRenderer API
+    // Signature: renderMarkdown(markdown: string, container: HTMLElement, component: Component, filePath?: string, afterSection?: boolean)
+    try {
+      const app = view.app as any;
+      if (app && app.markdownRenderer && typeof app.markdownRenderer.renderMarkdown === 'function') {
+        app.markdownRenderer.renderMarkdown(content, containerRef.current, view);
+        return;
+      }
+    } catch (error) {
+      console.debug('app.markdownRenderer.renderMarkdown failed:', error);
+    }
+
+    // Fallback: Use innerHTML with basic markdown parsing
+    try {
+      // Simple markdown to HTML conversion
+      let html = content
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+        .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+        .replace(/\*(.*)\*/gim, '<em>$1</em>')
+        .replace(/`(.*)`/gim, '<code>$1</code>')
+        .replace(/\n/gim, '<br>');
+      
+      containerRef.current.innerHTML = html;
+    } catch (error) {
+      console.error('Failed to render markdown:', error);
+      containerRef.current.textContent = content;
+    }
+  }, [content, view]);
+
+  return <div ref={containerRef} className="hermes-markdown-renderer" />;
 }
