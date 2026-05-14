@@ -202,46 +202,50 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
       <div className="hermes-input-wrapper">
         <div className="hermes-input-container">
-          <div className="hermes-input-left">
-            <button className="hermes-context-btn" title="Add Context">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M8 12h8M12 8v8"/>
-              </svg>
-              <span>@</span>
-            </button>
-            <div className="hermes-context-list">
-              {/* Context chips will be rendered here */}
-            </div>
-          </div>
           <textarea
             ref={(el) => {
               if (el) {
                 el.style.height = 'auto';
-                el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+                el.style.height = `${el.scrollHeight}px`;
               }
             }}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // Auto-resize textarea
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = 'auto';
+              target.style.height = `${target.scrollHeight}px`;
+            }}
             onKeyDown={handleInputKeyDown}
             placeholder="Message Hermes..."
             rows={1}
             className="hermes-input"
           />
-          <div className="hermes-input-right">
-            <button className="hermes-icon-btn" title="Add Image">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
-              </svg>
-            </button>
-            <button className="hermes-send-btn" onClick={handleSend} disabled={isTyping || !input.trim()} title="Send">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"/>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-              </svg>
-            </button>
+          <div className="hermes-input-bottom">
+            <div className="hermes-input-left">
+              <button className="hermes-context-btn" title="Add Context">
+                <span>@</span>
+              </button>
+              <div className="hermes-context-list">
+                {/* Context chips will be rendered here */}
+              </div>
+            </div>
+            <div className="hermes-input-right">
+              <button className="hermes-icon-btn" title="Add Image">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </button>
+              <button className="hermes-send-btn" onClick={handleSend} disabled={isTyping || !input.trim()} title="Send">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>

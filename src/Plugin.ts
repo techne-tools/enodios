@@ -57,10 +57,7 @@ export class Plugin extends PluginBase<PluginTypes> {
   protected override async onLayoutReady(): Promise<void> {
     await super.onLayoutReady();
     new Notice('This is executed after all plugins are loaded');
-    await this.openView(SAMPLE_VIEW_TYPE);
-    await this.openView(SAMPLE_SVELTE_VIEW_TYPE);
-    await this.openView(SAMPLE_REACT_VIEW_TYPE);
-    await this.openView(HERMES_CHAT_VIEW_TYPE);
+    // Note: Views are opened via ribbon icon or command, not automatically on load
   }
 
   protected override async onloadImpl(): Promise<void> {
@@ -115,6 +112,11 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.registerView(SAMPLE_SVELTE_VIEW_TYPE, (leaf) => new SampleSvelteView(leaf));
     this.registerView(SAMPLE_REACT_VIEW_TYPE, (leaf) => new SampleReactView(leaf));
     this.registerView(HERMES_CHAT_VIEW_TYPE, (leaf) => new HermesChatView(leaf, this));
+
+    // Add ribbon icon for Hermes chat
+    this.addRibbonIcon('message-square', 'Open Hermes Chat', () => {
+      this.openView(HERMES_CHAT_VIEW_TYPE);
+    });
 
     this.registerModalCommands();
 
@@ -182,7 +184,20 @@ export class Plugin extends PluginBase<PluginTypes> {
   }
 
   private async openView(viewType: string): Promise<void> {
-    await this.app.workspace.ensureSideLeaf(viewType, 'right');
+    // Check if view is already open in right sidebar
+    const existingLeaf = this.app.workspace.getLeavesOfType(viewType).first();
+    if (existingLeaf) {
+      // View is already open, just reveal it
+      this.app.workspace.revealLeaf(existingLeaf);
+      return;
+    }
+
+    // Create new leaf in right sidebar
+    const leaf = this.app.workspace.getRightLeaf(false);
+    if (leaf) {
+      await leaf.setViewState({ type: viewType, active: true });
+      this.app.workspace.revealLeaf(leaf);
+    }
   }
 
   private registerModalCommands(): void {
