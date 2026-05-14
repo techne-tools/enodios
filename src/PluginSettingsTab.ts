@@ -55,6 +55,15 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         });
       });
 
+    new SettingEx(this.containerEl)
+      .setName('Chat Agent Display Name')
+      .setDesc('Friendly name shown in the chat UI (default: Hermes)')
+      .addText((text) => {
+        text.setPlaceholder('Hermes')
+          .setValue(this.plugin.settings.chatAgentName);
+        this.bind(text, 'chatAgentName');
+      });
+
     // Context Selection Section
     new SettingEx(this.containerEl)
       .setName('Auto-Select Context')

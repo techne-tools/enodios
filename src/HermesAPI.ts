@@ -6,15 +6,23 @@ export interface HermesMessage {
   content: string;
 }
 
-export interface HermesRequest {
-  messages: HermesMessage[];
+export interface HermesChatRequest {
   model?: string;
-  context?: string;
-  session_id?: string;
+  messages: HermesMessage[];
   stream?: boolean;
 }
 
-export interface HermesResponse {
+export interface HermesResponseRequest {
+  model?: string;
+  input: string | HermesMessage[];
+  instructions?: string;
+  store?: boolean;
+  previous_response_id?: string;
+  conversation?: string;
+  stream?: boolean;
+}
+
+export interface HermesChatResponse {
   id: string;
   object: string;
   created: number;
@@ -31,12 +39,26 @@ export interface HermesResponse {
   };
 }
 
-export interface HermesSession {
+export interface HermesResponseAPI {
   id: string;
-  topic: string;
-  messages: HermesMessage[];
-  created_at: number;
-  updated_at: number;
+  object: string;
+  created: number;
+  model: string;
+  status: string;
+  output: Array<{
+    type: string;
+    role?: string;
+    content?: string | Array<{ type: string; text?: string }>;
+    name?: string;
+    arguments?: string;
+    call_id?: string;
+    output?: string;
+  }>;
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+  };
 }
 
 export class HermesAPI {
@@ -48,195 +70,130 @@ export class HermesAPI {
     this.plugin = plugin;
     this.baseUrl = plugin.settings.hermesApiUrl || 'http://127.0.0.1:8642';
     this.apiKey = plugin.settings.hermesApiKey || '';
+    console.log('[HermesAPI] Initialized with URL:', this.baseUrl, 'Has API key:', !!this.apiKey);
   }
 
   /**
    * Check if the Hermes API is reachable
    */
   public async checkConnection(): Promise<boolean> {
+    console.log('[HermesAPI] Checking connection to', this.baseUrl);
     try {
-      const response = await fetch(`${this.baseUrl}/health`, {
-        method: 'GET',
-        headers: this.getHeaders()
-      });
-      return response.ok;
+      // Try both /health and /v1/health endpoints
+      const endpoints = [`${this.baseUrl}/v1/health`, `${this.baseUrl}/health`];
+      for (const endpoint of endpoints) {
+        try {
+          console.log('[HermesAPI] Trying endpoint:', endpoint);
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: this.getHeaders()
+          });
+          console.log('[HermesAPI] Response status:', response.status, response.statusText);
+          if (response.ok) {
+            console.log('[HermesAPI] Connection successful!');
+            return true;
+          }
+        } catch (error) {
+          console.error(`[HermesAPI] Health check failed for ${endpoint}:`, error);
+        }
+      }
+      console.error('[HermesAPI] Connection check failed: No valid endpoint found');
+      return false;
     } catch (error) {
-      console.error('Hermes API connection check failed:', error);
+      console.error('[HermesAPI] Connection check failed:', error);
       return false;
     }
   }
 
   /**
-   * Create a new chat session
-   */
-  public async createSession(context?: string): Promise<HermesSession | null> {
-    try {
-      const response = await fetch(`${this.baseUrl}/sessions`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          context: context || ''
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to create session: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      if (!data || typeof data !== 'object') {
-        throw new Error('Invalid response from API');
-      }
-      const sessionData = data as Record<string, unknown>;
-      return {
-        id: sessionData['id'] as string,
-        topic: sessionData['topic'] as string || 'New Conversation',
-        messages: [],
-        created_at: Date.now(),
-        updated_at: Date.now()
-      };
-    } catch (error) {
-      console.error('Failed to create session:', error);
-      new Notice('Failed to create chat session. Check API settings.');
-      return null;
-    }
-  }
-
-  /**
-   * Send a message to the Hermes API
+   * Send a message to the Hermes API using OpenAI-compatible chat completions
+   * This is a stateless approach - full conversation history is included in each request
    */
   public async sendMessage(
-    sessionId: string,
-    content: string,
-    context?: string,
-    model?: string
-  ): Promise<HermesResponse | null> {
+    messages: HermesMessage[],
+    model?: string,
+    stream: boolean = false
+  ): Promise<HermesChatResponse | null> {
     try {
-      const request: HermesRequest = {
-        messages: [
-          {
-            role: 'user',
-            content: content
-          }
-        ],
+      const request: HermesChatRequest = {
         model: model || this.plugin.settings.hermesAgentName,
-        session_id: sessionId
+        messages: messages,
+        stream: stream
       };
 
-      // Add context if provided
-      if (context) {
-        request.context = context;
-      }
-
-      const response = await fetch(`${this.baseUrl}/chat`, {
+      console.log('[HermesAPI] Sending message to', `${this.baseUrl}/v1/chat/completions`);
+      const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(request)
       });
+
+      console.log('[HermesAPI] Response status:', response.status, response.statusText);
 
       if (!response.ok) {
         throw new Error(`Failed to send message: ${response.statusText}`);
       }
 
       const data = await response.json();
-      return data as unknown as HermesResponse;
+      console.log('[HermesAPI] Response received:', data);
+      return data as unknown as HermesChatResponse;
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('[HermesAPI] Failed to send message:', error);
       new Notice('Failed to send message. Check API settings.');
       return null;
     }
   }
 
   /**
-   * Get all sessions
+   * Send a message using the Responses API with server-side session management
+   * This approach maintains conversation state on the server
    */
-  public async getSessions(): Promise<HermesSession[]> {
+  public async sendMessageWithResponseAPI(
+    input: string,
+    previousResponseId?: string,
+    conversation?: string,
+    instructions?: string,
+    model?: string,
+    store: boolean = true
+  ): Promise<HermesResponseAPI | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/sessions`, {
-        method: 'GET',
-        headers: this.getHeaders()
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to get sessions: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      if (!data || typeof data !== 'object') {
-        throw new Error('Invalid response from API');
-      }
-      const sessionsData = data as Record<string, unknown>;
-      return (sessionsData['sessions'] as HermesSession[]) || [];
-    } catch (error) {
-      console.error('Failed to get sessions:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Get a specific session by ID
-   */
-  public async getSession(sessionId: string): Promise<HermesSession | null> {
-    try {
-      const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
-        method: 'GET',
-        headers: this.getHeaders()
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to get session: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      if (!data || typeof data !== 'object') {
-        throw new Error('Invalid response from API');
-      }
-      const sessionData = data as Record<string, unknown>;
-      return {
-        id: sessionData['id'] as string,
-        topic: sessionData['topic'] as string || 'Conversation',
-        messages: sessionData['messages'] as HermesMessage[] || [],
-        created_at: sessionData['created_at'] as number || Date.now(),
-        updated_at: sessionData['updated_at'] as number || Date.now()
+      const request: HermesResponseRequest = {
+        model: model || this.plugin.settings.hermesAgentName,
+        input: input,
+        store: store
       };
-    } catch (error) {
-      console.error('Failed to get session:', error);
-      return null;
-    }
-  }
 
-  /**
-   * Update a session
-   */
-  public async updateSession(sessionId: string, updates: Partial<HermesSession>): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
-        method: 'PATCH',
+      // Add optional parameters if provided
+      if (previousResponseId) {
+        request.previous_response_id = previousResponseId;
+      }
+      if (conversation) {
+        request.conversation = conversation;
+      }
+      if (instructions) {
+        request.instructions = instructions;
+      }
+
+      console.log('[HermesAPI] Sending message with Responses API to', `${this.baseUrl}/v1/responses`);
+      const response = await fetch(`${this.baseUrl}/v1/responses`, {
+        method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(updates)
+        body: JSON.stringify(request)
       });
 
-      return response.ok;
-    } catch (error) {
-      console.error('Failed to update session:', error);
-      return false;
-    }
-  }
+      console.log('[HermesAPI] Response status:', response.status, response.statusText);
 
-  /**
-   * Delete a session
-   */
-  public async deleteSession(sessionId: string): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
-        method: 'DELETE',
-        headers: this.getHeaders()
-      });
+      if (!response.ok) {
+        throw new Error(`Failed to send message: ${response.statusText}`);
+      }
 
-      return response.ok;
+      const data = await response.json();
+      console.log('[HermesAPI] Response received:', data);
+      return data as unknown as HermesResponseAPI;
     } catch (error) {
-      console.error('Failed to delete session:', error);
-      return false;
+      console.error('[HermesAPI] Failed to send message:', error);
+      new Notice('Failed to send message. Check API settings.');
+      return null;
     }
   }
 

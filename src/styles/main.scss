@@ -7,3 +7,292 @@
 .hermes.obsidian-dev-utils {
   /* Override library styles */
 }
+
+/* Hermes Chat View Styles */
+.hermes-chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  gap: 0;
+}
+
+.hermes-chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background-color: var(--background-primary);
+  
+  &-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  &-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  
+  .hermes-chat-agent-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-normal);
+  }
+}
+
+.hermes-chat-title {
+  display: none;
+}
+
+.hermes-chat-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: var(--background-modifier-border);
+    border-radius: 3px;
+    
+    &:hover {
+      background: var(--background-modifier-border-hover);
+    }
+  }
+}
+
+.hermes-message {
+  display: flex;
+  flex-direction: column;
+  max-width: 90%;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  
+  &.hermes-user {
+    align-self: flex-end;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+  }
+  
+  &.hermes-assistant {
+    align-self: flex-start;
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+  }
+  
+  &.hermes-system {
+    align-self: center;
+    background-color: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+}
+
+.hermes-message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  
+  .hermes-role {
+    font-weight: 600;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  
+  .hermes-timestamp,
+  .hermes-typing {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+}
+
+.hermes-message-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.hermes-markdown {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.hermes-input-wrapper {
+  padding: 16px 20px;
+  background-color: var(--background-primary);
+}
+
+.hermes-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background-color: transparent;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  
+  &:focus-within {
+    border-color: var(--interactive-accent);
+    background-color: var(--background-primary);
+  }
+}
+
+.hermes-input-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hermes-input-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hermes-context-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover:not(:disabled) {
+    background-color: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+  }
+  
+  span {
+    font-weight: 600;
+  }
+}
+
+.hermes-context-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.hermes-context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.hermes-input {
+  flex: 1;
+  padding: 12px 0;
+  border: none;
+  background-color: transparent;
+  color: var(--text-normal);
+  font-size: 14px;
+  resize: none;
+  min-height: 32px;
+  max-height: 300px;
+  outline: none;
+  line-height: 1.5;
+  
+  &::placeholder {
+    color: var(--text-muted);
+  }
+}
+
+.hermes-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background-color: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover:not(:disabled) {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.hermes-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background-color: var(--interactive-accent);
+  border: none;
+  border-radius: 6px;
+  color: var(--text-on-accent);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover:not(:disabled) {
+    background-color: var(--interactive-accent-hover);
+    transform: translateY(-1px);
+  }
+  
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--background-modifier-border);
+  }
+  
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
