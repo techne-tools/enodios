@@ -1,4 +1,3 @@
-import { HermesAPI } from './HermesAPI.ts';
 import type { Plugin } from './Plugin.ts';
 
 export interface SlashCommand {
@@ -45,53 +44,16 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
 let customCommands: SlashCommand[] = [];
 let cachedToolCommands: SlashCommand[] = [];
-let lastToolFetch = 0;
-const TOOL_CACHE_TTL_MS = 60_000;
 
 /**
- * Fetch available tools from the Hermes API and convert them to slash commands.
+ * Fetch available tools from Hermes via ACP and convert them to slash commands.
  * Results are cached for 60 seconds.
+ * TODO: Implement ACP-based tool discovery when SDK supports it.
  */
-export async function getToolSlashCommands(plugin: Plugin): Promise<SlashCommand[]> {
-  const now = Date.now();
-  if (now - lastToolFetch < TOOL_CACHE_TTL_MS && cachedToolCommands.length > 0) {
-    return cachedToolCommands;
-  }
-
-  const api = new HermesAPI(plugin);
-  const tools = await api.getTools();
-
-  if (!tools || tools.length === 0) {
-    cachedToolCommands = [];
-    return [];
-  }
-
-  cachedToolCommands = tools.map((tool) => ({
-    description: tool.description || `Call ${tool.name} tool`,
-    execute: async (p: Plugin, args: string) => {
-      const hermesApi = new HermesAPI(p);
-      const response = await hermesApi.sendMessageWithResponseAPI(
-        `/${tool.name} ${args}`,
-        undefined,
-        'obsidian-chat'
-      );
-
-      if (response?.output) {
-        const output = response.output.find((out) => out.type === 'message' && out.role === 'assistant');
-        if (output?.content) {
-          const text = typeof output.content === 'string'
-            ? output.content
-            : output.content.map((c) => c.text ?? '').join('\n');
-          return text || `Tool ${tool.name} executed.`;
-        }
-      }
-      return `Tool ${tool.name} executed with no output.`;
-    },
-    name: tool.name
-  }));
-
-  lastToolFetch = now;
-  return cachedToolCommands;
+export async function getToolSlashCommands(_plugin: Plugin): Promise<SlashCommand[]> {
+  // ACP migration: tool discovery via REST API disabled.
+  // Will implement via ACP when the SDK exposes tool listing.
+  return [];
 }
 
 /**
@@ -99,7 +61,6 @@ export async function getToolSlashCommands(plugin: Plugin): Promise<SlashCommand
  */
 export function clearToolCache(): void {
   cachedToolCommands = [];
-  lastToolFetch = 0;
 }
 
 /**

@@ -3,7 +3,7 @@
 
   let { startCount }: SampleSvelteComponentProps = $props();
 
-  let count = $state(startCount);
+  let count = $state((() => startCount)());
 
   export function increment(): void {
     count += 1;

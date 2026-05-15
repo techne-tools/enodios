@@ -18,4 +18,7 @@ export class PluginSettings {
   public hermesApiKey = '';
   // Hermes Agent API Configuration
   public hermesApiUrl = 'http://localhost:8642';
+
+  // ACP Configuration
+  public hermesBinaryPath = '';
 }

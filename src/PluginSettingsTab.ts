@@ -83,10 +83,20 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         this.bind(text, 'chatSaveFolder');
       });
 
+    // ACP Configuration Section
+    new SettingEx(this.containerEl)
+      .setName('Hermes Binary Path')
+      .setDesc('Full path to the hermes binary (optional — will auto-detect if empty)')
+      .addText((text) => {
+        text.setPlaceholder('/Users/chris/.local/bin/hermes')
+          .setValue(this.plugin.settings.hermesBinaryPath);
+        this.bind(text, 'hermesBinaryPath');
+      });
+
     // Test Connection Button
     new SettingEx(this.containerEl)
       .setName('Test Connection')
-      .setDesc('Test the connection to the Hermes Agent API')
+      .setDesc('Test the connection to Hermes via ACP')
       .addButton((button) => {
         button.setButtonText('Test')
           .onClick(async () => {
@@ -96,29 +106,12 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   }
 
   private async testConnection(): Promise<void> {
-    const { hermesApiKey, hermesApiUrl } = this.plugin.settings;
-
-    if (!hermesApiUrl) {
-      new Notice('Please enter a valid API URL');
-      return;
-    }
-
     try {
-      const response = await fetch(`${hermesApiUrl}/health`, {
-        headers: {
-          'Authorization': `Bearer ${hermesApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        method: 'GET'
-      });
-
-      if (response.ok) {
-        new Notice('Connection successful! The Hermes Agent API is working.');
-      } else {
-        new Notice(`Connection failed: ${response.statusText}`);
-      }
+      await this.plugin.acpClient.connect();
+      new Notice('ACP connection successful! Hermes is ready.');
     } catch (error) {
-      new Notice(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      new Notice(`ACP connection failed: ${message}`);
     }
   }
 }

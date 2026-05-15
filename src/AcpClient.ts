@@ -76,6 +76,33 @@ export class AcpClient {
     this.plugin = plugin;
   }
 
+  private resolveHermesPath(): string {
+    const configuredPath = this.plugin.settings.hermesBinaryPath?.trim();
+    if (configuredPath) {
+      return configuredPath;
+    }
+
+    // Try common install locations
+    const candidates = [
+      '/Users/chris/.local/bin/hermes',
+      '/usr/local/bin/hermes',
+      '/opt/homebrew/bin/hermes',
+      '/usr/bin/hermes'
+    ];
+    for (const candidate of candidates) {
+      try {
+        const fs = require('fs');
+        if (fs.existsSync(candidate)) {
+          return candidate;
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
+    return 'hermes';
+  }
+
   /**
    * Check if the ACP client is connected and has an active session.
    */
@@ -98,7 +125,8 @@ export class AcpClient {
 
     try {
       // Spawn hermes acp
-      this.childProcess = spawn('hermes', ['acp'], {
+      const hermesPath = this.resolveHermesPath();
+      this.childProcess = spawn(hermesPath, ['acp'], {
         env: { ...process.env, ['PATH']: process.env['PATH'] ?? '' },
         stdio: ['pipe', 'pipe', 'pipe']
       });
