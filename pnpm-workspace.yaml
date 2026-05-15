@@ -1,0 +1,8 @@
+allowBuilds:
+  '@parcel/watcher': true
+  dprint: true
+  esbuild: true
+  obsidian-dev-skills: true
+  obsidian-typings: true
+  svelte-preprocess: true
+  unrs-resolver: true

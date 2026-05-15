@@ -1,17 +1,23 @@
 import type { ReactElement } from 'react';
 
 import {
- ItemView,
-MarkdownView
+  ItemView,
+  MarkdownView,
+  Notice,
+  type WorkspaceLeaf
 } from 'obsidian';
 import {
- useEffect,
-useRef,
-useState
+  useCallback,
+  useEffect,
+  useRef,
+  useState
 } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { HermesAPI } from '../HermesAPI.ts';
+import { HermesAPI, type HermesMessage } from '../HermesAPI.ts';
+import type { Plugin } from '../Plugin.ts';
+import type { PluginSettings } from '../PluginSettings.ts';
+import { getSlashCommands, getToolSlashCommands, parseSlashCommand } from '../SlashCommands.ts';
 
 export const HERMES_CHAT_VIEW_TYPE = 'hermes-chat-view';
 
@@ -21,19 +27,19 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-interface HermesChatViewComponentProps {
-  view: HermesChatView;
+interface ContextItem {
+  id: string;
+  text: string;
+  type: 'folder' | 'note' | 'selection';
 }
 
-/**
- * Renders markdown content using Obsidian's native markdown renderer.
- * Supports Obsidian Flavored Markdown (OFM) including:
- * - Callouts, code blocks, wikilinks
- * - Embeds, tables, lists
- * - MathJax, highlights, etc.
- */
-interface MarkdownRendererProps {
-  content: string;
+interface AutocompleteSuggestion {
+  id: string;
+  text: string;
+  type: 'folder' | 'note';
+}
+
+interface HermesChatViewComponentProps {
   view: HermesChatView;
 }
 
@@ -42,7 +48,7 @@ export class HermesChatView extends ItemView {
   private previousResponseId: null | string = null;
   private root: null | ReturnType<typeof createRoot> = null;
 
-  constructor(leaf: any, private plugin: any) {
+  constructor(leaf: WorkspaceLeaf, private readonly pluginInstance: Plugin) {
     super(leaf);
   }
 
@@ -50,12 +56,12 @@ export class HermesChatView extends ItemView {
     return 'Hermes Chat';
   }
 
-  public getPlugin(): any {
-    return this.plugin;
+  public getPlugin(): Plugin {
+    return this.pluginInstance;
   }
 
-  public getSettings(): any {
-    return this.plugin.settings;
+  public getSettings(): PluginSettings {
+    return this.pluginInstance.settings;
   }
 
   public override getViewType(): string {
@@ -71,59 +77,68 @@ export class HermesChatView extends ItemView {
 
   public override async onOpen(): Promise<void> {
     this.contentEl.empty();
-    this.hermesAPI = new HermesAPI(this.plugin);
+    this.hermesAPI = new HermesAPI(this.pluginInstance);
     this.root = createRoot(this.contentEl);
     this.root.render(<HermesChatViewComponent view={this} />);
 
-    // Check connection on open
     await this.checkConnection();
   }
 
+  public async sendMessageStream(
+    prompt: string,
+    onChunk: (chunk: string) => void,
+    onDone: () => void,
+    onError: (error: string) => void
+  ): Promise<void> {
+    const messages: HermesMessage[] = [
+      { content: prompt, role: 'user' }
+    ];
+
+    await this.hermesAPI.sendMessageStream(
+      messages,
+      onChunk,
+      onDone,
+      onError,
+      this.pluginInstance.settings.hermesAgentName
+    );
+  }
+
   public async sendMessage(prompt: string, onAssistantResponse: (content: string) => void): Promise<void> {
-    // Send to Hermes API using Responses API for server-side session management
     const response = await this.hermesAPI.sendMessageWithResponseAPI(
       prompt,
       this.previousResponseId,
       'obsidian-chat',
       undefined,
-      this.plugin.settings.hermesAgentName
+      this.pluginInstance.settings.hermesAgentName
     );
 
-    if (response && response.output && response.output.length > 0) {
-      // Find the assistant's response
+    if (response?.output && response.output.length > 0) {
       const assistantOutput = response.output.find((out) =>
         out.type === 'message' && out.role === 'assistant'
       );
 
-      if (assistantOutput && assistantOutput.content) {
-        // Store response ID for next turn
+      if (assistantOutput?.content) {
         this.previousResponseId = response.id;
-
-        // Extract text content from the response
         const textContent = this.extractTextContent(assistantOutput.content);
-        console.log('Hermes response:', textContent);
-
-        // Call the callback to update the UI
         onAssistantResponse(textContent);
       }
     }
   }
 
-  private async checkConnection(): Promise<void> {
-    const isConnected = await this.hermesAPI.checkConnection();
-    if (isConnected) {
-      console.log('Hermes API: Connected successfully');
-    } else {
-      console.warn('Hermes API: Connection failed. Check settings.');
-    }
+  public clearConversation(): void {
+    this.previousResponseId = null;
   }
 
-  private extractTextContent(content: any): string {
+  private async checkConnection(): Promise<void> {
+    await this.hermesAPI.checkConnection();
+  }
+
+  private extractTextContent(content: string | Array<{ text?: string; value?: string }>): string {
     if (typeof content === 'string') {
       return content;
     }
     if (Array.isArray(content)) {
-      return content.map((c: { text?: string; value?: string }) => c.text || c.value || '').join('\n');
+      return content.map((c) => c.text ?? c.value ?? '').join('\n');
     }
     return String(content);
   }
@@ -131,602 +146,953 @@ export class HermesChatView extends ItemView {
 
 function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactElement {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState<string>('');
-  const [isTyping, setIsTyping] = useState<boolean>(false);
-  const [contextItems, setContextItems] = useState<{ id: string; text: string; type: 'folder' | 'note' | 'selection' }[]>([]);
-  const [autocompleteQuery, setAutocompleteQuery] = useState<string>('');
-  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<{ id: string; text: string; type: 'folder' | 'note' }[]>([]);
-  const [autocompletePosition, setAutocompletePosition] = useState<{ left: number; bottom: number; width?: number } | null>(null);
-  const [isAutocompleteOpen, setIsAutocompleteOpen] = useState<boolean>(false);
-  const [autocompleteSelectionIndex, setAutocompleteSelectionIndex] = useState<number>(0);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rateLimitSeconds, setRateLimitSeconds] = useState(0);
+  const [contextItems, setContextItems] = useState<ContextItem[]>([]);
+
+  const lastSendTimeRef = useRef<number>(0);
+  const RATE_LIMIT_MS = 2000; // 2 second cooldown between messages
+  const [autocompleteQuery, setAutocompleteQuery] = useState('');
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<AutocompleteSuggestion[]>([]);
+  const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
+  const [autocompleteSelectionIndex, setAutocompleteSelectionIndex] = useState(0);
+
+  const [slashSuggestions, setSlashSuggestions] = useState<{ description: string; name: string }[]>([]);
+  const [isSlashOpen, setIsSlashOpen] = useState(false);
+  const [slashSelectionIndex, setSlashSelectionIndex] = useState(0);
+  const [toolCommandsLoaded, setToolCommandsLoaded] = useState(false);
+
+  const [conversationFilePath, setConversationFilePath] = useState<string | null>(null);
+  const [conversationTitle, setConversationTitle] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isConversationListOpen, setIsConversationListOpen] = useState(false);
+  const [conversations, setConversations] = useState<{ filePath: string; title: string }[]>([]);
+
+  const plugin = view.getPlugin();
+  const settings = view.getSettings();
+
+  const loadConversationList = useCallback(async (): Promise<void> => {
+    try {
+      const list = await plugin.vaultManager.listConversations();
+      setConversations(list.map((c) => ({ filePath: c.filePath, title: c.metadata.title })));
+    } catch {
+      setConversations([]);
+    }
+  }, [plugin]);
+
+  const handleLoadConversation = useCallback(async (filePath: string): Promise<void> => {
+    try {
+      const loaded = await plugin.vaultManager.loadConversation(filePath);
+      if (loaded && loaded.messages.length > 0) {
+        setMessages(loaded.messages);
+        setConversationFilePath(filePath);
+        setConversationTitle(loaded.title);
+        view.clearConversation();
+      }
+    } catch {
+      // Silently ignore load errors
+    } finally {
+      setIsConversationListOpen(false);
+    }
+  }, [plugin, view]);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastPromptRef = useRef<string>('');
+  const saveTimeoutRef = useRef<number | null>(null);
 
-  const handleSend = async (): Promise<void> => {
-    if (!input.trim()) { return; }
+  const handleNewChat = useCallback((): void => {
+    setMessages([]);
+    setError(null);
+    setConversationFilePath(null);
+    setConversationTitle('');
+    view.clearConversation();
+  }, [view]);
+
+  const saveConversation = useCallback(async (currentMessages: ChatMessage[], currentTitle?: string): Promise<void> => {
+    if (currentMessages.length === 0) return;
+
+    setIsSaving(true);
+    try {
+      const title = currentTitle || conversationTitle || currentMessages[0]?.content.slice(0, 50) || 'Untitled';
+      if (!conversationFilePath) {
+        const filePath = await plugin.vaultManager.saveConversation(currentMessages, title);
+        setConversationFilePath(filePath);
+        setConversationTitle(title);
+      } else {
+        await plugin.vaultManager.updateConversation(conversationFilePath, currentMessages, title);
+      }
+    } catch {
+      // Silently ignore save errors to not disrupt chat flow
+    } finally {
+      setIsSaving(false);
+    }
+  }, [conversationFilePath, conversationTitle, plugin]);
+
+  const debouncedSave = useCallback((currentMessages: ChatMessage[]) => {
+    if (saveTimeoutRef.current) {
+      window.clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = window.setTimeout(() => {
+      void saveConversation(currentMessages);
+    }, 2000);
+  }, [saveConversation]);
+
+  const handleRetry = useCallback(async (): Promise<void> => {
+    if (!lastPromptRef.current || isTyping) return;
+    setError(null);
+    setIsTyping(true);
+
+    const streamingMessageId = Date.now();
+    const assistantPlaceholder: ChatMessage = {
+      content: '',
+      role: 'assistant',
+      timestamp: streamingMessageId
+    };
+    setMessages((prev) => [...prev, assistantPlaceholder]);
+
+    try {
+      await view.sendMessageStream(
+        lastPromptRef.current,
+        (chunk) => {
+          setMessages((prev) => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg?.role === 'assistant' && lastMsg.timestamp === streamingMessageId) {
+              return [...prev.slice(0, -1), {
+                ...lastMsg,
+                content: lastMsg.content + chunk
+              }];
+            }
+            return prev;
+          });
+        },
+        () => {
+          setIsTyping(false);
+          setMessages((prev) => {
+            debouncedSave(prev);
+            return prev;
+          });
+        },
+        (err) => {
+          setError(err);
+          setIsTyping(false);
+        }
+      );
+    } catch {
+      setIsTyping(false);
+    }
+  }, [isTyping, view, debouncedSave]);
+
+  const handleSend = useCallback(async (): Promise<void> => {
+    const trimmed = input.trim();
+    if (!trimmed || isTyping) return;
+
+    // Rate limiting
+    const now = Date.now();
+    const elapsed = now - lastSendTimeRef.current;
+    if (elapsed < RATE_LIMIT_MS) {
+      const remaining = Math.ceil((RATE_LIMIT_MS - elapsed) / 1000);
+      setRateLimitSeconds(remaining);
+      window.setTimeout(() => setRateLimitSeconds(0), RATE_LIMIT_MS - elapsed);
+      return;
+    }
+    lastSendTimeRef.current = now;
+    setRateLimitSeconds(0);
+
+    // Check for slash commands
+    const slashCmd = parseSlashCommand(trimmed);
+    if (slashCmd) {
+      setInput('');
+      setIsSlashOpen(false);
+
+      const userMessage: ChatMessage = {
+        content: trimmed,
+        role: 'user',
+        timestamp: Date.now()
+      };
+      setMessages((prev) => [...prev, userMessage]);
+
+      if (slashCmd.command.name === 'clear') {
+        setMessages([]);
+        view.clearConversation();
+        return;
+      }
+
+      setIsTyping(true);
+      try {
+        const result = await slashCmd.command.execute(plugin, slashCmd.args);
+        if (result) {
+          const systemMessage: ChatMessage = {
+            content: result,
+            role: 'system',
+            timestamp: Date.now()
+          };
+          setMessages((prev) => [...prev, systemMessage]);
+        }
+      } catch {
+        const errorMessage: ChatMessage = {
+          content: `Error executing /${slashCmd.command.name}`,
+          role: 'system',
+          timestamp: Date.now()
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      } finally {
+        setIsTyping(false);
+      }
+      return;
+    }
 
     const userMessage: ChatMessage = {
-      content: input,
+      content: trimmed,
       role: 'user',
       timestamp: Date.now()
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    setError(null);
     setIsTyping(true);
+    lastPromptRef.current = trimmed;
 
-    await view.sendMessage(input, (assistantContent) => {
-      const assistantMessage: ChatMessage = {
-        content: assistantContent,
-        role: 'assistant',
-        timestamp: Date.now()
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+    // Create a placeholder assistant message for streaming
+    const streamingMessageId = Date.now();
+    const assistantPlaceholder: ChatMessage = {
+      content: '',
+      role: 'assistant',
+      timestamp: streamingMessageId
+    };
+    setMessages((prev) => [...prev, assistantPlaceholder]);
+
+    try {
+      await view.sendMessageStream(
+        trimmed,
+        (chunk) => {
+          setMessages((prev) => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg?.role === 'assistant' && lastMsg.timestamp === streamingMessageId) {
+              const updated = [...prev.slice(0, -1), {
+                ...lastMsg,
+                content: lastMsg.content + chunk
+              }];
+              return updated;
+            }
+            return prev;
+          });
+        },
+        () => {
+          setIsTyping(false);
+          // Trigger save after streaming completes
+          setMessages((prev) => {
+            debouncedSave(prev);
+            return prev;
+          });
+        },
+        (err) => {
+          setError(err);
+          setIsTyping(false);
+        }
+      );
+    } catch {
+      setError('Failed to get a response. Click to retry.');
       setIsTyping(false);
-    });
-  };
-
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-    // If autocomplete is open, don't handle Enter - let autocomplete handle it
-    if (isAutocompleteOpen) {
-      return;
     }
-    
+  }, [input, isTyping, view, plugin, debouncedSave]);
+
+  const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (isSlashOpen && slashSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashSelectionIndex((prev) =>
+          prev < slashSuggestions.length - 1 ? prev + 1 : 0
+        );
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashSelectionIndex((prev) =>
+          prev > 0 ? prev - 1 : slashSuggestions.length - 1
+        );
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const selected = slashSuggestions[slashSelectionIndex];
+        if (selected) {
+          setInput(`/${selected.name} `);
+          setIsSlashOpen(false);
+          setSlashSuggestions([]);
+          setTimeout(() => textareaRef.current?.focus(), 0);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        setIsSlashOpen(false);
+        return;
+      }
+    }
+
+    if (isAutocompleteOpen && autocompleteSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setAutocompleteSelectionIndex((prev) =>
+          prev < autocompleteSuggestions.length - 1 ? prev + 1 : 0
+        );
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setAutocompleteSelectionIndex((prev) =>
+          prev > 0 ? prev - 1 : autocompleteSuggestions.length - 1
+        );
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const selected = autocompleteSuggestions[autocompleteSelectionIndex];
+        if (selected) {
+          insertAutocomplete(selected.text);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        setIsAutocompleteOpen(false);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
-  };
+  }, [isSlashOpen, slashSuggestions, slashSelectionIndex, isAutocompleteOpen, autocompleteSuggestions, autocompleteSelectionIndex, handleSend]);
 
-  const handleContextClick = (): void => {
-    console.log('Context button clicked');
-    console.log('Settings:', view.getSettings());
+  const insertAutocomplete = useCallback((text: string): void => {
+    const value = input;
+    const lastOpen = Math.max(value.lastIndexOf('[['), value.lastIndexOf('{'));
+    if (lastOpen < 0) return;
 
-    // Get the active file
-    const activeFile = view.getPlugin().app.workspace.getActiveFile();
-    console.log('Active file:', activeFile?.path);
+    const isWikiLink = value[lastOpen] === '[';
+    const queryStart = lastOpen + (isWikiLink ? 2 : 1);
+    const prefix = value.substring(0, queryStart);
+    const suffix = value.substring(textareaRef.current?.selectionStart ?? value.length);
+    const closingBracket = isWikiLink ? ']]' : '}';
+    const newText = prefix + text + closingBracket + suffix;
 
-    // Try to get the active editor from any markdown view in the workspace
+    setInput(newText);
+    setIsAutocompleteOpen(false);
+    setAutocompleteQuery('');
+    setAutocompleteSuggestions([]);
+    setAutocompleteSelectionIndex(0);
+
+    const cursorPos = prefix.length + text.length + closingBracket.length;
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(cursorPos, cursorPos);
+      }
+    }, 0);
+  }, [input]);
+
+  const handleContextClick = useCallback((): void => {
+    const activeFile = plugin.app.workspace.getActiveFile();
     let selectedText = '';
-    let activeEditor = null;
 
-    // Get all views in the workspace
-    const allViews = view.getPlugin().app.workspace.getLeavesOfType('markdown');
-    console.log('All markdown views:', allViews.length);
-
+    const allViews = plugin.app.workspace.getLeavesOfType('markdown');
     for (const leaf of allViews) {
-      const viewType = leaf.view.getViewType();
-      console.log('View type:', viewType);
-
-      if (viewType === 'markdown' && leaf.view instanceof MarkdownView) {
-        activeEditor = leaf.view.editor;
-        console.log('Found markdown editor');
+      if (leaf.view instanceof MarkdownView) {
+        selectedText = leaf.view.editor.getSelection();
         break;
       }
     }
 
-    if (activeEditor) {
-      selectedText = activeEditor.getSelection();
-      console.log('Editor selection:', selectedText);
-      console.log('Selection length:', selectedText.length);
+    const autoAddEnabled = settings.contextEntireNote;
+
+    if (selectedText.length > 0) {
+      const isDuplicate = contextItems.some((item) =>
+        item.type === 'selection' && item.text === selectedText
+      );
+      if (isDuplicate) return;
+
+      setContextItems((prev) => [...prev, {
+        id: `selection-${Date.now()}`,
+        text: selectedText,
+        type: 'selection'
+      }]);
+    } else if (activeFile && !autoAddEnabled) {
+      const isDuplicate = contextItems.some((item) =>
+        item.type === 'note' && item.id === `note-${activeFile.path}`
+      );
+      if (isDuplicate) return;
+
+      setContextItems((prev) => [...prev, {
+        id: `note-${activeFile.path}`,
+        text: activeFile.basename,
+        type: 'note'
+      }]);
     }
+  }, [plugin, settings, contextItems]);
 
-    // Check if auto-add is enabled
-    const autoAddEnabled = view.getSettings().contextEntireNote;
-    console.log('Auto-add enabled:', autoAddEnabled);
-
-    if (autoAddEnabled) {
-      // Auto-add mode: if text selected, add to context; if no text, do nothing
-      if (selectedText && selectedText.length > 0) {
-        // Add selection to context with precise deduplication
-        const isDuplicate = contextItems.some((item) =>
-          item.type === 'selection' && item.text === selectedText
-        );
-
-        if (isDuplicate) {
-          console.log('Duplicate selection already in context');
-          return;
-        }
-
-        const newContextItem = {
-          id: `selection-${Date.now()}`,
-          text: selectedText,
-          type: 'selection' as const
-        };
-        setContextItems((prev) => [...prev, newContextItem]);
-        console.log('Added selected text to context (auto-add mode):', selectedText.substring(0, 50));
-      } else {
-        console.log('No text selected, auto-add mode active - doing nothing');
-      }
-    } else {
-      // Manual mode: '@' button adds current note (if no text) or selection (if text)
-      if (selectedText && selectedText.length > 0) {
-        // Add selection to context with precise deduplication
-        const isDuplicate = contextItems.some((item) =>
-          item.type === 'selection' && item.text === selectedText
-        );
-
-        if (isDuplicate) {
-          console.log('Duplicate selection already in context');
-          return;
-        }
-
-        const newContextItem = {
-          id: `selection-${Date.now()}`,
-          text: selectedText,
-          type: 'selection' as const
-        };
-        setContextItems((prev) => [...prev, newContextItem]);
-        console.log('Added selected text to context (manual mode):', selectedText.substring(0, 50));
-      } else if (activeFile) {
-        // Add current note to context with precise deduplication by path
-        const isDuplicate = contextItems.some((item) =>
-          item.type === 'note' && item.id === `note-${activeFile.path}`
-        );
-
-        if (isDuplicate) {
-          console.log('Current note already in context');
-          return;
-        }
-
-        const newContextItem = {
-          id: `note-${activeFile.path}`,
-          text: activeFile.basename,
-          type: 'note' as const
-        };
-        setContextItems((prev) => [...prev, newContextItem]);
-        console.log('Added current note to context (manual mode):', activeFile.path);
-      }
-    }
-  };
-
-  const removeContextItem = (id: string): void => {
+  const removeContextItem = useCallback((id: string): void => {
     setContextItems((prev) => prev.filter((item) => item.id !== id));
-  };
+  }, []);
 
-  // Auto-scroll to bottom when messages change
+  const handleAttachFiles = useCallback(async (files: FileList): Promise<void> => {
+    const activeFile = plugin.app.workspace.getActiveFile();
+    const targetFolder = activeFile?.parent?.path ?? '';
+    const copied: string[] = [];
+
+    for (const file of Array.from(files)) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileName = file.name;
+        const targetPath = targetFolder ? `${targetFolder}/${fileName}` : fileName;
+
+        // Check if file already exists
+        const existing = plugin.app.vault.getAbstractFileByPath(targetPath);
+        if (existing) {
+          continue; // Skip duplicates silently
+        }
+
+        await plugin.app.vault.createBinary(targetPath, arrayBuffer);
+        copied.push(fileName);
+      } catch {
+        // Silently ignore individual file errors
+      }
+    }
+
+    if (copied.length > 0) {
+      new Notice(`Copied ${copied.length} file(s) to vault`);
+    }
+  }, [plugin]);
+
+  // Auto-scroll to bottom
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Watch for active file changes and update context if auto-add is enabled
+  // Auto-add context when active file changes
   useEffect(() => {
-    const currentActiveFile = view.getPlugin().app.workspace.getActiveFile();
-    const autoAddEnabled = view.getSettings().contextEntireNote;
+    if (!settings.contextEntireNote) return;
 
-    // Only update if auto-add is enabled
-    if (currentActiveFile && autoAddEnabled) {
-      // Check if the active file has changed (precise deduplication by path)
-      const currentNoteItem = contextItems.find((item) => item.type === 'note');
+    const currentActiveFile = plugin.app.workspace.getActiveFile();
+    if (!currentActiveFile) return;
 
-      if (currentNoteItem?.id !== `note-${currentActiveFile.path}`) {
-        // Replace the entire context stack with only the new note
-        // This clears all previous context items and adds only the current note
-        setContextItems([{
-          id: `note-${currentActiveFile.path}`,
-          text: currentActiveFile.basename,
-          type: 'note' as const
-        }]);
-        console.log('Replaced context stack with new note (auto-add):', currentActiveFile.path);
+    const currentNoteItem = contextItems.find((item) => item.type === 'note');
+    if (currentNoteItem?.id === `note-${currentActiveFile.path}`) return;
+
+    setContextItems((prev) => [
+      ...prev.filter((item) => item.type !== 'note'),
+      {
+        id: `note-${currentActiveFile.path}`,
+        text: currentActiveFile.basename,
+        type: 'note'
       }
-    } else if (!autoAddEnabled && contextItems.length > 0) {
-      // If auto-add is disabled, clear the context stack
-      setContextItems([]);
-      console.log('Cleared context stack (auto-add disabled)');
-    }
-  }, [view.getPlugin().app.workspace.getActiveFile()?.path, view.getSettings().contextEntireNote]);
+    ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plugin.app.workspace.getActiveFile()?.path, settings.contextEntireNote]);
 
-  // Initialize context with current note when view opens (if auto-add is enabled)
+  // Initialize context on mount
   useEffect(() => {
-    const autoAddEnabled = view.getSettings().contextEntireNote;
-    
-    if (autoAddEnabled) {
-      const currentActiveFile = view.getPlugin().app.workspace.getActiveFile();
-      if (currentActiveFile) {
-        // Set initial context with the current note
-        setContextItems([{
-          id: `note-${currentActiveFile.path}`,
-          text: currentActiveFile.basename,
-          type: 'note' as const
-        }]);
-        console.log('Initialized context with current note (view open):', currentActiveFile.path);
-      }
+    if (!settings.contextEntireNote) return;
+
+    const currentActiveFile = plugin.app.workspace.getActiveFile();
+    if (currentActiveFile) {
+      setContextItems([{
+        id: `note-${currentActiveFile.path}`,
+        text: currentActiveFile.basename,
+        type: 'note'
+      }]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Autocomplete functionality for braces {} and wikilinks [[...]]
+  // Autocomplete trigger detection
   useEffect(() => {
-    // Check if user typed opening brace or [[ in the current input
-    if (input.length > 0) {
-      const lastChar = input[input.length - 1];
-      const lastTwoChars = input.length > 1 ? input.substring(input.length - 2) : '';
+    if (input.length === 0) return;
 
-      // Check if we just opened autocomplete (typing { or [[)
-      const justOpened = (lastChar === '{' && !input.substring(input.length - 2, input.length - 1).endsWith('\\')) ||
-                         (lastTwoChars === '[[' && !input.substring(input.length - 3, input.length - 1).endsWith('\\'));
+    const lastChar = input[input.length - 1];
+    const lastTwoChars = input.length > 1 ? input.slice(-2) : '';
 
-      if (justOpened) {
-        // User just typed { or [[ - open autocomplete
-        setIsAutocompleteOpen(true);
-        setAutocompleteQuery('');
-        setAutocompleteSelectionIndex(0);
-        console.log('Autocomplete opened for', lastTwoChars === '[[' ? '[[' : '{');
-      } else if (isAutocompleteOpen) {
-        // Autocomplete is open - extract query after [[ or {
-        const lastOpen = Math.max(input.lastIndexOf('[['), input.lastIndexOf('{'));
-        if (lastOpen >= 0) {
-          const query = input.substring(lastOpen + 2);
-          setAutocompleteQuery(query);
-          console.log('Autocomplete query updated:', query);
-          
-          // Reset selection index when typing new query
-          if (query.length > 0) {
-            setAutocompleteSelectionIndex(0);
+    const justOpened = (lastChar === '{' && input[input.length - 2] !== '\\') ||
+                       (lastTwoChars === '[[' && input[input.length - 3] !== '\\');
+
+    if (justOpened) {
+      setIsAutocompleteOpen(true);
+      setAutocompleteQuery('');
+      setAutocompleteSelectionIndex(0);
+    } else if (isAutocompleteOpen) {
+      const lastOpen = Math.max(input.lastIndexOf('[['), input.lastIndexOf('{'));
+      if (lastOpen >= 0) {
+        const query = input.substring(lastOpen + 2);
+        setAutocompleteQuery(query);
+        if (query.length > 0) {
+          setAutocompleteSelectionIndex(0);
+        }
+      }
+    }
+  }, [input, isAutocompleteOpen]);
+
+  // Fetch autocomplete suggestions
+  useEffect(() => {
+    if (autocompleteQuery.length === 0) {
+      setAutocompleteSuggestions([]);
+      return;
+    }
+
+    const vault = plugin.app.vault;
+    const files = vault.getMarkdownFiles();
+    const queryLower = autocompleteQuery.toLowerCase();
+
+    const matches = files.filter((file) =>
+      file.path.toLowerCase().includes(queryLower) ||
+      file.basename.toLowerCase().includes(queryLower)
+    );
+
+    const recentFiles = matches
+      .map((file) => ({ file, mtime: file.stat.mtime }))
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(0, 5);
+
+    const suggestions: AutocompleteSuggestion[] = recentFiles.map(({ file }) => ({
+      id: `note-${file.path}`,
+      text: file.path,
+      type: 'note'
+    }));
+
+    if (autocompleteQuery.includes('/')) {
+      const folders = new Set<string>();
+      for (const file of files) {
+        const parts = file.path.split('/');
+        for (let i = 1; i < parts.length; i++) {
+          const folderPath = parts.slice(0, i).join('/');
+          if (folderPath.toLowerCase().includes(queryLower)) {
+            folders.add(folderPath);
           }
         }
       }
+
+      const folderSuggestions = Array.from(folders)
+        .slice(0, 5 - suggestions.length)
+        .map((folder) => ({
+          id: `folder-${folder}`,
+          text: folder,
+          type: 'folder' as const
+        }));
+
+      suggestions.push(...folderSuggestions);
+    }
+
+    setAutocompleteSuggestions(suggestions.slice(0, 5));
+  }, [autocompleteQuery, plugin]);
+
+  // Close autocomplete on bracket close
+  useEffect(() => {
+    if (input.endsWith(']]') || input.endsWith('}')) {
+      setIsAutocompleteOpen(false);
     }
   }, [input]);
 
-  // Fetch autocomplete suggestions when query changes
+  // Slash command detection
   useEffect(() => {
-    console.log('[Autocomplete] Query changed:', autocompleteQuery, 'Length:', autocompleteQuery.length);
-    if (autocompleteQuery.length > 0) {
-      const fetchSuggestions = async (): Promise<void> => {
-        console.log('[Autocomplete] Fetching suggestions for:', autocompleteQuery);
-        const vault = view.getPlugin().app.vault;
-        const files = vault.getMarkdownFiles();
-        console.log('[Autocomplete] Total files in vault:', files.length);
-        const queryLower = autocompleteQuery.toLowerCase();
+    if (input === '/') {
+      setIsSlashOpen(true);
+      setSlashSelectionIndex(0);
+      // Show built-in commands immediately, then merge with tool commands
+      const builtIn = getSlashCommands();
+      setSlashSuggestions(builtIn.map((cmd) => ({ description: cmd.description, name: cmd.name })));
+      // Async fetch tool commands from Hermes API (only once per session)
+      if (!toolCommandsLoaded) {
+        void getToolSlashCommands(plugin).then((toolCmds) => {
+          if (toolCmds.length > 0) {
+            const merged = [...builtIn, ...toolCmds];
+            setSlashSuggestions(merged.map((cmd) => ({ description: cmd.description, name: cmd.name })));
+          }
+          setToolCommandsLoaded(true);
+        });
+      }
+      return;
+    }
 
-        // Filter files by path
-        const matches = files.filter((file: any) =>
-          file.path.toLowerCase().includes(queryLower)
-          || file.basename.toLowerCase().includes(queryLower)
-        );
-        console.log('[Autocomplete] Matches found:', matches.length);
-
-        // Get most recent files (last 5 modified)
-        const recentFiles = matches
-          .map((file: any) => ({
-            basename: file.basename,
-            mtime: file.stat.mtime,
-            path: file.path
-          }))
-          .sort((a: any, b: any) => b.mtime - a.mtime)
-          .slice(0, 5);
-
-        const suggestions = recentFiles.map((file: any) => ({
-          id: `note-${file.path}`,
-          text: file.path, // Use full path for filesystem paths
-          type: 'note' as const
-        }));
-
-        // Also add folder suggestions if query contains path separators
-        if (autocompleteQuery.includes('/')) {
-          const folders = new Set<string>();
-          files.forEach((file: any) => {
-            const pathParts = file.path.split('/');
-            for (let i = 1; i < pathParts.length; i++) {
-              const folderPath = pathParts.slice(0, i).join('/');
-              if (folderPath.toLowerCase().includes(queryLower)) {
-                folders.add(folderPath);
-              }
-            }
-          });
-
-          const folderSuggestions = Array.from(folders)
-            .slice(0, 5 - suggestions.length)
-            .map((folder: string) => ({
-              id: `folder-${folder}`,
-              text: folder,
-              type: 'folder' as const
-            }));
-
-          suggestions.push(...folderSuggestions);
-        }
-
-        const finalSuggestions = suggestions.slice(0, 5);
-        console.log('[Autocomplete] Final suggestions:', finalSuggestions);
-        setAutocompleteSuggestions(finalSuggestions);
-      };
-
-      fetchSuggestions();
+    if (input.startsWith('/')) {
+      const query = input.slice(1).toLowerCase();
+      const commands = getSlashCommands();
+      const filtered = commands.filter((cmd) =>
+        cmd.name.toLowerCase().includes(query) ||
+        cmd.description.toLowerCase().includes(query)
+      );
+      setSlashSuggestions(filtered.map((cmd) => ({ description: cmd.description, name: cmd.name })));
+      setIsSlashOpen(filtered.length > 0);
     } else {
-      console.log('[Autocomplete] Clearing suggestions (empty query)');
-      setAutocompleteSuggestions([]);
+      setIsSlashOpen(false);
+      setSlashSuggestions([]);
     }
-  }, [autocompleteQuery]);
+  }, [input, plugin, toolCommandsLoaded]);
 
-  // Position autocomplete pane above textarea
-  useEffect(() => {
-    if (isAutocompleteOpen && textareaRef.current) {
-      const textarea = textareaRef.current;
-      const container = textarea.closest('.hermes-chat-container');
-      const inputWrapper = textarea.closest('.hermes-input-wrapper');
-      
-      // Get input wrapper position relative to viewport
-      const inputWrapperRect = inputWrapper?.getBoundingClientRect();
-      
-      // Get container position relative to viewport
-      const containerRect = container?.getBoundingClientRect();
-      
-      // Calculate position relative to container
-      const left = containerRect && inputWrapperRect ? inputWrapperRect.left - containerRect.left : 0;
-      // bottom = position of input wrapper top relative to viewport
-      // This positions the bottom of autocomplete at the top of input wrapper
-      const bottom = inputWrapperRect?.top || 0;
-      
-      console.log('Autocomplete positioning:', {
-        left: left,
-        bottom: bottom,
-        width: inputWrapperRect?.width
-      });
-      setAutocompletePosition({
-        left: left,
-        bottom: bottom,
-        width: inputWrapperRect?.width
-      });
-    }
-  }, [isAutocompleteOpen, autocompleteSuggestions.length]);
+  const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>): void => {
+    const value = e.target.value;
+    setInput(value);
+
+    const target = e.target;
+    target.style.height = 'auto';
+    target.style.height = `${target.scrollHeight}px`;
+  }, []);
 
   return (
     <div className="hermes-chat-container">
-      <div className="hermes-chat-header">
-        <div className="hermes-chat-header-left">
-          <span className="hermes-chat-agent-name">{view.getSettings().chatAgentName || 'Hermes'}</span>
+      <ChatHeader
+        agentName={settings.chatAgentName || 'Hermes'}
+        isSaving={isSaving}
+        onNewChat={handleNewChat}
+        onOpenSettings={() => plugin.openSettings()}
+        onToggleConversationList={() => {
+          if (!isConversationListOpen) {
+            void loadConversationList();
+          }
+          setIsConversationListOpen((prev) => !prev);
+        }}
+      />
+
+      {isConversationListOpen && (
+        <div className="hermes-conversation-list">
+          <div className="hermes-conversation-list-header">
+            <span>Previous Conversations</span>
+            <button
+              className="hermes-icon-btn"
+              onClick={() => setIsConversationListOpen(false)}
+              title="Close"
+              type="button"
+            >
+              ✕
+            </button>
+          </div>
+          {conversations.length === 0 ? (
+            <div className="hermes-conversation-empty">No saved conversations</div>
+          ) : (
+            <ul>
+              {conversations.map((conv) => (
+                <li key={conv.filePath}>
+                  <button
+                    className="hermes-conversation-item"
+                    onClick={() => void handleLoadConversation(conv.filePath)}
+                    type="button"
+                  >
+                    {conv.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-        <div className="hermes-chat-header-right">
-          <button className="hermes-icon-btn" title="New Chat">
-            <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
-          <button className="hermes-icon-btn" onClick={() => view.getPlugin().openSettings()} title="Settings">
-            <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
-        </div>
-      </div>
+      )}
 
       <div className="hermes-chat-content" ref={chatContainerRef}>
-        {messages.map((msg, index) => (
-          <div className={`hermes-message hermes-${msg.role}`} key={index}>
-            <div className="hermes-message-header">
-              <span className="hermes-role">{msg.role === 'user' ? 'You' : 'Hermes'}</span>
-              <span className="hermes-timestamp">
-                {new Date(msg.timestamp).toLocaleTimeString()}
-              </span>
-            </div>
-            <div className="hermes-message-content">
-              <MarkdownRenderer content={msg.content} view={view} />
-            </div>
+        {messages.length === 0 && !error && (
+          <div className="hermes-empty-state">
+            Start a conversation with {settings.chatAgentName || 'Hermes'}
           </div>
+        )}
+        {messages.map((msg) => (
+          <ChatMessageItem key={`${msg.timestamp}-${msg.role}`} message={msg} view={view} />
         ))}
-        {isTyping && (
-          <div className="hermes-message hermes-assistant">
-            <div className="hermes-message-header">
-              <span className="hermes-role">Hermes</span>
-              <span className="hermes-typing">Typing...</span>
-            </div>
+        {isTyping && <TypingIndicator agentName={settings.chatAgentName || 'Hermes'} />}
+        {error && (
+          <div className="hermes-error" onClick={handleRetry} role="button" tabIndex={0}>
+            <span className="hermes-error-icon">⚠️</span>
+            <span className="hermes-error-text">{error}</span>
           </div>
         )}
       </div>
 
-      <div className="hermes-input-wrapper">
-        <div className="hermes-input-container">
+      <ChatInput
+        contextItems={contextItems}
+        input={input}
+        isAutocompleteOpen={isAutocompleteOpen}
+        isTyping={isTyping}
+        rateLimitSeconds={rateLimitSeconds}
+        autocompleteQuery={autocompleteQuery}
+        autocompleteSelectionIndex={autocompleteSelectionIndex}
+        autocompleteSuggestions={autocompleteSuggestions}
+        isSlashOpen={isSlashOpen}
+        slashSelectionIndex={slashSelectionIndex}
+        slashSuggestions={slashSuggestions}
+        onAttachFiles={handleAttachFiles}
+        onContextClick={handleContextClick}
+        onInputChange={handleTextareaChange}
+        onInputKeyDown={handleInputKeyDown}
+        onRemoveContextItem={removeContextItem}
+        onSend={handleSend}
+        onSelectAutocomplete={insertAutocomplete}
+        onSelectSlash={(name) => {
+          setInput(`/${name} `);
+          setIsSlashOpen(false);
+          setSlashSuggestions([]);
+          setTimeout(() => textareaRef.current?.focus(), 0);
+        }}
+        textareaRef={textareaRef}
+      />
+    </div>
+  );
+}
+
+// --- Sub-components ---
+
+interface ChatHeaderProps {
+  agentName: string;
+  isSaving: boolean;
+  onNewChat: () => void;
+  onOpenSettings: () => void;
+  onToggleConversationList: () => void;
+}
+
+function ChatHeader({ agentName, isSaving, onNewChat, onOpenSettings, onToggleConversationList }: ChatHeaderProps): ReactElement {
+  return (
+    <div className="hermes-chat-header">
+      <div className="hermes-chat-header-left">
+        <span className="hermes-chat-agent-name">{agentName}</span>
+        {isSaving && <span className="hermes-saving-indicator" title="Saving...">●</span>}
+      </div>
+      <div className="hermes-chat-header-right">
+        <button className="hermes-icon-btn" onClick={onToggleConversationList} title="Previous Conversations" type="button">
+          <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 12h18M3 6h18M3 18h18" />
+          </svg>
+        </button>
+        <button className="hermes-icon-btn" onClick={onNewChat} title="New Chat" type="button">
+          <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+        <button className="hermes-icon-btn" onClick={onOpenSettings} title="Settings" type="button">
+          <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface ChatMessageItemProps {
+  message: ChatMessage;
+  view: HermesChatView;
+}
+
+function ChatMessageItem({ message, view }: ChatMessageItemProps): ReactElement {
+  return (
+    <div className={`hermes-message hermes-${message.role}`}>
+      <div className="hermes-message-header">
+        <span className="hermes-role">{message.role === 'user' ? 'You' : 'Hermes'}</span>
+        <span className="hermes-timestamp">
+          {new Date(message.timestamp).toLocaleTimeString()}
+        </span>
+      </div>
+      <div className="hermes-message-content">
+        <MarkdownRenderer content={message.content} view={view} />
+      </div>
+    </div>
+  );
+}
+
+interface TypingIndicatorProps {
+  agentName: string;
+}
+
+const BRAILLE_SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+function TypingIndicator({ agentName }: TypingIndicatorProps): ReactElement {
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setFrame((prev) => (prev + 1) % BRAILLE_SPINNER.length);
+    }, 80);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="hermes-message hermes-assistant">
+      <div className="hermes-message-header">
+        <span className="hermes-role">{agentName}</span>
+        <span className="hermes-typing">
+          <span className="hermes-spinner">{BRAILLE_SPINNER[frame]}</span>
+          {' Typing'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+interface ChatInputProps {
+  contextItems: ContextItem[];
+  input: string;
+  isAutocompleteOpen: boolean;
+  isTyping: boolean;
+  rateLimitSeconds: number;
+  autocompleteQuery: string;
+  autocompleteSelectionIndex: number;
+  autocompleteSuggestions: AutocompleteSuggestion[];
+  isSlashOpen: boolean;
+  slashSelectionIndex: number;
+  slashSuggestions: { description: string; name: string }[];
+  onAttachFiles: (files: FileList) => void;
+  onContextClick: () => void;
+  onInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onInputKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onRemoveContextItem: (id: string) => void;
+  onSend: () => void;
+  onSelectAutocomplete: (text: string) => void;
+  onSelectSlash: (name: string) => void;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+}
+
+function ChatInput({
+  contextItems,
+  input,
+  isAutocompleteOpen,
+  isTyping,
+  rateLimitSeconds,
+  autocompleteSelectionIndex,
+  autocompleteSuggestions,
+  isSlashOpen,
+  slashSelectionIndex,
+  slashSuggestions,
+  onAttachFiles,
+  onContextClick,
+  onInputChange,
+  onInputKeyDown,
+  onRemoveContextItem,
+  onSend,
+  onSelectAutocomplete,
+  onSelectSlash,
+  textareaRef
+}: ChatInputProps): ReactElement {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <div className="hermes-input-wrapper">
+      {isSlashOpen && slashSuggestions.length > 0 && (
+        <div className="hermes-autocomplete hermes-slash-commands">
+          <div className="hermes-autocomplete-hint">Commands</div>
+          {slashSuggestions.map((suggestion, index) => (
+            <div
+              className={`hermes-autocomplete-item ${index === slashSelectionIndex ? 'selected' : ''}`}
+              key={suggestion.name}
+              onClick={() => onSelectSlash(suggestion.name)}
+              role="option"
+              aria-selected={index === slashSelectionIndex}
+            >
+              <span className="hermes-autocomplete-icon">⚡</span>
+              <span className="hermes-autocomplete-text">
+                <strong>/{suggestion.name}</strong>
+                <span className="hermes-autocomplete-desc">{suggestion.description}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="hermes-input-container">
+        <div className="hermes-context-list">
+          {contextItems.map((item) => (
+            <div className="hermes-context-chip" key={item.id}>
+              <button
+                className="hermes-context-remove"
+                onClick={() => onRemoveContextItem(item.id)}
+                title="Remove from context"
+                type="button"
+              >
+                <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                  <line x1="18" x2="6" y1="6" y2="18" />
+                  <line x1="6" x2="18" y1="6" y2="18" />
+                </svg>
+              </button>
+              <span className="hermes-context-text">{item.text}</span>
+            </div>
+          ))}
+        </div>
+        <textarea
+          className="hermes-input"
+          onChange={onInputChange}
+          onKeyDown={onInputKeyDown}
+          placeholder="Message Hermes..."
+          ref={textareaRef}
+          rows={1}
+          value={input}
+        />
+        <div className="hermes-input-bottom">
           <div className="hermes-input-left">
             <button
               className="hermes-context-btn"
-              onClick={handleContextClick}
+              onClick={onContextClick}
               title="Add Context"
+              type="button"
             >
-              <span>@</span>
+              <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.9" />
+              </svg>
             </button>
-            <div className="hermes-context-list">
-              {contextItems.map((item) => (
-                <div className="hermes-context-chip" key={item.id}>
-                  <button
-                    className="hermes-context-remove"
-                    onClick={() => { removeContextItem(item.id); }}
-                    title="Remove from context"
-                  >
-                    <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
-                      <line x1="18" x2="6" y1="6" y2="18" />
-                      <line x1="6" x2="18" y1="6" y2="18" />
-                    </svg>
-                  </button>
-                  <span className="hermes-context-text">{item.text}</span>
-                </div>
-              ))}
-            </div>
           </div>
-          <textarea
-            className="hermes-input"
-            onChange={(e) => {
-              const value = e.target.value;
-              setInput(value);
-
-              // Check if user typed [[ or { to open autocomplete
-              if (value.endsWith('[[') || value.endsWith('{')) {
-                setIsAutocompleteOpen(true);
-                setAutocompleteQuery('');
-                setAutocompleteSelectionIndex(0);
-              } else if (value.endsWith(']') && value.length > 1 && value[value.length - 2] === ']') {
-                setIsAutocompleteOpen(false);
-                setAutocompleteQuery('');
-                setAutocompleteSuggestions([]);
-                setAutocompleteSelectionIndex(0);
-              } else if (value.endsWith('}')) {
-                setIsAutocompleteOpen(false);
-                setAutocompleteQuery('');
-                setAutocompleteSuggestions([]);
-                setAutocompleteSelectionIndex(0);
-              } else if (isAutocompleteOpen) {
-                // Extract query after [[ or {
-                const lastOpen = Math.max(value.lastIndexOf('[['), value.lastIndexOf('{'));
-                if (lastOpen >= 0) {
-                  const query = value.substring(lastOpen + 2);
-                  setAutocompleteQuery(query);
-                  
-                  // Reset selection index when typing new query
-                  if (query.length > 0) {
-                    setAutocompleteSelectionIndex(0);
-                  }
+          <div className="hermes-input-right">
+            <input
+              accept="*/*"
+              multiple
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  onAttachFiles(e.target.files);
                 }
-              }
-
-              // Auto-resize textarea
-              const target = e.target;
-              target.style.height = 'auto';
-              target.style.height = `${target.scrollHeight}px`;
-            }}
-            onKeyDown={(e) => {
-              handleInputKeyDown(e);
-
-              // Handle autocomplete selection with arrow keys
-              if (isAutocompleteOpen && autocompleteSuggestions.length > 0) {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  setAutocompleteSelectionIndex((prev) => 
-                    prev < autocompleteSuggestions.length - 1 ? prev + 1 : 0
-                  );
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  setAutocompleteSelectionIndex((prev) => 
-                    prev > 0 ? prev - 1 : autocompleteSuggestions.length - 1
-                  );
-                } else if (e.key === 'Enter' || e.key === 'Tab') {
-                  e.preventDefault();
-                  const selected = autocompleteSuggestions[autocompleteSelectionIndex];
-                  if (selected) {
-                    const value = input;
-                    const lastOpen = Math.max(value.lastIndexOf('[['), value.lastIndexOf('{'));
-                    if (lastOpen >= 0) {
-                      // Get the query that was typed after the opening
-                      // For [[, the opening is 2 chars, so query starts at lastOpen + 2
-                      // For {, the opening is 1 char, so query starts at lastOpen + 1
-                      const queryStart = value[lastOpen] === '[' ? lastOpen + 2 : lastOpen + 1;
-                      const query = value.substring(queryStart);
-                      
-                      // Prefix is just the opening bracket(s)
-                      const prefix = value.substring(0, lastOpen + (value[lastOpen] === '[' ? 2 : 1));
-                      // The suffix is everything after the query
-                      const suffix = value.substring(queryStart + query.length);
-                      
-                      // Add closing bracket based on opening
-                      const closingBracket = value[lastOpen] === '{' ? '}' : ']]';
-                      const newText = prefix + selected.text + closingBracket + suffix;
-                      setInput(newText);
-                      setIsAutocompleteOpen(false);
-                      setAutocompleteQuery('');
-                      setAutocompleteSuggestions([]);
-                      setAutocompleteSelectionIndex(0);
-
-                      // Move cursor after inserted text
-                      setTimeout(() => {
-                        if (textareaRef.current) {
-                          textareaRef.current.focus();
-                          textareaRef.current.setSelectionRange(
-                            newText.length,
-                            newText.length
-                          );
-                        }
-                      }, 0);
-                    }
-                  }
-                }
-              } else if (e.key === 'Escape') {
-                setIsAutocompleteOpen(false);
-                setAutocompleteQuery('');
-                setAutocompleteSuggestions([]);
-                setAutocompleteSelectionIndex(0);
-              }
-            }}
-            placeholder="Message Hermes..."
-            ref={(el) => {
-              textareaRef.current = el;
-              if (el) {
-                el.style.height = 'auto';
-                el.style.height = `${el.scrollHeight}px`;
-              }
-            }}
-            rows={1}
-            value={input}
-          />
-          <div className="hermes-input-bottom">
-            <div className="hermes-input-right">
-              <button className="hermes-icon-btn" title="Add Image">
-                <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
-                  <rect height="18" rx="2" ry="2" width="18" x="3" y="3" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <polyline points="21 15 16 10 5 21" />
-                </svg>
-              </button>
-              <button className="hermes-send-btn" disabled={isTyping || !input.trim()} onClick={handleSend} title="Send">
-                <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
-                  <line x1="22" x2="11" y1="2" y2="13" />
-                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                </svg>
-              </button>
-            </div>
+                e.target.value = '';
+              }}
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              type="file"
+            />
+            <button
+              className="hermes-attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach files"
+              type="button"
+            >
+              <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
+            {rateLimitSeconds > 0 && (
+              <span className="hermes-rate-limit">{rateLimitSeconds}s</span>
+            )}
+            <button className="hermes-send-btn" disabled={isTyping || !input.trim() || rateLimitSeconds > 0} onClick={onSend} title="Send" type="button">
+              <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+                <line x1="22" x2="11" y1="2" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Autocomplete pane - rendered outside the container for proper positioning */}
       {isAutocompleteOpen && autocompleteSuggestions.length > 0 && (
-        <div
-          className="hermes-autocomplete"
-          style={{
-            position: 'fixed' as const,
-            left: autocompletePosition?.left,
-            bottom: autocompletePosition?.bottom,
-            width: autocompletePosition?.width || textareaRef.current?.offsetWidth
-          }}
-        >
-          <div style={{ padding: '8px 12px', color: 'var(--text-muted)' }}>
-            Type to search files...
-          </div>
+        <div className="hermes-autocomplete hermes-autocomplete-rich">
+          <div className="hermes-autocomplete-hint">Type to search files...</div>
           {autocompleteSuggestions.map((suggestion, index) => (
             <div
               className={`hermes-autocomplete-item ${index === autocompleteSelectionIndex ? 'selected' : ''}`}
               key={suggestion.id}
-              onClick={() => {
-                const value = input;
-                const lastOpen = Math.max(value.lastIndexOf('[['), value.lastIndexOf('{'));
-                if (lastOpen >= 0) {
-                  const prefix = value.substring(0, lastOpen + 2);
-                  const suffix = value.substring(textareaRef.current?.selectionStart || 0);
-                  const newText = prefix + suggestion.text + suffix;
-                  setInput(newText);
-                  setIsAutocompleteOpen(false);
-                  setAutocompleteQuery('');
-                  setAutocompleteSuggestions([]);
-                  setAutocompleteSelectionIndex(0);
-
-                  // Move cursor after inserted text
-                  setTimeout(() => {
-                    if (textareaRef.current) {
-                      textareaRef.current.focus();
-                      textareaRef.current.setSelectionRange(
-                        newText.length,
-                        newText.length
-                      );
-                    }
-                  }, 0);
-                }
-              }}
+              onClick={() => onSelectAutocomplete(suggestion.text)}
+              role="option"
+              aria-selected={index === autocompleteSelectionIndex}
             >
               <span className="hermes-autocomplete-icon">
                 {suggestion.type === 'folder' ? '📁' : '📄'}
               </span>
-              <span className="hermes-autocomplete-text">{suggestion.text}</span>
+              <span className="hermes-autocomplete-text">
+                <strong>{suggestion.text}</strong>
+                <span className="hermes-autocomplete-desc">{suggestion.type === 'folder' ? 'Folder' : 'Note'}</span>
+              </span>
             </div>
           ))}
         </div>
@@ -735,46 +1101,34 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
   );
 }
 
+interface MarkdownRendererProps {
+  content: string;
+  view: HermesChatView;
+}
+
 function MarkdownRenderer({ content, view }: MarkdownRendererProps): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) {
-      return;
-    }
+    if (!containerRef.current) return;
 
-    // Clear previous content
     containerRef.current.innerHTML = '';
 
-    // Use Obsidian's app.markdownRenderer API
-    // Signature: renderMarkdown(markdown: string, container: HTMLElement, component: Component, filePath?: string, afterSection?: boolean)
     try {
-      const app = view.app as any;
-      if (app?.markdownRenderer && typeof app.markdownRenderer.renderMarkdown === 'function') {
-        app.markdownRenderer.renderMarkdown(content, containerRef.current, view);
+      const app = view.app as unknown as {
+        markdownRenderer?: {
+          renderMarkdown(markdown: string, el: HTMLElement, component: unknown): Promise<void>;
+        };
+      };
+      if (app.markdownRenderer?.renderMarkdown) {
+        void app.markdownRenderer.renderMarkdown(content, containerRef.current, view);
         return;
       }
-    } catch (error) {
-      console.debug('app.markdownRenderer.renderMarkdown failed:', error);
+    } catch {
+      // Fall through to fallback
     }
 
-    // Fallback: Use innerHTML with basic markdown parsing
-    try {
-      // Simple markdown to HTML conversion
-      const html = content
-        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-        .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-        .replace(/\*(.*)\*/gim, '<em>$1</em>')
-        .replace(/`(.*)`/gim, '<code>$1</code>')
-        .replace(/\n/gim, '<br>');
-
-      containerRef.current.innerHTML = html;
-    } catch (error) {
-      console.error('Failed to render markdown:', error);
-      containerRef.current.textContent = content;
-    }
+    containerRef.current.textContent = content;
   }, [content, view]);
 
   return <div className="hermes-markdown-renderer" ref={containerRef} />;

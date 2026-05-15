@@ -44,6 +44,79 @@
     font-weight: 600;
     color: var(--text-normal);
   }
+
+  .hermes-saving-indicator {
+    font-size: 8px;
+    color: var(--text-accent);
+    animation: hermes-pulse 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes hermes-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.hermes-conversation-list {
+  position: absolute;
+  top: 40px;
+  left: 8px;
+  right: 8px;
+  max-height: 300px;
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  &-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-normal);
+  }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+  }
+
+  .hermes-conversation-item {
+    width: 100%;
+    text-align: left;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      background-color: var(--background-modifier-hover);
+    }
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  .hermes-conversation-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
 }
 
 .hermes-chat-title {
@@ -128,6 +201,17 @@
     flex-shrink: 0;
     margin-left: 6px;
   }
+
+  .hermes-spinner {
+    display: inline-block;
+    width: 1ch;
+    text-align: center;
+    font-family: monospace;
+    font-size: 11px;
+    line-height: 1;
+    vertical-align: middle;
+    margin-right: 2px;
+  }
 }
 
 .hermes-message-content {
@@ -147,11 +231,88 @@
   * {
     background-color: transparent !important;
   }
+
+  // Code blocks
+  pre {
+    background-color: var(--background-secondary) !important;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 8px 0;
+    overflow-x: auto;
+
+    code {
+      background-color: transparent !important;
+      font-family: var(--font-monospace);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  }
+
+  // Inline code
+  code:not(pre code) {
+    background-color: var(--background-secondary) !important;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: var(--font-monospace);
+    font-size: 12px;
+  }
+
+  // Blockquotes
+  blockquote {
+    border-left: 3px solid var(--interactive-accent);
+    padding-left: 12px;
+    margin: 8px 0;
+    color: var(--text-muted);
+  }
+
+  // Tables
+  table {
+    border-collapse: collapse;
+    margin: 8px 0;
+    width: 100%;
+
+    th, td {
+      border: 1px solid var(--background-modifier-border);
+      padding: 6px 10px;
+      text-align: left;
+    }
+
+    th {
+      background-color: var(--background-secondary) !important;
+      font-weight: 600;
+    }
+  }
+
+  // Lists
+  ul, ol {
+    margin: 6px 0;
+    padding-left: 20px;
+  }
+
+  li {
+    margin: 2px 0;
+  }
+
+  // Links
+  a {
+    color: var(--interactive-accent);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  // Horizontal rule
+  hr {
+    border: none;
+    border-top: 1px solid var(--background-modifier-border);
+    margin: 12px 0;
+  }
 }
 
 .hermes-input-wrapper {
-  padding: 10px 0 12px 0;
-  background-color: transparent;
+  position: relative;
 }
 
 .hermes-input-container {
@@ -192,14 +353,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 25px;
+  height: 25px;
   padding: 0;
   background-color: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 600;
+  border-radius: 4px;
   color: var(--text-normal);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -209,8 +368,9 @@
     border-color: var(--interactive-accent);
   }
   
-  span {
-    font-weight: 600;
+  svg {
+    width: 16px;
+    height: 16px;
   }
 }
 
@@ -329,8 +489,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 25px;
+  height: 25px;
   padding: 0;
   background-color: var(--interactive-accent);
   border: none;
@@ -355,9 +515,41 @@
   }
   
   svg {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
   }
+}
+
+.hermes-attach-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  background-color: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover:not(:disabled) {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+  
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.hermes-rate-limit {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  padding-right: 4px;
 }
 
 /* Context Modal Styles */
@@ -447,15 +639,58 @@
   }
 }
 
+/* Empty State */
+.hermes-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 24px;
+}
+
+/* Error Banner */
+.hermes-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 8px 12px;
+  background-color: var(--background-modifier-error);
+  color: var(--text-error);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  .hermes-error-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+
+  .hermes-error-text {
+    flex: 1;
+  }
+}
+
 /* Autocomplete Styles */
 .hermes-autocomplete {
-  position: fixed;
-  z-index: 9999;
-  overflow-y: auto;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  margin-bottom: 4px;
   background-color: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
   
   .hermes-autocomplete-item {
     display: flex;
@@ -485,5 +720,112 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+  }
+}
+
+.hermes-autocomplete-hint {
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.hermes-slash-commands,
+.hermes-autocomplete-rich {
+  .hermes-autocomplete-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    strong {
+      font-size: 13px;
+      color: var(--text-normal);
+    }
+  }
+
+  .hermes-autocomplete-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: normal;
+  }
+}
+
+/* Mobile Responsive */
+@media (max-width: 600px) {
+  .hermes-chat-container {
+    height: 100vh;
+  }
+
+  .hermes-chat-header {
+    padding: 6px 8px;
+
+    .hermes-chat-agent-name {
+      font-size: 12px;
+    }
+  }
+
+  .hermes-chat-content {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .hermes-message {
+    max-width: 95%;
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+
+  .hermes-message-header {
+    .hermes-role,
+    .hermes-timestamp,
+    .hermes-typing {
+      font-size: 9px;
+    }
+  }
+
+  .hermes-input-wrapper {
+    padding: 6px 0 8px 0;
+  }
+
+  .hermes-input-container {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .hermes-context-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .hermes-context-chip {
+    padding: 3px 6px 3px 3px;
+    font-size: 11px;
+  }
+
+  .hermes-send-btn {
+    width: 24px;
+    height: 24px;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  .hermes-icon-btn {
+    width: 24px;
+    height: 24px;
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  .hermes-error {
+    margin: 6px 8px;
+    padding: 8px 10px;
+    font-size: 12px;
   }
 }

@@ -1,51 +1,28 @@
-import type {
-  Editor,
-  MarkdownPostProcessorContext,
-  ObsidianProtocolData,
-  TAbstractFile
-} from 'obsidian';
 import type { ExtractPluginSettingsWrapper } from 'obsidian-dev-utils/obsidian/Plugin/PluginTypesBase';
-import type { MaybeReturn } from 'obsidian-dev-utils/Type';
 import type { ReadonlyDeep } from 'type-fest';
 
-import {
-  MarkdownView,
-  Notice
-} from 'obsidian';
-import { convertAsyncToSync } from 'obsidian-dev-utils/Async';
-import { getDebugger } from 'obsidian-dev-utils/Debug';
-import { alert } from 'obsidian-dev-utils/obsidian/Modals/Alert';
-import { confirm } from 'obsidian-dev-utils/obsidian/Modals/Confirm';
-import { prompt } from 'obsidian-dev-utils/obsidian/Modals/Prompt';
-import { selectItem } from 'obsidian-dev-utils/obsidian/Modals/SelectItem';
 import { PluginBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginBase';
 
 import type { PluginTypes } from './PluginTypes.ts';
 
-import { sampleStateField } from './EditorExtensions/SampleStateField.ts';
-import { sampleViewPlugin } from './EditorExtensions/SampleViewPlugin.ts';
-import { SampleEditorSuggest } from './EditorSuggests/SampleEditorSuggest.ts';
-import { HermesModal } from './Modals/SampleModal.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
 import { PluginSettingsTab } from './PluginSettingsTab.ts';
+import { VaultManager } from './VaultManager.ts';
 import {
   HERMES_CHAT_VIEW_TYPE,
   HermesChatView
 } from './Views/HermesChatView.tsx';
-import {
-  SAMPLE_REACT_VIEW_TYPE,
-  SampleReactView
-} from './Views/SampleReactView.tsx';
-import {
-  SAMPLE_SVELTE_VIEW_TYPE,
-  SampleSvelteView
-} from './Views/SampleSvelteView.ts';
-import {
-  SAMPLE_VIEW_TYPE,
-  SampleView
-} from './Views/SampleView.ts';
 
 export class Plugin extends PluginBase<PluginTypes> {
+  public vaultManager!: VaultManager;
+  /**
+   * Open the plugin settings tab.
+   */
+  public openSettings(): void {
+    (this.app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting.open();
+    (this.app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting.openTabById(this.manifest.id);
+  }
+
   protected override createSettingsManager(): PluginSettingsManager {
     return new PluginSettingsManager(this);
   }
@@ -56,77 +33,65 @@ export class Plugin extends PluginBase<PluginTypes> {
 
   protected override async onLayoutReady(): Promise<void> {
     await super.onLayoutReady();
-    new Notice('This is executed after all plugins are loaded');
-    // Note: Views are opened via ribbon icon or command, not automatically on load
   }
 
   protected override async onloadImpl(): Promise<void> {
     await super.onloadImpl();
-    this.addCommand({
-      callback: this.runSampleCommand.bind(this),
-      id: 'sample',
-      name: 'Sample'
-    });
 
-    this.addCommand({
-      editorCallback: this.runSampleEditorCommand.bind(this),
-      id: 'sample-editor',
-      name: 'Sample editor'
-    });
+    this.vaultManager = new VaultManager(this);
 
-    this.addCommand({
-      checkCallback: this.runSampleCommandWithCheck.bind(this),
-      id: 'sample-with-check',
-      name: 'Sample with check'
-    });
-
-    this.addRibbonIcon('dice', 'Sample ribbon icon', this.runSampleRibbonIconCommand.bind(this));
-
-    this.addStatusBarItem().setText('Sample status bar item');
-
-    this.registerDomEvent(document, 'dblclick', this.handleSampleDomEvent.bind(this));
-
-    this.registerEditorExtension([sampleViewPlugin, sampleStateField]);
-
-    this.registerEditorSuggest(new SampleEditorSuggest(this.app));
-
-    this.registerEvent(this.app.vault.on('create', this.handleSampleEvent.bind(this)));
-
-    this.registerExtensions(['sample-extension-1', 'sample-extension-2'], SAMPLE_VIEW_TYPE);
-
-    this.registerHoverLinkSource(SAMPLE_VIEW_TYPE, {
-      defaultMod: true,
-      display: this.manifest.name
-    });
-
-    const INTERVAL_IN_MILLISECONDS = 60_000;
-    this.registerInterval(window.setInterval(this.handleSampleIntervalTick.bind(this), INTERVAL_IN_MILLISECONDS));
-
-    this.registerMarkdownCodeBlockProcessor('sample-code-block-processor', this.handleSampleCodeBlockProcessor.bind(this));
-
-    this.registerMarkdownPostProcessor(this.handleSampleMarkdownPostProcessor.bind(this));
-
-    this.registerObsidianProtocolHandler('sample-action', this.handleSampleObsidianProtocolHandler.bind(this));
-
-    this.registerView(SAMPLE_VIEW_TYPE, (leaf) => new SampleView(leaf));
-    this.registerView(SAMPLE_SVELTE_VIEW_TYPE, (leaf) => new SampleSvelteView(leaf));
-    this.registerView(SAMPLE_REACT_VIEW_TYPE, (leaf) => new SampleReactView(leaf));
     this.registerView(HERMES_CHAT_VIEW_TYPE, (leaf) => new HermesChatView(leaf, this));
 
     // Add ribbon icon for Hermes chat
     this.addRibbonIcon('message-square', 'Open Hermes Chat', () => {
-      this.openView(HERMES_CHAT_VIEW_TYPE);
+      this.openView(HERMES_CHAT_VIEW_TYPE).catch(() => {
+        // Silently ignore view open errors
+      });
     });
-
-    this.registerModalCommands();
 
     // Add command to open Hermes chat view
     this.addCommand({
       callback: () => {
-        this.openView(HERMES_CHAT_VIEW_TYPE);
+        this.openView(HERMES_CHAT_VIEW_TYPE).catch(() => {
+          // Silently ignore view open errors
+        });
       },
       id: 'open-hermes-chat',
       name: 'Open Hermes Chat'
+    });
+
+    // Add command to toggle Hermes chat view
+    this.addCommand({
+      callback: () => {
+        this.toggleView(HERMES_CHAT_VIEW_TYPE).catch(() => {
+          // Silently ignore view toggle errors
+        });
+      },
+      id: 'toggle-hermes-chat',
+      name: 'Toggle Hermes Chat',
+      hotkeys: [
+        {
+          modifiers: ['Mod'],
+          key: 'H'
+        }
+      ]
+    });
+
+    // Add command to focus chat input (when chat is open)
+    this.addCommand({
+      callback: () => {
+        this.focusChatInput().catch(() => {
+          // Silently ignore focus errors
+        });
+      },
+      id: 'focus-hermes-chat-input',
+      name: 'Focus Hermes Chat Input',
+      hotkeys: [
+        {
+          modifiers: ['Mod', 'Shift'],
+          key: 'H'
+        }
+      ]
     });
   }
 
@@ -147,159 +112,57 @@ export class Plugin extends PluginBase<PluginTypes> {
 
   protected override async onunloadImpl(): Promise<void> {
     await super.onunloadImpl();
-    new Notice('Sample plugin is being unloaded');
-  }
-
-  private handleSampleCodeBlockProcessor(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
-    getDebugger('handleSampleCodeBlockProcessor')(source, el, ctx);
-    el.setText('Sample code block processor');
-  }
-
-  private handleSampleDomEvent(evt: MouseEvent): void {
-    const tagName = evt.target instanceof HTMLElement ? evt.target.tagName : '';
-    new Notice(`Sample DOM event: ${tagName}`);
-  }
-
-  private handleSampleEvent(file: TAbstractFile): void {
-    if (!this.app.workspace.layoutReady) {
-      return;
-    }
-
-    new Notice(`Sample event: ${file.name}`);
-  }
-
-  private handleSampleIntervalTick(): void {
-    new Notice('Sample interval tick');
-  }
-
-  private handleSampleMarkdownPostProcessor(el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
-    getDebugger('handleSampleMarkdownPostProcessor')(el, ctx);
-    if (el.hasClass('el-h6')) {
-      el.setText('Sample markdown post processor');
-    }
-  }
-
-  private handleSampleObsidianProtocolHandler(params: ObsidianProtocolData): void {
-    new Notice(`Sample obsidian protocol handler: ${params.action}`);
   }
 
   private async openView(viewType: string): Promise<void> {
-    // Check if view is already open in right sidebar
-    const existingLeaf = this.app.workspace.getLeavesOfType(viewType).first();
-    if (existingLeaf) {
-      // View is already open, just reveal it
-      this.app.workspace.revealLeaf(existingLeaf);
+    const leaves = this.app.workspace.getLeavesOfType(viewType);
+    const existingLeaf = leaves.length > 0 ? leaves[0] : null;
+    if (existingLeaf !== null) {
+      await this.app.workspace.revealLeaf(existingLeaf);
       return;
     }
 
-    // Create new leaf in right sidebar
     const leaf = this.app.workspace.getRightLeaf(false);
-    if (leaf) {
+    if (leaf !== null) {
       await leaf.setViewState({ active: true, type: viewType });
-      this.app.workspace.revealLeaf(leaf);
+      await this.app.workspace.revealLeaf(leaf);
     }
   }
 
-  private registerModalCommands(): void {
-    this.addCommand({
-      callback: this.showSampleModal.bind(this),
-      id: 'show-sample-modal',
-      name: 'Show sample modal'
-    });
-
-    this.addCommand({
-      callback: convertAsyncToSync(this.showAlert.bind(this)),
-      id: 'show-alert-modal',
-      name: 'Show alert modal'
-    });
-
-    this.addCommand({
-      callback: convertAsyncToSync(this.showConfirm.bind(this)),
-      id: 'show-confirm-modal',
-      name: 'Show confirm modal'
-    });
-
-    this.addCommand({
-      callback: convertAsyncToSync(this.showPrompt.bind(this)),
-      id: 'show-prompt-modal',
-      name: 'Show prompt modal'
-    });
-
-    this.addCommand({
-      callback: convertAsyncToSync(this.showSelectItem.bind(this)),
-      id: 'show-select-item-modal',
-      name: 'Show select item modal'
-    });
-  }
-
-  private runSampleCommand(): void {
-    new Notice('Sample command');
-  }
-
-  private runSampleCommandWithCheck(checking: boolean): boolean {
-    const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!markdownView) {
-      return false;
-    }
-
-    if (!checking) {
-      new Notice('Sample command with check');
-    }
-
-    return true;
-  }
-
-  private runSampleEditorCommand(editor: Editor): void {
-    editor.replaceSelection('Sample Editor Command');
-  }
-
-  private runSampleRibbonIconCommand(): void {
-    new Notice('Sample ribbon icon command');
-  }
-
-  private async showAlert(): Promise<void> {
-    await alert({
-      app: this.app,
-      message: 'Sample alert message',
-      title: 'Sample alert title'
-    });
-  }
-
-  private async showConfirm(): Promise<void> {
-    const result = await confirm({
-      app: this.app,
-      message: 'Sample confirm message',
-      title: 'Sample confirm title'
-    });
-
-    new Notice(`Sample confirm result: ${String(result)}`);
-  }
-
-  private async showPrompt(): Promise<void> {
-    await prompt({
-      app: this.app,
-      defaultValue: 'Sample prompt default value',
-      placeholder: 'Sample prompt placeholder',
-      title: 'Sample prompt title',
-      valueValidator: (value): MaybeReturn<string> => {
-        const MIN_LENGTH = 30;
-        if (value.length < MIN_LENGTH) {
-          return `Value must be at least ${String(MIN_LENGTH)} characters long`;
-        }
+  private async toggleView(viewType: string): Promise<void> {
+    const leaves = this.app.workspace.getLeavesOfType(viewType);
+    const existingLeaf = leaves.length > 0 ? leaves[0] : null;
+    if (existingLeaf !== null) {
+      // If the view is active, close it; otherwise reveal it
+      const activeLeaf = this.app.workspace.activeLeaf;
+      if (activeLeaf?.view?.getViewType() === viewType) {
+        await this.app.workspace.detachLeavesOfType(viewType);
+      } else {
+        await this.app.workspace.revealLeaf(existingLeaf);
       }
-    });
+      return;
+    }
+
+    // Open if not exists
+    await this.openView(viewType);
   }
 
-  private showSampleModal(): void {
-    new HermesModal(this.app).open();
-  }
+  private async focusChatInput(): Promise<void> {
+    const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+    const leaf = leaves.length > 0 ? leaves[0] : null;
+    if (leaf === null) {
+      await this.openView(HERMES_CHAT_VIEW_TYPE);
+      return;
+    }
 
-  private async showSelectItem(): Promise<void> {
-    await selectItem({
-      app: this.app,
-      items: ['Item 1', 'Item 2', 'Item 3'],
-      itemTextFunc: (item) => item,
-      placeholder: 'Sample select item placeholder'
-    });
+    await this.app.workspace.revealLeaf(leaf);
+    // Focus the textarea after a short delay to allow the view to render
+    window.setTimeout(() => {
+      const container = leaf.view.containerEl;
+      const textarea = container.querySelector('.hermes-input') as HTMLTextAreaElement | null;
+      if (textarea) {
+        textarea.focus();
+      }
+    }, 100);
   }
 }

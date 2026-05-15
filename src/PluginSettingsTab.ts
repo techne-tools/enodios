@@ -73,6 +73,16 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         this.bind(toggle, 'contextEntireNote');
       });
 
+    // Conversation Persistence Section
+    new SettingEx(this.containerEl)
+      .setName('Conversation Save Folder')
+      .setDesc('Folder path where conversations will be saved (default: hermes)')
+      .addText((text) => {
+        text.setPlaceholder('hermes')
+          .setValue(this.plugin.settings.chatSaveFolder);
+        this.bind(text, 'chatSaveFolder');
+      });
+
     // Test Connection Button
     new SettingEx(this.containerEl)
       .setName('Test Connection')

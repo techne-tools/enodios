@@ -10,6 +10,10 @@ export class PluginSettings {
   public contextAutoSelect = true;
   // Context Selection
   public contextEntireNote = false; // Auto-add current note when it changes
+
+  // Conversation Persistence
+  public chatSaveFolder = 'hermes'; // Folder to save conversations to
+
   public hermesAgentName = 'hermes-agent';
   public hermesApiKey = '';
   // Hermes Agent API Configuration

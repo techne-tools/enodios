@@ -15,12 +15,12 @@
 ## UX Improvements (Medium Priority)
 
 - [ ] Implement streaming responses
-- [ ] Add typing indicator animation
-- [ ] Implement error handling and retry logic
-- [ ] Add mobile-responsive styling
-- [ ] Add keyboard shortcuts
-- [ ] Implement code block syntax highlighting
-- [ ] Implement rate limiting indicators
+- [x] Add typing indicator animation (Unicode braille spinner)
+- [x] Implement error handling and retry logic
+- [x] Add mobile-responsive styling
+- [x] Add keyboard shortcuts (Cmd+H toggle, Cmd+Shift+H focus)
+- [x] Implement code block syntax highlighting
+- [x] Implement rate limiting indicators
 
 ## Completed
 
