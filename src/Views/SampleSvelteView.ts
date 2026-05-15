@@ -26,7 +26,6 @@ export class SampleSvelteView extends ItemView {
   public override onOpen(): Promise<void> {
     const START_COUNT = 10;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Svelte component mount return type
     this.sampleSvelteComponent = mount(SampleSvelteComponent, {
       props: { startCount: START_COUNT },
       target: this.contentEl

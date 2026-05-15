@@ -1,59 +1,50 @@
 import { Notice } from 'obsidian';
+
 import type { Plugin } from './Plugin.ts';
 
-export interface HermesMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
-
 export interface HermesChatRequest {
-  model?: string;
   messages: HermesMessage[];
-  stream?: boolean;
-}
-
-export interface HermesResponseRequest {
   model?: string;
-  input: string | HermesMessage[];
-  instructions?: string;
-  store?: boolean;
-  previous_response_id?: string;
-  conversation?: string;
   stream?: boolean;
 }
 
 export interface HermesChatResponse {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
   choices: {
+    finish_reason: string;
     index: number;
     message: HermesMessage;
-    finish_reason: string;
   }[];
+  created: number;
+  id: string;
+  model: string;
+  object: string;
   usage?: {
-    prompt_tokens: number;
     completion_tokens: number;
+    prompt_tokens: number;
     total_tokens: number;
   };
 }
 
+export interface HermesMessage {
+  content: string;
+  role: 'assistant' | 'system' | 'user';
+}
+
 export interface HermesResponseAPI {
-  id: string;
-  object: string;
   created: number;
+  id: string;
   model: string;
-  status: string;
-  output: Array<{
-    type: string;
-    role?: string;
-    content?: string | Array<{ type: string; text?: string }>;
-    name?: string;
+  object: string;
+  output: {
     arguments?: string;
     call_id?: string;
+    content?: { text?: string; type: string }[] | string;
+    name?: string;
     output?: string;
-  }>;
+    role?: string;
+    type: string;
+  }[];
+  status: string;
   usage?: {
     input_tokens: number;
     output_tokens: number;
@@ -61,10 +52,20 @@ export interface HermesResponseAPI {
   };
 }
 
+export interface HermesResponseRequest {
+  conversation?: string;
+  input: HermesMessage[] | string;
+  instructions?: string;
+  model?: string;
+  previous_response_id?: string;
+  store?: boolean;
+  stream?: boolean;
+}
+
 export class HermesAPI {
-  private plugin: Plugin;
-  private baseUrl: string;
   private apiKey: string;
+  private baseUrl: string;
+  private plugin: Plugin;
 
   constructor(plugin: Plugin) {
     this.plugin = plugin;
@@ -85,8 +86,8 @@ export class HermesAPI {
         try {
           console.log('[HermesAPI] Trying endpoint:', endpoint);
           const response = await fetch(endpoint, {
-            method: 'GET',
-            headers: this.getHeaders()
+            headers: this.getHeaders(),
+            method: 'GET'
           });
           console.log('[HermesAPI] Response status:', response.status, response.statusText);
           if (response.ok) {
@@ -112,20 +113,20 @@ export class HermesAPI {
   public async sendMessage(
     messages: HermesMessage[],
     model?: string,
-    stream: boolean = false
+    stream = false
   ): Promise<HermesChatResponse | null> {
     try {
       const request: HermesChatRequest = {
+        messages,
         model: model || this.plugin.settings.hermesAgentName,
-        messages: messages,
-        stream: stream
+        stream
       };
 
       console.log('[HermesAPI] Sending message to', `${this.baseUrl}/v1/chat/completions`);
       const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-        method: 'POST',
+        body: JSON.stringify(request),
         headers: this.getHeaders(),
-        body: JSON.stringify(request)
+        method: 'POST'
       });
 
       console.log('[HermesAPI] Response status:', response.status, response.statusText);
@@ -154,13 +155,13 @@ export class HermesAPI {
     conversation?: string,
     instructions?: string,
     model?: string,
-    store: boolean = true
+    store = true
   ): Promise<HermesResponseAPI | null> {
     try {
       const request: HermesResponseRequest = {
+        input,
         model: model || this.plugin.settings.hermesAgentName,
-        input: input,
-        store: store
+        store
       };
 
       // Add optional parameters if provided
@@ -176,9 +177,9 @@ export class HermesAPI {
 
       console.log('[HermesAPI] Sending message with Responses API to', `${this.baseUrl}/v1/responses`);
       const response = await fetch(`${this.baseUrl}/v1/responses`, {
-        method: 'POST',
+        body: JSON.stringify(request),
         headers: this.getHeaders(),
-        body: JSON.stringify(request)
+        method: 'POST'
       });
 
       console.log('[HermesAPI] Response status:', response.status, response.statusText);

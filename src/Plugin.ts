@@ -122,11 +122,11 @@ export class Plugin extends PluginBase<PluginTypes> {
 
     // Add command to open Hermes chat view
     this.addCommand({
-      id: 'open-hermes-chat',
-      name: 'Open Hermes Chat',
       callback: () => {
         this.openView(HERMES_CHAT_VIEW_TYPE);
-      }
+      },
+      id: 'open-hermes-chat',
+      name: 'Open Hermes Chat'
     });
   }
 
@@ -195,7 +195,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Create new leaf in right sidebar
     const leaf = this.app.workspace.getRightLeaf(false);
     if (leaf) {
-      await leaf.setViewState({ type: viewType, active: true });
+      await leaf.setViewState({ active: true, type: viewType });
       this.app.workspace.revealLeaf(leaf);
     }
   }

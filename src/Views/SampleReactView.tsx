@@ -34,7 +34,7 @@ export class SampleReactView extends ItemView {
     };
 
     this.root = createRoot(this.contentEl);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AppContext type issue
+
     this.root.render(
       <StrictMode>
         {/* @ts-expect-error - AppContext type issue */}

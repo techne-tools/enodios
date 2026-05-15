@@ -58,15 +58,7 @@ npx grunt        # Watch mode (auto-rebuild on changes)
   └── manifest.json    # Theme manifest
 ```
 
-**Plugin location** (in vault):
-```
-<Vault>/.obsidian/plugins/<plugin-name>/
-  ├── main.js          # Compiled JavaScript
-  ├── manifest.json    # Plugin manifest
-  └── styles.css       # Compiled CSS
-```
-
-**Build output**: Must be at top level of theme/plugin folder in vault.
+**Build output**: Must be at top level of theme folder in vault.
 
 ## CSS Patterns
 

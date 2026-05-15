@@ -66,21 +66,11 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     // Context Selection Section
     new SettingEx(this.containerEl)
-      .setName('Auto-Select Context')
-      .setDesc('Automatically select context when sending messages')
+      .setName('Auto-Add Current Note')
+      .setDesc('Automatically update context when a different note is opened (requires note to be in context first)')
       .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.contextAutoSelect);
-        this.bind(toggle, 'contextAutoSelect');
-      });
-
-    new SettingEx(this.containerEl)
-      .setName('Context Source')
-      .setDesc('Default context source when auto-select is enabled')
-      .addDropdown((dropdown) => {
-        dropdown.addOption('editor', 'Entire Editor');
-        dropdown.addOption('selection', 'Selected Text');
-        dropdown.setValue(this.plugin.settings.contextMode);
-        this.bind(dropdown, 'contextMode');
+        toggle.setValue(this.plugin.settings.contextEntireNote);
+        this.bind(toggle, 'contextEntireNote');
       });
 
     // Test Connection Button
@@ -96,8 +86,8 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   }
 
   private async testConnection(): Promise<void> {
-    const { hermesApiUrl, hermesApiKey } = this.plugin.settings;
-    
+    const { hermesApiKey, hermesApiUrl } = this.plugin.settings;
+
     if (!hermesApiUrl) {
       new Notice('Please enter a valid API URL');
       return;
@@ -105,11 +95,11 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     try {
       const response = await fetch(`${hermesApiUrl}/health`, {
-        method: 'GET',
         headers: {
           'Authorization': `Bearer ${hermesApiKey}`,
           'Content-Type': 'application/json'
-        }
+        },
+        method: 'GET'
       });
 
       if (response.ok) {

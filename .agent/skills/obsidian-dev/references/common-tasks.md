@@ -14,19 +14,6 @@ Update frequency: Check Obsidian Sample Plugin repo for updates
 
 > **Note**: If user asks "what does the Obsidian API say about X?" or similar, check `.ref/obsidian-api/obsidian.d.ts` first. See [ref-instructions.md](../../obsidian-ref/references/ref-instructions.md) for when to check `.ref` setup.
 
-## Plugin Installation
-
-**CRITICAL**: Plugins must be installed in `<vault>/.obsidian/plugins/<plugin-name>/`:
-
-```
-<Vault>/.obsidian/plugins/<plugin-name>/
-  ├── main.js          # Compiled JavaScript
-  ├── manifest.json    # Plugin manifest
-  └── styles.css       # Compiled CSS
-```
-
-The `.obsidian/plugins` directory is required - Obsidian will not detect plugins in other locations. After copying files, reload Obsidian and enable the plugin in Settings → Plugins.
-
 ## Organize code across multiple files
 
 **main.ts** (minimal, lifecycle only):
