@@ -14,7 +14,7 @@ import {
 } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { HermesAPI, type HermesMessage } from '../HermesAPI.ts';
+import type { AcpSessionUpdate } from '../AcpClient.ts';
 import type { Plugin } from '../Plugin.ts';
 import type { PluginSettings } from '../PluginSettings.ts';
 import { getSlashCommands, getToolSlashCommands, parseSlashCommand } from '../SlashCommands.ts';
@@ -44,9 +44,9 @@ interface HermesChatViewComponentProps {
 }
 
 export class HermesChatView extends ItemView {
-  private hermesAPI!: HermesAPI;
-  private previousResponseId: null | string = null;
   private root: null | ReturnType<typeof createRoot> = null;
+  private unsubscribeUpdate: (() => void) | null = null;
+  private unsubscribeError: (() => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly pluginInstance: Plugin) {
     super(leaf);
@@ -69,6 +69,14 @@ export class HermesChatView extends ItemView {
   }
 
   public override async onClose(): Promise<void> {
+    if (this.unsubscribeUpdate) {
+      this.unsubscribeUpdate();
+      this.unsubscribeUpdate = null;
+    }
+    if (this.unsubscribeError) {
+      this.unsubscribeError();
+      this.unsubscribeError = null;
+    }
     if (this.root) {
       this.root.unmount();
       this.root = null;
@@ -77,70 +85,32 @@ export class HermesChatView extends ItemView {
 
   public override async onOpen(): Promise<void> {
     this.contentEl.empty();
-    this.hermesAPI = new HermesAPI(this.pluginInstance);
     this.root = createRoot(this.contentEl);
     this.root.render(<HermesChatViewComponent view={this} />);
-
-    await this.checkConnection();
   }
 
-  public async sendMessageStream(
-    prompt: string,
-    onChunk: (chunk: string) => void,
-    onDone: () => void,
-    onError: (error: string) => void
-  ): Promise<void> {
-    const messages: HermesMessage[] = [
-      { content: prompt, role: 'user' }
-    ];
-
-    await this.hermesAPI.sendMessageStream(
-      messages,
-      onChunk,
-      onDone,
-      onError,
-      this.pluginInstance.settings.hermesAgentName
-    );
-  }
-
-  public async sendMessage(prompt: string, onAssistantResponse: (content: string) => void): Promise<void> {
-    const response = await this.hermesAPI.sendMessageWithResponseAPI(
-      prompt,
-      this.previousResponseId,
-      'obsidian-chat',
-      undefined,
-      this.pluginInstance.settings.hermesAgentName
-    );
-
-    if (response?.output && response.output.length > 0) {
-      const assistantOutput = response.output.find((out) =>
-        out.type === 'message' && out.role === 'assistant'
-      );
-
-      if (assistantOutput?.content) {
-        this.previousResponseId = response.id;
-        const textContent = this.extractTextContent(assistantOutput.content);
-        onAssistantResponse(textContent);
-      }
+  public async sendPrompt(text: string): Promise<void> {
+    const client = this.pluginInstance.acpClient;
+    if (!client.isReady()) {
+      await client.connect();
     }
+    await client.sendPrompt(text);
+  }
+
+  public async cancelPrompt(): Promise<void> {
+    await this.pluginInstance.acpClient.cancel();
+  }
+
+  public subscribeToUpdates(callback: (update: AcpSessionUpdate) => void): void {
+    this.unsubscribeUpdate = this.pluginInstance.acpClient.onUpdate(callback);
+  }
+
+  public subscribeToErrors(callback: (error: string) => void): void {
+    this.unsubscribeError = this.pluginInstance.acpClient.onError(callback);
   }
 
   public clearConversation(): void {
-    this.previousResponseId = null;
-  }
-
-  private async checkConnection(): Promise<void> {
-    await this.hermesAPI.checkConnection();
-  }
-
-  private extractTextContent(content: string | Array<{ text?: string; value?: string }>): string {
-    if (typeof content === 'string') {
-      return content;
-    }
-    if (Array.isArray(content)) {
-      return content.map((c) => c.text ?? c.value ?? '').join('\n');
-    }
-    return String(content);
+    // ACP sessions maintain their own history; just clear local state
   }
 }
 
@@ -172,6 +142,49 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
   const plugin = view.getPlugin();
   const settings = view.getSettings();
+  const streamingMessageIdRef = useRef<number | null>(null);
+
+  // Subscribe to ACP session updates for streaming
+  useEffect(() => {
+    view.subscribeToUpdates((update: AcpSessionUpdate) => {
+      if (update.type === 'message' && update.content) {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === 'assistant' && last.timestamp === streamingMessageIdRef.current) {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              ...last,
+              content: last.content + update.content
+            };
+            return updated;
+          }
+          return prev;
+        });
+      } else if (update.type === 'stop') {
+        setIsTyping(false);
+        streamingMessageIdRef.current = null;
+        // Save conversation after response completes
+        setMessages((currentMessages) => {
+          void saveConversation(currentMessages);
+          return currentMessages;
+        });
+      } else if (update.type === 'tool_start' || update.type === 'tool_progress') {
+        // Optionally show tool call status in UI
+        // For now, silently ignore tool events
+      }
+    });
+
+    view.subscribeToErrors((err: string) => {
+      setError(err);
+      setIsTyping(false);
+      streamingMessageIdRef.current = null;
+    });
+
+    return () => {
+      // Subscriptions are cleaned up by the view's onClose
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   const loadConversationList = useCallback(async (): Promise<void> => {
     try {
@@ -201,7 +214,6 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastPromptRef = useRef<string>('');
-  const saveTimeoutRef = useRef<number | null>(null);
 
   const handleNewChat = useCallback((): void => {
     setMessages([]);
@@ -231,21 +243,13 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     }
   }, [conversationFilePath, conversationTitle, plugin]);
 
-  const debouncedSave = useCallback((currentMessages: ChatMessage[]) => {
-    if (saveTimeoutRef.current) {
-      window.clearTimeout(saveTimeoutRef.current);
-    }
-    saveTimeoutRef.current = window.setTimeout(() => {
-      void saveConversation(currentMessages);
-    }, 2000);
-  }, [saveConversation]);
-
   const handleRetry = useCallback(async (): Promise<void> => {
     if (!lastPromptRef.current || isTyping) return;
     setError(null);
     setIsTyping(true);
 
     const streamingMessageId = Date.now();
+    streamingMessageIdRef.current = streamingMessageId;
     const assistantPlaceholder: ChatMessage = {
       content: '',
       role: 'assistant',
@@ -254,36 +258,12 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
     try {
-      await view.sendMessageStream(
-        lastPromptRef.current,
-        (chunk) => {
-          setMessages((prev) => {
-            const lastMsg = prev[prev.length - 1];
-            if (lastMsg?.role === 'assistant' && lastMsg.timestamp === streamingMessageId) {
-              return [...prev.slice(0, -1), {
-                ...lastMsg,
-                content: lastMsg.content + chunk
-              }];
-            }
-            return prev;
-          });
-        },
-        () => {
-          setIsTyping(false);
-          setMessages((prev) => {
-            debouncedSave(prev);
-            return prev;
-          });
-        },
-        (err) => {
-          setError(err);
-          setIsTyping(false);
-        }
-      );
+      await view.sendPrompt(lastPromptRef.current);
     } catch {
       setIsTyping(false);
+      streamingMessageIdRef.current = null;
     }
-  }, [isTyping, view, debouncedSave]);
+  }, [isTyping, view]);
 
   const handleSend = useCallback(async (): Promise<void> => {
     const trimmed = input.trim();
@@ -358,6 +338,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
     // Create a placeholder assistant message for streaming
     const streamingMessageId = Date.now();
+    streamingMessageIdRef.current = streamingMessageId;
     const assistantPlaceholder: ChatMessage = {
       content: '',
       role: 'assistant',
@@ -366,39 +347,13 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
     try {
-      await view.sendMessageStream(
-        trimmed,
-        (chunk) => {
-          setMessages((prev) => {
-            const lastMsg = prev[prev.length - 1];
-            if (lastMsg?.role === 'assistant' && lastMsg.timestamp === streamingMessageId) {
-              const updated = [...prev.slice(0, -1), {
-                ...lastMsg,
-                content: lastMsg.content + chunk
-              }];
-              return updated;
-            }
-            return prev;
-          });
-        },
-        () => {
-          setIsTyping(false);
-          // Trigger save after streaming completes
-          setMessages((prev) => {
-            debouncedSave(prev);
-            return prev;
-          });
-        },
-        (err) => {
-          setError(err);
-          setIsTyping(false);
-        }
-      );
+      await view.sendPrompt(trimmed);
     } catch {
       setError('Failed to get a response. Click to retry.');
       setIsTyping(false);
+      streamingMessageIdRef.current = null;
     }
-  }, [input, isTyping, view, plugin, debouncedSave]);
+  }, [input, isTyping, view, plugin]);
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (isSlashOpen && slashSuggestions.length > 0) {

@@ -48,6 +48,7 @@
     "type-fest": "latest"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^0.21.1",
     "markdownlint-cli2": "^0.22.1"
   }
 }

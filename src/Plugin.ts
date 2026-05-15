@@ -5,6 +5,7 @@ import { PluginBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginBase';
 
 import type { PluginTypes } from './PluginTypes.ts';
 
+import { AcpClient } from './AcpClient.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
 import { PluginSettingsTab } from './PluginSettingsTab.ts';
 import { VaultManager } from './VaultManager.ts';
@@ -14,6 +15,7 @@ import {
 } from './Views/HermesChatView.tsx';
 
 export class Plugin extends PluginBase<PluginTypes> {
+  public acpClient!: AcpClient;
   public vaultManager!: VaultManager;
   /**
    * Open the plugin settings tab.
@@ -39,6 +41,12 @@ export class Plugin extends PluginBase<PluginTypes> {
     await super.onloadImpl();
 
     this.vaultManager = new VaultManager(this);
+    this.acpClient = new AcpClient(this);
+
+    // Connect to ACP on load
+    this.acpClient.connect().catch(() => {
+      // Silently ignore connection errors - will retry on first message
+    });
 
     this.registerView(HERMES_CHAT_VIEW_TYPE, (leaf) => new HermesChatView(leaf, this));
 
