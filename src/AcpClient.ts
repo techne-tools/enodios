@@ -59,6 +59,12 @@ export interface AcpSessionUpdate {
   };
 }
 
+export interface PromptContextItem {
+  id: string;
+  text: string;
+  type: 'folder' | 'note' | 'selection';
+}
+
 /**
  * Manages the ACP (Agent Client Protocol) connection to Hermes.
  * Spawns hermes acp as a subprocess and communicates via JSON-RPC over stdio.
@@ -256,16 +262,54 @@ export class AcpClient {
   /**
    * Send a prompt to the ACP session.
    */
-  public async sendPrompt(text: string): Promise<void> {
+  public async sendPrompt(text: string, contextItems: PromptContextItem[] = []): Promise<void> {
     if (!this.isReady() || !this.clientConnection || !this.currentSessionId) {
       throw new Error('ACP client not connected');
     }
 
+    const promptBlocks: PromptRequest['prompt'] = [];
+
+    // Add context items as embedded resources before the user message
+    for (const item of contextItems) {
+      if (item.type === 'note') {
+        const notePath = item.id.replace(/^note-/, '');
+        try {
+          const file = this.plugin.app.vault.getAbstractFileByPath(notePath);
+          if (file && 'read' in file) {
+            const content = await this.plugin.app.vault.read(file as any);
+            promptBlocks.push({
+              resource: {
+                mimeType: 'text/markdown',
+                text: content,
+                uri: `vault://${notePath}`
+              },
+              type: 'resource'
+            });
+          }
+        } catch {
+          // Skip notes that can't be read
+        }
+      } else if (item.type === 'selection') {
+        promptBlocks.push({
+          resource: {
+            mimeType: 'text/plain',
+            text: item.text,
+            uri: `vault://selection/${encodeURIComponent(item.id)}`
+          },
+          type: 'resource'
+        });
+      }
+      // folder type is skipped — no single file to embed
+    }
+
+    // Add the user's text message
+    promptBlocks.push({
+      text,
+      type: 'text'
+    });
+
     const promptRequest: PromptRequest = {
-      prompt: [{
-        text,
-        type: 'text'
-      }],
+      prompt: promptBlocks,
       sessionId: this.currentSessionId
     };
     await this.clientConnection.prompt(promptRequest);

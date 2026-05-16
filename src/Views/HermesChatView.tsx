@@ -14,7 +14,7 @@ import {
 } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import type { AcpSessionUpdate } from '../AcpClient.ts';
+import type { AcpSessionUpdate, PromptContextItem } from '../AcpClient.ts';
 import type { Plugin } from '../Plugin.ts';
 import type { PluginSettings } from '../PluginSettings.ts';
 import { getSlashCommands, getToolSlashCommands, parseSlashCommand } from '../SlashCommands.ts';
@@ -27,11 +27,8 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-interface ContextItem {
-  id: string;
-  text: string;
-  type: 'folder' | 'note' | 'selection';
-}
+// Re-export ContextItem shape from AcpClient for UI use
+type ContextItem = PromptContextItem;
 
 interface AutocompleteSuggestion {
   id: string;
@@ -89,12 +86,12 @@ export class HermesChatView extends ItemView {
     this.root.render(<HermesChatViewComponent view={this} />);
   }
 
-  public async sendPrompt(text: string): Promise<void> {
+  public async sendPrompt(text: string, contextItems: PromptContextItem[] = []): Promise<void> {
     const client = this.pluginInstance.acpClient;
     if (!client.isReady()) {
       await client.connect();
     }
-    await client.sendPrompt(text);
+    await client.sendPrompt(text, contextItems);
   }
 
   public async cancelPrompt(): Promise<void> {
@@ -214,6 +211,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastPromptRef = useRef<string>('');
+  const lastContextItemsRef = useRef<ContextItem[]>([]);
 
   const handleNewChat = useCallback((): void => {
     setMessages([]);
@@ -258,7 +256,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
     try {
-      await view.sendPrompt(lastPromptRef.current);
+      await view.sendPrompt(lastPromptRef.current, lastContextItemsRef.current);
     } catch {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
@@ -335,6 +333,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     setError(null);
     setIsTyping(true);
     lastPromptRef.current = trimmed;
+    lastContextItemsRef.current = [...contextItems];
 
     // Create a placeholder assistant message for streaming
     const streamingMessageId = Date.now();
@@ -347,13 +346,13 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
     try {
-      await view.sendPrompt(trimmed);
+      await view.sendPrompt(trimmed, contextItems);
     } catch {
       setError('Failed to get a response. Click to retry.');
       setIsTyping(false);
       streamingMessageIdRef.current = null;
     }
-  }, [input, isTyping, view, plugin]);
+  }, [input, isTyping, view, plugin, contextItems]);
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (isSlashOpen && slashSuggestions.length > 0) {
