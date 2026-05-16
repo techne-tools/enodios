@@ -1,5 +1,6 @@
+import { existsSync } from 'fs';
 import { spawn, type ChildProcess } from 'child_process';
-import { Notice } from 'obsidian';
+import { Notice, TFile } from 'obsidian';
 import {
   ClientSideConnection,
   ndJsonStream,
@@ -32,6 +33,20 @@ import type {
 } from '@agentclientprotocol/sdk';
 
 import type { Plugin } from './Plugin.ts';
+import type { ChatClient, ChatSessionUpdate } from './ChatClient.ts';
+
+/**
+ * Strip ANSI escape codes from a string.
+ * Handles color codes, cursor movements, clear lines, and other terminal sequences.
+ */
+function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')   // CSI sequences (colors, cursor, etc.)
+    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
+    .replace(/\x1b[()[\]{}#~%@\^=\/>!]/g, '') // Single-char escape sequences
+    .replace(/\x1b\x1b/g, '');              // Double escapes
+}
 
 export interface AcpMessage {
   content: string;
@@ -47,17 +62,8 @@ export interface AcpToolCall {
   result?: string;
 }
 
-export interface AcpSessionUpdate {
-  content?: string;
-  stopReason?: string;
+export interface AcpSessionUpdate extends ChatSessionUpdate {
   toolCall?: AcpToolCall;
-  type: 'message' | 'tool_start' | 'tool_progress' | 'tool_complete' | 'usage' | 'stop' | 'available_commands';
-  usage?: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  };
-  availableCommands?: Array<{ description: string; name: string }>;
 }
 
 export interface PromptContextItem {
@@ -70,14 +76,15 @@ export interface PromptContextItem {
  * Manages the ACP (Agent Client Protocol) connection to Hermes.
  * Spawns hermes acp as a subprocess and communicates via JSON-RPC over stdio.
  */
-export class AcpClient {
+export class AcpClient implements ChatClient {
   private childProcess: ChildProcess | null = null;
   private clientConnection: ClientSideConnection | null = null;
   private currentSessionId: string | null = null;
   private isConnecting = false;
-  private messageCallbacks: Array<(update: AcpSessionUpdate) => void> = [];
+  private messageCallbacks: Array<(update: ChatSessionUpdate) => void> = [];
   private errorCallbacks: Array<(error: string) => void> = [];
   private commandsCallbacks: Array<(commands: Array<{ description: string; name: string }>) => void> = [];
+  private lastAvailableCommands: Array<{ description: string; name: string }> = [];
   private readonly plugin: Plugin;
 
   constructor(plugin: Plugin) {
@@ -99,8 +106,7 @@ export class AcpClient {
     ];
     for (const candidate of candidates) {
       try {
-        const fs = require('fs');
-        if (fs.existsSync(candidate)) {
+        if (existsSync(candidate)) {
           return candidate;
         }
       } catch {
@@ -143,19 +149,13 @@ export class AcpClient {
         throw new Error('Failed to spawn hermes acp: stdio pipes not available');
       }
 
-      // Forward stderr to error subscribers
+      // Log stderr for debugging only — Hermes outputs INFO/WARNING to stderr
       if (this.childProcess.stderr) {
         this.childProcess.stderr.on('data', (chunk: Buffer) => {
-          const stderrText = chunk.toString('utf-8').trim();
+          const stderrText = stripAnsi(chunk.toString('utf-8').trim());
           if (stderrText) {
-            console.error('hermes stderr:', stderrText);
-            for (const callback of this.errorCallbacks) {
-              try {
-                callback(stderrText);
-              } catch {
-                // Ignore callback errors
-              }
-            }
+            // eslint-disable-next-line no-console
+            console.log('[Hermes stderr]', stderrText);
           }
         });
       }
@@ -208,7 +208,7 @@ export class AcpClient {
       };
       const initResponse = await this.clientConnection.initialize(initRequest);
 
-      console.log('ACP initialized:', initResponse);
+      // ACP initialized successfully
 
       // Authenticate if needed
       if (initResponse.authMethods && initResponse.authMethods.length > 0) {
@@ -231,12 +231,11 @@ export class AcpClient {
       const sessionResponse = await this.clientConnection.newSession(sessionRequest);
 
       this.currentSessionId = sessionResponse.sessionId;
-      console.log('ACP session created:', this.currentSessionId);
+      // ACP session created successfully
 
       new Notice('Connected to Hermes via ACP');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error('ACP connection failed:', message);
       new Notice(`ACP connection failed: ${message}`);
       this.disconnect();
       throw error;
@@ -294,8 +293,8 @@ export class AcpClient {
         const notePath = item.id.replace(/^note-/, '');
         try {
           const file = this.plugin.app.vault.getAbstractFileByPath(notePath);
-          if (file && 'read' in file) {
-            const content = await this.plugin.app.vault.read(file as any);
+          if (file instanceof TFile) {
+            const content = await this.plugin.app.vault.read(file);
             promptBlocks.push({
               resource: {
                 mimeType: 'text/markdown',
@@ -351,7 +350,7 @@ export class AcpClient {
   /**
    * Subscribe to session updates.
    */
-  public onUpdate(callback: (update: AcpSessionUpdate) => void): () => void {
+  public onUpdate(callback: (update: ChatSessionUpdate) => void): () => void {
     this.messageCallbacks.push(callback);
     return () => {
       const index = this.messageCallbacks.indexOf(callback);
@@ -379,6 +378,14 @@ export class AcpClient {
    */
   public onAvailableCommands(callback: (commands: Array<{ description: string; name: string }>) => void): () => void {
     this.commandsCallbacks.push(callback);
+    // Immediately notify with cached commands if available
+    if (this.lastAvailableCommands.length > 0) {
+      try {
+        callback(this.lastAvailableCommands);
+      } catch {
+        // Ignore callback errors
+      }
+    }
     return () => {
       const index = this.commandsCallbacks.indexOf(callback);
       if (index >= 0) {
@@ -387,12 +394,17 @@ export class AcpClient {
     };
   }
 
+  /**
+   * Get the last known available commands from the agent.
+   */
+  public getLastAvailableCommands(): Array<{ description: string; name: string }> {
+    return [...this.lastAvailableCommands];
+  }
+
   private createClientHandler(): Client {
     return {
       requestPermission: async (params: RequestPermissionRequest): Promise<RequestPermissionResponse> => {
-        // For now, auto-approve all permissions by selecting the first option
-        // TODO: Show approval UI in Obsidian
-        console.log('ACP permission request:', params);
+        // NOTE: Permissions are auto-approved. Future enhancement: show approval UI in Obsidian.
         const firstOption = params.options[0];
         if (firstOption) {
           return {
@@ -412,10 +424,10 @@ export class AcpClient {
       readTextFile: async (params: ReadTextFileRequest): Promise<ReadTextFileResponse> => {
         try {
           const file = this.plugin.app.vault.getAbstractFileByPath(params.path);
-          if (!file || !('read' in file)) {
+          if (!(file instanceof TFile)) {
             throw new Error(`File not found: ${params.path}`);
           }
-          const content = await this.plugin.app.vault.read(file as any);
+          const content = await this.plugin.app.vault.read(file);
           return { content };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -426,8 +438,8 @@ export class AcpClient {
       writeTextFile: async (params: WriteTextFileRequest): Promise<WriteTextFileResponse> => {
         try {
           const existingFile = this.plugin.app.vault.getAbstractFileByPath(params.path);
-          if (existingFile && 'write' in existingFile) {
-            await this.plugin.app.vault.modify(existingFile as any, params.content);
+          if (existingFile instanceof TFile) {
+            await this.plugin.app.vault.modify(existingFile, params.content);
           } else {
             await this.plugin.app.vault.create(params.path, params.content);
           }
@@ -438,10 +450,8 @@ export class AcpClient {
         }
       },
 
-      createTerminal: async (params: CreateTerminalRequest): Promise<CreateTerminalResponse> => {
-        // For now, return a mock terminal response
-        // TODO: Implement actual terminal support
-        console.log('ACP createTerminal:', params);
+      createTerminal: async (_params: CreateTerminalRequest): Promise<CreateTerminalResponse> => {
+        // NOTE: Terminal support is not yet implemented.
         return {
           terminalId: `terminal-${Date.now()}`
         };
@@ -485,6 +495,7 @@ export class AcpClient {
 
       // Also notify command subscribers when available_commands update arrives
       if (parsedUpdate.type === 'available_commands' && parsedUpdate.availableCommands) {
+        this.lastAvailableCommands = parsedUpdate.availableCommands;
         for (const callback of this.commandsCallbacks) {
           try {
             callback(parsedUpdate.availableCommands);

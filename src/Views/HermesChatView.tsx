@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 
 import {
   ItemView,
+  MarkdownRenderer,
   MarkdownView,
   Notice,
   type WorkspaceLeaf
@@ -14,10 +15,24 @@ import {
 } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import type { AcpSessionUpdate, PromptContextItem } from '../AcpClient.ts';
+import type { ChatSessionUpdate } from '../ChatClient.ts';
+import type { PromptContextItem } from '../AcpClient.ts';
 import type { Plugin } from '../Plugin.ts';
 import type { PluginSettings } from '../PluginSettings.ts';
 import { getSlashCommands, parseSlashCommand, setCachedToolCommands } from '../SlashCommands.ts';
+
+/**
+ * Strip ANSI escape codes from a string.
+ * Handles color codes, cursor movements, clear lines, and other terminal sequences.
+ */
+function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')   // CSI sequences (colors, cursor, etc.)
+    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
+    .replace(/\x1b[()[\]{}#~%@\^=\/>!]/g, '') // Single-char escape sequences
+    .replace(/\x1b\x1b/g, '');              // Double escapes
+}
 
 export const HERMES_CHAT_VIEW_TYPE = 'hermes-chat-view';
 
@@ -42,8 +57,9 @@ interface HermesChatViewComponentProps {
 
 export class HermesChatView extends ItemView {
   private root: null | ReturnType<typeof createRoot> = null;
-  private unsubscribeUpdate: (() => void) | null = null;
+  private unsubscribeCommands: (() => void) | null = null;
   private unsubscribeError: (() => void) | null = null;
+  private unsubscribeUpdate: (() => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly pluginInstance: Plugin) {
     super(leaf);
@@ -74,6 +90,10 @@ export class HermesChatView extends ItemView {
       this.unsubscribeError();
       this.unsubscribeError = null;
     }
+    if (this.unsubscribeCommands) {
+      this.unsubscribeCommands();
+      this.unsubscribeCommands = null;
+    }
     if (this.root) {
       this.root.unmount();
       this.root = null;
@@ -87,7 +107,7 @@ export class HermesChatView extends ItemView {
   }
 
   public async sendPrompt(text: string, contextItems: PromptContextItem[] = []): Promise<void> {
-    const client = this.pluginInstance.acpClient;
+    const client = this.pluginInstance.getChatClient();
     if (!client.isReady()) {
       await client.connect();
     }
@@ -95,15 +115,19 @@ export class HermesChatView extends ItemView {
   }
 
   public async cancelPrompt(): Promise<void> {
-    await this.pluginInstance.acpClient.cancel();
+    await this.pluginInstance.getChatClient().cancel();
   }
 
-  public subscribeToUpdates(callback: (update: AcpSessionUpdate) => void): void {
-    this.unsubscribeUpdate = this.pluginInstance.acpClient.onUpdate(callback);
+  public subscribeToUpdates(callback: (update: ChatSessionUpdate) => void): void {
+    this.unsubscribeUpdate = this.pluginInstance.getChatClient().onUpdate(callback);
   }
 
   public subscribeToErrors(callback: (error: string) => void): void {
-    this.unsubscribeError = this.pluginInstance.acpClient.onError(callback);
+    this.unsubscribeError = this.pluginInstance.getChatClient().onError(callback);
+  }
+
+  public subscribeToAvailableCommands(callback: (commands: Array<{ description: string; name: string }>) => void): void {
+    this.unsubscribeCommands = this.pluginInstance.getChatClient().onAvailableCommands(callback);
   }
 
   public clearConversation(onClear?: () => void): void {
@@ -132,6 +156,17 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
   const [slashSuggestions, setSlashSuggestions] = useState<{ description: string; name: string }[]>([]);
   const [isSlashOpen, setIsSlashOpen] = useState(false);
   const [slashSelectionIndex, setSlashSelectionIndex] = useState(0);
+  const isSlashOpenRef = useRef(false);
+  const inputRef = useRef('');
+
+  // Keep refs in sync with state for useEffect callbacks
+  useEffect(() => {
+    isSlashOpenRef.current = isSlashOpen;
+  }, [isSlashOpen]);
+
+  useEffect(() => {
+    inputRef.current = input;
+  }, [input]);
 
   const [conversationFilePath, setConversationFilePath] = useState<string | null>(null);
   const [conversationTitle, setConversationTitle] = useState<string>('');
@@ -142,24 +177,49 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
   const plugin = view.getPlugin();
   const settings = view.getSettings();
   const streamingMessageIdRef = useRef<number | null>(null);
+  const lastChunkTimeRef = useRef<number>(0);
+  const typingTimeoutRef = useRef<number | null>(null);
+
+  const clearTypingTimeout = useCallback((): void => {
+    if (typingTimeoutRef.current !== null) {
+      window.clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const resetTypingTimeout = useCallback((): void => {
+    clearTypingTimeout();
+    typingTimeoutRef.current = window.setTimeout(() => {
+      setIsTyping(false);
+      streamingMessageIdRef.current = null;
+      // Save conversation after response completes (timeout-based fallback)
+      setMessages((currentMessages) => {
+        void saveConversation(currentMessages);
+        return currentMessages;
+      });
+    }, 3000);
+  }, [clearTypingTimeout]);
 
   // Subscribe to ACP session updates for streaming
   useEffect(() => {
-    view.subscribeToUpdates((update: AcpSessionUpdate) => {
+    view.subscribeToUpdates((update: ChatSessionUpdate) => {
       if (update.type === 'message' && update.content) {
+        lastChunkTimeRef.current = Date.now();
+        resetTypingTimeout();
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last && last.role === 'assistant' && last.timestamp === streamingMessageIdRef.current) {
             const updated = [...prev];
             updated[updated.length - 1] = {
               ...last,
-              content: last.content + update.content
+              content: last.content + (update.content ?? '')
             };
             return updated;
           }
           return prev;
         });
       } else if (update.type === 'stop') {
+        clearTypingTimeout();
         setIsTyping(false);
         streamingMessageIdRef.current = null;
         // Save conversation after response completes
@@ -185,16 +245,41 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     });
 
     view.subscribeToErrors((err: string) => {
-      setError(err);
+      clearTypingTimeout();
+      const cleaned = stripAnsi(err).trim();
+      if (!cleaned) return;
+      setError(cleaned);
       setIsTyping(false);
       streamingMessageIdRef.current = null;
     });
 
+    view.subscribeToAvailableCommands((commands) => {
+      const toolCmds = commands.map((cmd) => ({
+        description: cmd.description,
+        execute: async (): Promise<string | null> => {
+          // Tool commands are sent as regular prompts; the agent handles them
+          return null;
+        },
+        name: cmd.name
+      }));
+      setCachedToolCommands(toolCmds);
+      // Refresh slash suggestions if the dropdown is currently open
+      if (isSlashOpenRef.current) {
+        const query = inputRef.current.slice(1).toLowerCase();
+        const all = getSlashCommands();
+        const filtered = all.filter((cmd) =>
+          cmd.name.toLowerCase().includes(query)
+          || cmd.description.toLowerCase().includes(query)
+        );
+        setSlashSuggestions(filtered.map((cmd) => ({ description: cmd.description, name: cmd.name })));
+      }
+    });
+
     return () => {
+      clearTypingTimeout();
       // Subscriptions are cleaned up by the view's onClose
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
+  }, [view, plugin, clearTypingTimeout, resetTypingTimeout]);
 
   const loadConversationList = useCallback(async (): Promise<void> => {
     try {
@@ -272,8 +357,8 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     try {
       await view.sendPrompt(lastPromptRef.current, lastContextItemsRef.current);
     } catch (err) {
-      console.error('Retry failed:', err);
       setError(`Retry failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
     }
@@ -325,9 +410,27 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
             timestamp: Date.now()
           };
           setMessages((prev) => [...prev, systemMessage]);
+        } else {
+          // Tool commands return null — forward to agent as a prompt
+          lastPromptRef.current = trimmed;
+          lastContextItemsRef.current = [...contextItems];
+
+          const streamingMessageId = Date.now();
+          streamingMessageIdRef.current = streamingMessageId;
+          const assistantPlaceholder: ChatMessage = {
+            content: '',
+            role: 'assistant',
+            timestamp: streamingMessageId
+          };
+          setMessages((prev) => [...prev, assistantPlaceholder]);
+
+          try {
+            await view.sendPrompt(trimmed, contextItems);
+          } catch (err) {
+            setError(`Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`);
+          }
         }
       } catch (err) {
-        console.error(`Slash command /${slashCmd.command.name} failed:`, err);
         const errorMessage: ChatMessage = {
           content: `Error executing /${slashCmd.command.name}: ${err instanceof Error ? err.message : String(err)}`,
           role: 'system',
@@ -336,6 +439,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
         setMessages((prev) => [...prev, errorMessage]);
       } finally {
         setIsTyping(false);
+        streamingMessageIdRef.current = null;
       }
       return;
     }
@@ -366,8 +470,8 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     try {
       await view.sendPrompt(trimmed, contextItems);
     } catch (err) {
-      console.error('Send failed:', err);
       setError(`Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`);
+    } finally {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
     }
@@ -684,11 +788,21 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
       const query = input.slice(1).toLowerCase();
       const commands = getSlashCommands();
       const filtered = commands.filter((cmd) =>
-        cmd.name.toLowerCase().includes(query) ||
-        cmd.description.toLowerCase().includes(query)
+        cmd.name.toLowerCase().includes(query)
+        || cmd.description.toLowerCase().includes(query)
       );
-      setSlashSuggestions(filtered.map((cmd) => ({ description: cmd.description, name: cmd.name })));
-      setIsSlashOpen(filtered.length > 0);
+      if (filtered.length > 0) {
+        setSlashSuggestions(filtered.map((cmd) => ({ description: cmd.description, name: cmd.name })));
+        setIsSlashOpen(true);
+      } else {
+        // No cached match — still show as a runnable agent command
+        const syntheticName = input.slice(1).split(/\s/)[0] ?? '';
+        setSlashSuggestions([{
+          description: 'Send command to Hermes',
+          name: syntheticName
+        }]);
+        setIsSlashOpen(true);
+      }
     } else {
       setIsSlashOpen(false);
       setSlashSuggestions([]);
@@ -763,9 +877,25 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
         ))}
         {isTyping && <TypingIndicator agentName={settings.chatAgentName || 'Hermes'} />}
         {error && (
-          <div className="hermes-error" onClick={handleRetry} role="button" tabIndex={0}>
+          <div className="hermes-error" role="alert">
             <span className="hermes-error-icon">⚠️</span>
-            <span className="hermes-error-text">{error}</span>
+            <span className="hermes-error-text">{error || 'An error occurred'}</span>
+            <button
+              className="hermes-error-dismiss"
+              onClick={() => setError(null)}
+              title="Dismiss"
+              type="button"
+            >
+              ✕
+            </button>
+            <button
+              className="hermes-error-retry"
+              onClick={handleRetry}
+              title="Retry"
+              type="button"
+            >
+              Retry
+            </button>
           </div>
         )}
       </div>
@@ -855,7 +985,7 @@ function ChatMessageItem({ message, view }: ChatMessageItemProps): ReactElement 
         </span>
       </div>
       <div className="hermes-message-content">
-        <MarkdownRenderer content={message.content} view={view} />
+        <MarkdownContent content={message.content} view={view} />
       </div>
     </div>
   );
@@ -983,7 +1113,7 @@ function ChatInput({
           onChange={onInputChange}
           onKeyDown={onInputKeyDown}
           placeholder="Message Hermes..."
-          ref={textareaRef}
+          ref={textareaRef as React.RefObject<HTMLTextAreaElement>}
           rows={1}
           value={input}
         />
@@ -1064,34 +1194,28 @@ function ChatInput({
   );
 }
 
-interface MarkdownRendererProps {
+interface MarkdownContentProps {
   content: string;
   view: HermesChatView;
 }
 
-function MarkdownRenderer({ content, view }: MarkdownRendererProps): ReactElement {
+function MarkdownContent({ content, view }: MarkdownContentProps): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) {
+      return;
+    }
 
     containerRef.current.innerHTML = '';
 
     try {
-      const app = view.app as unknown as {
-        markdownRenderer?: {
-          renderMarkdown(markdown: string, el: HTMLElement, component: unknown): Promise<void>;
-        };
-      };
-      if (app.markdownRenderer?.renderMarkdown) {
-        void app.markdownRenderer.renderMarkdown(content, containerRef.current, view);
-        return;
-      }
+      MarkdownRenderer.render(view.app, content, containerRef.current, view.app.vault.getRoot().path, view).catch(() => {
+        // Ignore render errors
+      });
     } catch {
-      // Fall through to fallback
+      containerRef.current.textContent = content;
     }
-
-    containerRef.current.textContent = content;
   }, [content, view]);
 
   return <div className="hermes-markdown-renderer" ref={containerRef} />;

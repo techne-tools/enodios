@@ -107,7 +107,13 @@
 
 ## Next Steps
 
-1. ✅ Markdown rendering for assistant responses
-2. ⏳ Context/references feature
-3. ⏳ Add settings for API configuration
-4. ⏳ Chat history persistence
+1. ✅ Remove dead code and sample scaffolding
+2. ✅ Fix type safety issues (strictNullChecks enabled)
+3. ✅ Gate console logging and remove debug noise
+4. ✅ Fix react-hooks/exhaustive-deps
+5. ✅ Remove eslint-disable for no-explicit-any
+6. ✅ Bump version to 0.1.0
+7. 🔄 Implement permission approval UI in Obsidian (AcpClient)
+8. 🔄 Implement actual terminal support (AcpClient)
+9. 🔄 Add unit tests for VaultManager and SlashCommands
+10. 🔄 Add integration tests for ACP connection flow

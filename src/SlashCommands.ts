@@ -85,9 +85,18 @@ export function unregisterSlashCommand(name: string): void {
 /**
  * Get all available slash commands (built-in + custom + cached tool commands).
  * Note: Tool commands from the API are fetched separately via getToolSlashCommands().
+ * Built-in commands take precedence; duplicates by name are removed.
  */
 export function getSlashCommands(): SlashCommand[] {
-  return [...BUILT_IN_COMMANDS, ...customCommands, ...cachedToolCommands];
+  const all = [...BUILT_IN_COMMANDS, ...customCommands, ...cachedToolCommands];
+  const seen = new Set<string>();
+  return all.filter((cmd) => {
+    if (seen.has(cmd.name)) {
+      return false;
+    }
+    seen.add(cmd.name);
+    return true;
+  });
 }
 
 /**

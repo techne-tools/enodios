@@ -7,6 +7,7 @@ export class PluginSettings {
   public chatShowTitle = false;
   public chatShowTopic = true;
 
+  public connectionMode: 'acp' | 'api' = 'acp';
   public contextAutoSelect = true;
   // Context Selection
   public contextEntireNote = false; // Auto-add current note when it changes
@@ -15,7 +16,6 @@ export class PluginSettings {
   public chatSaveFolder = 'hermes'; // Folder to save conversations to
 
   public hermesAgentName = 'hermes-agent';
-  public hermesApiKey = '';
   // Hermes Agent API Configuration
   public hermesApiUrl = 'http://localhost:8642';
 

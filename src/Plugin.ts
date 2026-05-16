@@ -3,11 +3,14 @@ import type { ReadonlyDeep } from 'type-fest';
 
 import { PluginBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginBase';
 
+import type { ChatClient } from './ChatClient.ts';
 import type { PluginTypes } from './PluginTypes.ts';
 
 import { AcpClient } from './AcpClient.ts';
+import { HermesApiClient } from './HermesApiClient.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
 import { PluginSettingsTab } from './PluginSettingsTab.ts';
+import { SecretsManager } from './SecretsManager.ts';
 import { VaultManager } from './VaultManager.ts';
 import {
   HERMES_CHAT_VIEW_TYPE,
@@ -16,11 +19,22 @@ import {
 
 export class Plugin extends PluginBase<PluginTypes> {
   public acpClient!: AcpClient;
+  public apiClient!: HermesApiClient;
+  public secrets!: SecretsManager;
   public vaultManager!: VaultManager;
+
+  /**
+   * Get the active chat client based on connection mode.
+   */
+  public getChatClient(): ChatClient {
+    return this.settings.connectionMode === 'api' ? this.apiClient : this.acpClient;
+  }
+
   /**
    * Open the plugin settings tab.
    */
   public openSettings(): void {
+    // Access internal Obsidian API not exposed in public types
     (this.app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting.open();
     (this.app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting.openTabById(this.manifest.id);
   }
@@ -41,10 +55,13 @@ export class Plugin extends PluginBase<PluginTypes> {
     await super.onloadImpl();
 
     this.vaultManager = new VaultManager(this);
+    this.secrets = new SecretsManager(this);
     this.acpClient = new AcpClient(this);
+    this.apiClient = new HermesApiClient(this, this.secrets);
 
-    // Connect to ACP on load
-    this.acpClient.connect().catch(() => {
+    // Connect on load using the configured mode
+    const client = this.getChatClient();
+    client.connect().catch(() => {
       // Silently ignore connection errors - will retry on first message
     });
 
@@ -124,14 +141,13 @@ export class Plugin extends PluginBase<PluginTypes> {
 
   private async openView(viewType: string): Promise<void> {
     const leaves = this.app.workspace.getLeavesOfType(viewType);
-    const existingLeaf = leaves.length > 0 ? leaves[0] : null;
-    if (existingLeaf !== null) {
-      await this.app.workspace.revealLeaf(existingLeaf);
+    if (leaves.length > 0) {
+      await this.app.workspace.revealLeaf(leaves[0]!);
       return;
     }
 
     const leaf = this.app.workspace.getRightLeaf(false);
-    if (leaf !== null) {
+    if (leaf) {
       await leaf.setViewState({ active: true, type: viewType });
       await this.app.workspace.revealLeaf(leaf);
     }
@@ -139,14 +155,13 @@ export class Plugin extends PluginBase<PluginTypes> {
 
   private async toggleView(viewType: string): Promise<void> {
     const leaves = this.app.workspace.getLeavesOfType(viewType);
-    const existingLeaf = leaves.length > 0 ? leaves[0] : null;
-    if (existingLeaf !== null) {
+    if (leaves.length > 0) {
       // If the view is active, close it; otherwise reveal it
       const activeLeaf = this.app.workspace.activeLeaf;
       if (activeLeaf?.view?.getViewType() === viewType) {
         await this.app.workspace.detachLeavesOfType(viewType);
-      } else {
-        await this.app.workspace.revealLeaf(existingLeaf);
+      } else if (activeLeaf) {
+        await this.app.workspace.revealLeaf(leaves[0]!);
       }
       return;
     }
@@ -157,16 +172,15 @@ export class Plugin extends PluginBase<PluginTypes> {
 
   private async focusChatInput(): Promise<void> {
     const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
-    const leaf = leaves.length > 0 ? leaves[0] : null;
-    if (leaf === null) {
+    if (leaves.length === 0) {
       await this.openView(HERMES_CHAT_VIEW_TYPE);
       return;
     }
 
-    await this.app.workspace.revealLeaf(leaf);
+    await this.app.workspace.revealLeaf(leaves[0]!);
     // Focus the textarea after a short delay to allow the view to render
     window.setTimeout(() => {
-      const container = leaf.view.containerEl;
+      const container = leaves[0]!.view.containerEl;
       const textarea = container.querySelector('.hermes-input') as HTMLTextAreaElement | null;
       if (textarea) {
         textarea.focus();

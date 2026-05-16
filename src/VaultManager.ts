@@ -117,7 +117,7 @@ export class VaultManager {
       const headerMatch = trimmed.match(/^## \*\*(.+?)\*\* — (.+?)\n\n/);
       if (!headerMatch) continue;
 
-      const roleText = headerMatch[1].toLowerCase();
+      const roleText = headerMatch[1]?.toLowerCase() ?? '';
       const role = roleText === 'you' ? 'user' : roleText === 'hermes' ? 'assistant' : 'system';
       const contentText = trimmed.slice(headerMatch[0].length);
 
@@ -148,7 +148,6 @@ export class VaultManager {
       await this.vault.create(filePath, content);
       return filePath;
     } catch (error) {
-      console.error('Failed to save conversation:', error);
       new Notice('Failed to save conversation to vault');
       return null;
     }
@@ -167,7 +166,6 @@ export class VaultManager {
       await this.vault.modify(file, content);
       return true;
     } catch (error) {
-      console.error('Failed to update conversation:', error);
       return false;
     }
   }
@@ -189,7 +187,6 @@ export class VaultManager {
 
       return { messages, title };
     } catch (error) {
-      console.error('Failed to load conversation:', error);
       return null;
     }
   }
@@ -205,7 +202,6 @@ export class VaultManager {
       await this.vault.trash(file, true);
       return true;
     } catch (error) {
-      console.error('Failed to delete conversation:', error);
       return false;
     }
   }
@@ -232,14 +228,14 @@ export class VaultManager {
           const createdMatch = content.match(/^createdAt:\s*(\d+)$/m);
           const updatedMatch = content.match(/^updatedAt:\s*(\d+)$/m);
 
-          if (idMatch && titleMatch) {
+          if (idMatch?.[1] && titleMatch?.[1]) {
             conversations.push({
               filePath: child.path,
               metadata: {
-                createdAt: Number(createdMatch?.[1]) || child.stat.ctime,
+                createdAt: Number(createdMatch?.[1] ?? '') || child.stat.ctime,
                 id: idMatch[1].trim(),
                 title: titleMatch[1].trim(),
-                updatedAt: Number(updatedMatch?.[1]) || child.stat.mtime
+                updatedAt: Number(updatedMatch?.[1] ?? '') || child.stat.mtime
               }
             });
           }
@@ -271,7 +267,6 @@ export class VaultManager {
 
       return await this.vault.create(filePath, content);
     } catch (error) {
-      console.error('Failed to create note:', error);
       new Notice(`Failed to create note: ${filePath}`);
       return null;
     }
@@ -287,7 +282,6 @@ export class VaultManager {
     try {
       return await this.vault.read(file);
     } catch (error) {
-      console.error('Failed to read note:', error);
       return null;
     }
   }
@@ -303,7 +297,6 @@ export class VaultManager {
       await this.vault.modify(file, content);
       return true;
     } catch (error) {
-      console.error('Failed to update note:', error);
       return false;
     }
   }
@@ -319,7 +312,6 @@ export class VaultManager {
       await this.vault.trash(file, true);
       return true;
     } catch (error) {
-      console.error('Failed to delete note:', error);
       return false;
     }
   }

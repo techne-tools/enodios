@@ -1,0 +1,242 @@
+
+=== DIRECTORY TREE (max depth 3, source files only) ===
+.DS_Store
+Obsidian Dev
+Obsidian Dev/.DS_Store
+Obsidian Dev/.obsidian
+Obsidian Dev/.obsidian/.DS_Store
+Obsidian Dev/.obsidian/app.json
+Obsidian Dev/.obsidian/appearance.json
+Obsidian Dev/.obsidian/community-plugins.json
+Obsidian Dev/.obsidian/core-plugins.json
+Obsidian Dev/.obsidian/graph.json
+Obsidian Dev/.obsidian/plugins
+Obsidian Dev/.obsidian/plugins/.DS_Store
+Obsidian Dev/.obsidian/plugins/copilot
+Obsidian Dev/.obsidian/plugins/hermes
+Obsidian Dev/.obsidian/workspace.json
+Obsidian Dev/Welcome.md
+Obsidian Dev/copilot
+Obsidian Dev/copilot/copilot-conversations
+Obsidian Dev/copilot/copilot-conversations/test_message@20260514_063858.md
+Obsidian Dev/copilot/copilot-custom-prompts
+Obsidian Dev/copilot/copilot-custom-prompts/Clip Web Page.md
+Obsidian Dev/copilot/copilot-custom-prompts/Clip YouTube Transcript.md
+Obsidian Dev/copilot/copilot-custom-prompts/Emojify.md
+Obsidian Dev/copilot/copilot-custom-prompts/Explain like I am 5.md
+Obsidian Dev/copilot/copilot-custom-prompts/Fix grammar and spelling.md
+Obsidian Dev/copilot/copilot-custom-prompts/Generate glossary.md
+Obsidian Dev/copilot/copilot-custom-prompts/Generate table of contents.md
+Obsidian Dev/copilot/copilot-custom-prompts/Make longer.md
+Obsidian Dev/copilot/copilot-custom-prompts/Make shorter.md
+Obsidian Dev/copilot/copilot-custom-prompts/Remove URLs.md
+Obsidian Dev/copilot/copilot-custom-prompts/Rewrite as tweet thread.md
+Obsidian Dev/copilot/copilot-custom-prompts/Rewrite as tweet.md
+Obsidian Dev/copilot/copilot-custom-prompts/Simplify.md
+Obsidian Dev/copilot/copilot-custom-prompts/Summarize.md
+Obsidian Dev/copilot/copilot-custom-prompts/Translate to Chinese.md
+Obsidian Dev/hermes
+Obsidian Dev/hermes/this-is-a-test-conversation-dont-save-it-2026-05-15-1778882321916.md
+obsidian-hermes
+obsidian-hermes/.DS_Store
+obsidian-hermes/.agent
+obsidian-hermes/.agent/skills
+obsidian-hermes/.agent/skills/obsidian-dev
+obsidian-hermes/.agent/skills/obsidian-ops
+obsidian-hermes/.agent/skills/obsidian-ref
+obsidian-hermes/.agent/skills/project
+obsidian-hermes/.agent/sync-status.json
+obsidian-hermes/.agent.md
+obsidian-hermes/.editorconfig
+obsidian-hermes/.gitattributes
+obsidian-hermes/.github
+obsidian-hermes/.github/FUNDING.yml
+obsidian-hermes/.github/ISSUE_TEMPLATE
+obsidian-hermes/.github/ISSUE_TEMPLATE/bug_report.yml
+obsidian-hermes/.github/ISSUE_TEMPLATE/config.yml
+obsidian-hermes/.github/ISSUE_TEMPLATE/feature_request.yml
+obsidian-hermes/.github/agents
+obsidian-hermes/.github/agents/obsidian-plugin-dev.agent.md
+obsidian-hermes/.gitignore
+obsidian-hermes/.markdownlint-cli2.mjs
+obsidian-hermes/.markdownlint-cli2.mts
+obsidian-hermes/.npmrc
+obsidian-hermes/AGENTS.md
+obsidian-hermes/HERMES_API_FIX.md
+obsidian-hermes/LICENSE
+obsidian-hermes/README.md
+obsidian-hermes/TODO.md
+obsidian-hermes/TODO.md.bak
+obsidian-hermes/cspell.json
+obsidian-hermes/docs
+obsidian-hermes/docs/codebase
+obsidian-hermes/docs/codebase/.codebase-scan.txt
+obsidian-hermes/eslint.config.mts
+obsidian-hermes/manifest.json
+obsidian-hermes/package-lock.json
+obsidian-hermes/package.json
+obsidian-hermes/pnpm-lock.yaml
+obsidian-hermes/pnpm-workspace.yaml
+obsidian-hermes/src
+obsidian-hermes/src/.DS_Store
+obsidian-hermes/src/AcpClient.ts
+obsidian-hermes/src/EditorExtensions
+obsidian-hermes/src/EditorExtensions/SampleStateField.ts
+obsidian-hermes/src/EditorExtensions/SampleViewPlugin.ts
+obsidian-hermes/src/EditorExtensions/SampleWidget.ts
+obsidian-hermes/src/EditorSuggests
+obsidian-hermes/src/EditorSuggests/SampleEditorSuggest.ts
+obsidian-hermes/src/HermesAPI.ts
+obsidian-hermes/src/Modals
+obsidian-hermes/src/Modals/SampleModal.ts
+obsidian-hermes/src/Plugin.ts
+obsidian-hermes/src/PluginSettings.ts
+obsidian-hermes/src/PluginSettingsManager.ts
+obsidian-hermes/src/PluginSettingsTab.ts
+obsidian-hermes/src/PluginTypes.ts
+obsidian-hermes/src/ReactComponents
+obsidian-hermes/src/ReactComponents/SampleReactComponent.tsx
+obsidian-hermes/src/SlashCommands.ts
+obsidian-hermes/src/SvelteComponents
+obsidian-hermes/src/SvelteComponents/SampleSvelteComponent.d.ts
+obsidian-hermes/src/SvelteComponents/SampleSvelteComponent.svelte
+obsidian-hermes/src/VaultManager.ts
+obsidian-hermes/src/Views
+obsidian-hermes/src/Views/HermesChatView.tsx
+obsidian-hermes/src/Views/SampleReactView.tsx
+obsidian-hermes/src/Views/SampleSvelteView.ts
+obsidian-hermes/src/Views/SampleView.ts
+obsidian-hermes/src/main.ts
+obsidian-hermes/src/styles
+obsidian-hermes/src/styles/main.scss
+obsidian-hermes/styles
+obsidian-hermes/styles/main.scss
+obsidian-hermes/tsconfig.json
+obsidian-hermes/tsconfig.tsbuildinfo
+obsidian-hermes/types
+obsidian-hermes/types/markdownlint-cli2.d.ts
+obsidian-hermes/versions.json
+obsidian-template
+obsidian-template/.DS_Store
+obsidian-template/.agent
+obsidian-template/.agent/skills
+obsidian-template/.agent/skills/obsidian-dev
+obsidian-template/.agent/skills/obsidian-ops
+obsidian-template/.agent/skills/obsidian-ref
+obsidian-template/.agent/skills/project
+obsidian-template/.agent/sync-status.json
+obsidian-template/.editorconfig
+obsidian-template/.gitattributes
+obsidian-template/.github
+obsidian-template/.github/FUNDING.yml
+obsidian-template/.github/ISSUE_TEMPLATE
+obsidian-template/.github/ISSUE_TEMPLATE/bug_report.yml
+obsidian-template/.github/ISSUE_TEMPLATE/config.yml
+obsidian-template/.github/ISSUE_TEMPLATE/feature_request.yml
+obsidian-template/.github/agents
+obsidian-template/.github/agents/obsidian-plugin-dev.agent.md
+obsidian-template/.gitignore
+obsidian-template/.markdownlint-cli2.mjs
+obsidian-template/.markdownlint-cli2.mts
+obsidian-template/.npmrc
+obsidian-template/AGENTS.md
+obsidian-template/LICENSE
+obsidian-template/README.md
+obsidian-template/cspell.json
+obsidian-template/eslint.config.mts
+obsidian-template/manifest.json
+obsidian-template/package-lock.json
+obsidian-template/package.json
+obsidian-template/src
+obsidian-template/src/EditorExtensions
+obsidian-template/src/EditorExtensions/SampleStateField.ts
+obsidian-template/src/EditorExtensions/SampleViewPlugin.ts
+obsidian-template/src/EditorExtensions/SampleWidget.ts
+obsidian-template/src/EditorSuggests
+obsidian-template/src/EditorSuggests/SampleEditorSuggest.ts
+obsidian-template/src/Modals
+obsidian-template/src/Modals/SampleModal.ts
+obsidian-template/src/Plugin.ts
+obsidian-template/src/PluginSettings.ts
+obsidian-template/src/PluginSettingsManager.ts
+obsidian-template/src/PluginSettingsTab.ts
+obsidian-template/src/PluginTypes.ts
+obsidian-template/src/ReactComponents
+obsidian-template/src/ReactComponents/SampleReactComponent.tsx
+obsidian-template/src/SvelteComponents
+obsidian-template/src/SvelteComponents/SampleSvelteComponent.d.ts
+obsidian-template/src/SvelteComponents/SampleSvelteComponent.svelte
+obsidian-template/src/Views
+obsidian-template/src/Views/SampleReactView.tsx
+obsidian-template/src/Views/SampleSvelteView.ts
+obsidian-template/src/Views/SampleView.ts
+obsidian-template/src/main.ts
+obsidian-template/src/styles
+obsidian-template/src/styles/main.scss
+obsidian-template/tsconfig.json
+obsidian-template/types
+obsidian-template/types/markdownlint-cli2.d.ts
+obsidian-template/versions.json
+screenshots
+screenshots/.DS_Store
+
+=== STACK DETECTION (manifest files) ===
+No recognized manifest files found in project root.
+
+=== ENTRY POINTS ===
+No common entry points found. Check 'main' or 'scripts.start' in manifest files above.
+
+=== LINTING AND FORMATTING CONFIG ===
+No linting or formatting config files found in project root.
+
+=== ENVIRONMENT VARIABLE TEMPLATES ===
+No .env.example or .env.template found. Identify required environment variables by searching the code and config for environment variable reads.
+
+=== TODO / FIXME / HACK (production code only, test dirs excluded) ===
+obsidian-hermes/src/AcpClient.ts:394: // TODO: Show approval UI in Obsidian
+obsidian-hermes/src/AcpClient.ts:443: // TODO: Implement actual terminal support
+
+=== GIT RECENT COMMITS (last 20) ===
+No commits found.
+
+=== HIGH-CHURN FILES (last 90 days, top 20) ===
+None found.
+
+=== MONOREPO SIGNALS ===
+No monorepo signals detected.
+
+=== CODE METRICS ===
+Total files scanned: 178
+Total lines of code: 32361
+
+Files by language:
+  Other: 137
+  TypeScript: 34
+  TypeScript/React: 5
+  JavaScript: 2
+
+Top 10 largest files:
+Obsidian Dev/.obsidian/plugins/copilot/main.js: 3383.6KB
+Obsidian Dev/.obsidian/plugins/hermes/main.js: 992.8KB
+obsidian-template/package-lock.json: 478.4KB
+obsidian-hermes/package-lock.json: 478.4KB
+obsidian-hermes/pnpm-lock.yaml: 283.4KB
+Obsidian Dev/.obsidian/plugins/copilot/styles.css: 70.7KB
+obsidian-hermes/src/Views/HermesChatView.tsx: 37.0KB
+obsidian-hermes/.agent/skills/obsidian-ref/references/ref-instructions.md: 29.1KB
+obsidian-template/.agent/skills/obsidian-ref/references/ref-instructions.md: 28.6KB
+obsidian-hermes/.agent/skills/obsidian-dev/references/code-patterns.md: 17.6KB
+
+=== CI/CD PIPELINES ===
+No CI/CD pipelines detected.
+
+=== CONTAINERS & ORCHESTRATION ===
+No containerization configs detected.
+
+=== SECURITY & COMPLIANCE ===
+No security configs detected.
+
+=== PERFORMANCE & TESTING ===
+No performance testing configs detected.
+
+=== SCAN COMPLETE ===

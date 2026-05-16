@@ -26,19 +26,19 @@
   padding: 8px 12px;
   border-bottom: 1px solid var(--background-modifier-border);
   background-color: var(--background-primary);
-  
+
   &-left {
     display: flex;
     align-items: center;
     gap: 6px;
   }
-  
+
   &-right {
     display: flex;
     align-items: center;
     gap: 4px;
   }
-  
+
   .hermes-chat-agent-name {
     font-size: 13px;
     font-weight: 600;
@@ -131,19 +131,19 @@
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-  
+
   &::-webkit-scrollbar {
     width: 5px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   &::-webkit-scrollbar-thumb {
     background: var(--background-modifier-border);
     border-radius: 2px;
-    
+
     &:hover {
       background: var(--background-modifier-border-hover);
     }
@@ -158,19 +158,19 @@
   border-radius: 6px;
   font-size: 13px;
   line-height: 1.4;
-  
+
   &.hermes-user {
     align-self: flex-end;
     background-color: var(--interactive-accent);
     color: var(--text-on-accent);
   }
-  
+
   &.hermes-assistant {
     align-self: flex-start;
     background-color: var(--background-secondary);
     color: var(--text-normal);
   }
-  
+
   &.hermes-system {
     align-self: center;
     background-color: transparent;
@@ -185,14 +185,14 @@
   align-items: center;
   margin-bottom: 4px;
   padding-bottom: 2px;
-  
+
   .hermes-role {
     font-weight: 600;
     font-size: 10px;
     white-space: nowrap;
     flex-shrink: 0;
   }
-  
+
   .hermes-timestamp,
   .hermes-typing {
     font-size: 10px;
@@ -227,7 +227,7 @@
   word-wrap: break-word;
   font-size: 13px;
   line-height: 1.4;
-  
+
   * {
     background-color: transparent !important;
   }
@@ -362,12 +362,12 @@
   color: var(--text-normal);
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &:hover:not(:disabled) {
     background-color: var(--background-modifier-hover);
     border-color: var(--interactive-accent);
   }
-  
+
   svg {
     width: 16px;
     height: 16px;
@@ -397,7 +397,7 @@
   text-overflow: ellipsis;
   max-width: 100%;
   min-width: 4ch;
-  
+
   .hermes-context-remove {
     display: flex;
     align-items: center;
@@ -411,18 +411,18 @@
     color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
     transition: all 0.2s ease;
-    
+
     &:hover {
       background-color: rgba(255, 255, 255, 0.5);
       color: rgba(255, 255, 255, 1);
     }
-    
+
     svg {
       width: 10px;
       height: 10px;
     }
   }
-  
+
   .hermes-context-text {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -444,12 +444,12 @@
   outline: none;
   line-height: 1.4;
   overflow-y: hidden;
-  
+
   &:focus {
     outline: none;
     box-shadow: none;
   }
-  
+
   &::placeholder {
     color: var(--text-muted);
   }
@@ -468,17 +468,17 @@
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &:hover:not(:disabled) {
     background-color: var(--background-modifier-hover);
     color: var(--text-normal);
   }
-  
+
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
-  
+
   svg {
     width: 12px;
     height: 12px;
@@ -498,22 +498,22 @@
   color: var(--text-on-accent);
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &:hover:not(:disabled) {
     background-color: var(--interactive-accent-hover);
     transform: translateY(-1px);
   }
-  
+
   &:active:not(:disabled) {
     transform: translateY(0);
   }
-  
+
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     background-color: var(--background-modifier-border);
   }
-  
+
   svg {
     width: 14px;
     height: 14px;
@@ -533,12 +533,12 @@
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &:hover:not(:disabled) {
     background-color: var(--background-modifier-hover);
     color: var(--text-normal);
   }
-  
+
   svg {
     width: 16px;
     height: 16px;
@@ -557,17 +557,17 @@
   max-width: 500px;
   max-height: 600px;
   overflow-y: auto;
-  
+
   h2 {
     margin: 0 0 16px 0;
     font-size: 18px;
     font-weight: 600;
   }
-  
+
   .hermes-search-container {
     margin-bottom: 16px;
   }
-  
+
   .hermes-search-input {
     width: 100%;
     padding: 8px 12px;
@@ -577,28 +577,28 @@
     color: var(--text-normal);
     font-size: 14px;
     outline: none;
-    
+
     &:focus {
       border-color: var(--interactive-accent);
       background-color: var(--background-primary);
     }
   }
-  
+
   .hermes-results-container {
     margin-bottom: 16px;
     max-height: 300px;
     overflow-y: auto;
-    
+
     p {
       padding: 12px;
       text-align: center;
       color: var(--text-muted);
     }
   }
-  
+
   .hermes-recent-section {
     margin-bottom: 16px;
-    
+
     h3 {
       margin: 0 0 8px 0;
       font-size: 14px;
@@ -606,7 +606,7 @@
       color: var(--text-muted);
     }
   }
-  
+
   .hermes-result-item {
     display: flex;
     flex-direction: column;
@@ -620,18 +620,18 @@
     text-align: left;
     cursor: pointer;
     transition: all 0.2s ease;
-    
+
     &:hover {
       background-color: var(--background-modifier-hover);
       border-color: var(--interactive-accent);
     }
-    
+
     span {
       font-size: 14px;
       font-weight: 500;
       color: var(--text-normal);
     }
-    
+
     small {
       font-size: 12px;
       color: var(--text-muted);
@@ -656,18 +656,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  margin: 8px 12px;
+  padding: 8px 12px;
+  margin: 4px 8px;
   background-color: var(--background-modifier-error);
   color: var(--text-error);
   border-radius: 6px;
   font-size: 13px;
-  cursor: pointer;
   transition: opacity 0.2s;
-
-  &:hover {
-    opacity: 0.9;
-  }
+  max-height: 80px;
+  overflow: hidden;
 
   .hermes-error-icon {
     flex-shrink: 0;
@@ -676,6 +673,31 @@
 
   .hermes-error-text {
     flex: 1;
+    word-break: break-word;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .hermes-error-dismiss,
+  .hermes-error-retry {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.15);
+    color: inherit;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+  }
+
+  .hermes-error-retry {
+    font-weight: 600;
   }
 }
 
@@ -691,7 +713,7 @@
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
-  
+
   .hermes-autocomplete-item {
     display: flex;
     align-items: center;
@@ -699,20 +721,20 @@
     padding: 8px 12px;
     cursor: pointer;
     transition: all 0.2s ease;
-    
+
     &:hover {
       background-color: var(--background-modifier-hover);
     }
-    
+
     &.selected {
       background-color: var(--background-modifier-hover);
       font-weight: 600;
     }
-    
+
     .hermes-autocomplete-icon {
       font-size: 14px;
     }
-    
+
     .hermes-autocomplete-text {
       font-size: 13px;
       color: var(--text-normal);
