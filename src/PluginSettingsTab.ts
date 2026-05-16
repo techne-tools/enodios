@@ -102,6 +102,32 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         this.bind(text, 'chatAgentName');
       });
 
+    // Visibility Toggles
+    new SettingEx(this.containerEl)
+      .setName('Show Reasoning')
+      .setDesc('Display agent reasoning steps in the chat (if supported by the agent)')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.showReasoning);
+        this.bind(toggle, 'showReasoning');
+      });
+
+    new SettingEx(this.containerEl)
+      .setName('Show Tool Use')
+      .setDesc('Display tool calls and their results in the chat')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.showToolUse);
+        this.bind(toggle, 'showToolUse');
+      });
+
+    // Security
+    new SettingEx(this.containerEl)
+      .setName('Allow Terminal Access')
+      .setDesc('⚠️ WARNING: Terminal allows the agent to run shell commands that can bypass file-change approval. Enable only if you trust the agent.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.allowTerminal);
+        this.bind(toggle, 'allowTerminal');
+      });
+
     // Context Selection Section
     new SettingEx(this.containerEl)
       .setName('Auto-Add Current Note')

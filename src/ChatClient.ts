@@ -2,8 +2,15 @@ import type { PromptContextItem } from './AcpClient.ts';
 
 export interface ChatSessionUpdate {
   content?: string;
+  reasoning?: string;
   stopReason?: string;
-  type: 'message' | 'tool_start' | 'tool_progress' | 'tool_complete' | 'usage' | 'stop' | 'available_commands';
+  toolCall?: {
+    callId: string;
+    name: string;
+    status: 'running' | 'complete' | 'error';
+    result?: string;
+  };
+  type: 'message' | 'reasoning' | 'tool_start' | 'tool_progress' | 'tool_complete' | 'usage' | 'stop' | 'available_commands';
   usage?: {
     inputTokens: number;
     outputTokens: number;

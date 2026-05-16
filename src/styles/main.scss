@@ -177,6 +177,25 @@
     color: var(--text-muted);
     font-size: 12px;
   }
+
+  &.hermes-reasoning {
+    align-self: flex-start;
+    background-color: var(--background-secondary-alt);
+    color: var(--text-muted);
+    font-size: 12px;
+    border-left: 3px solid var(--text-accent);
+    border-radius: 0 6px 6px 0;
+    max-width: 95%;
+  }
+
+  &.hermes-tool {
+    align-self: flex-start;
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+    font-size: 12px;
+    border: 1px dashed var(--background-modifier-border);
+    max-width: 95%;
+  }
 }
 
 .hermes-message-header {
@@ -849,5 +868,151 @@
     margin: 6px 8px;
     padding: 8px 10px;
     font-size: 12px;
+  }
+}
+
+/* Pending Changes Panel */
+.hermes-pending-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary);
+  max-height: 250px;
+  overflow-y: auto;
+
+  &-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-normal);
+  }
+}
+
+.hermes-pending-change {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: var(--background-primary);
+
+  &-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      background-color: var(--background-modifier-hover);
+    }
+  }
+
+  &-path {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-normal);
+    font-family: var(--font-monospace);
+  }
+
+  &-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  &-diff {
+    border-top: 1px solid var(--background-modifier-border);
+  }
+
+  &-actions {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    justify-content: flex-end;
+  }
+}
+
+.hermes-diff-view {
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: var(--font-monospace);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.hermes-diff-line {
+  display: flex;
+  padding: 1px 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+
+  .hermes-diff-marker {
+    width: 20px;
+    flex-shrink: 0;
+    text-align: center;
+    user-select: none;
+  }
+
+  .hermes-diff-text {
+    flex: 1;
+  }
+
+  &.hermes-diff-added {
+    background-color: rgba(0, 200, 83, 0.12);
+    color: var(--text-normal);
+
+    .hermes-diff-marker {
+      color: #00c853;
+    }
+  }
+
+  &.hermes-diff-removed {
+    background-color: rgba(255, 82, 82, 0.12);
+    color: var(--text-normal);
+
+    .hermes-diff-marker {
+      color: #ff5252;
+    }
+  }
+
+  &.hermes-diff-unchanged {
+    color: var(--text-muted);
+  }
+}
+
+.hermes-btn-approve,
+.hermes-btn-reject {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.hermes-btn-approve {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+
+  &:hover {
+    background-color: var(--interactive-accent-hover);
+  }
+}
+
+.hermes-btn-reject {
+  background-color: var(--background-modifier-border);
+  color: var(--text-normal);
+
+  &:hover {
+    background-color: var(--background-modifier-hover);
   }
 }

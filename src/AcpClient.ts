@@ -437,27 +437,28 @@ export class AcpClient implements ChatClient {
 
       writeTextFile: async (params: WriteTextFileRequest): Promise<WriteTextFileResponse> => {
         try {
-          const existingFile = this.plugin.app.vault.getAbstractFileByPath(params.path);
-          if (existingFile instanceof TFile) {
-            await this.plugin.app.vault.modify(existingFile, params.content);
-          } else {
-            await this.plugin.app.vault.create(params.path, params.content);
-          }
+          // Queue the change for user approval instead of writing immediately
+          await this.plugin.fileChangeManager.registerChange(params.path, params.content);
           return {};
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          throw new Error(`Failed to write file: ${message}`);
+          throw new Error(`Failed to queue file change: ${message}`);
         }
       },
 
       createTerminal: async (_params: CreateTerminalRequest): Promise<CreateTerminalResponse> => {
-        // NOTE: Terminal support is not yet implemented.
+        if (!this.plugin.settings.allowTerminal) {
+          throw new Error('Terminal access is disabled in Hermes settings. Enable "Allow Terminal Access" to use terminal tools.');
+        }
         return {
           terminalId: `terminal-${Date.now()}`
         };
       },
 
       terminalOutput: async (_params: TerminalOutputRequest): Promise<TerminalOutputResponse> => {
+        if (!this.plugin.settings.allowTerminal) {
+          throw new Error('Terminal access is disabled.');
+        }
         return {
           exitStatus: { exitCode: 0, signal: null },
           output: '',
@@ -470,6 +471,9 @@ export class AcpClient implements ChatClient {
       },
 
       waitForTerminalExit: async (_params: WaitForTerminalExitRequest): Promise<WaitForTerminalExitResponse> => {
+        if (!this.plugin.settings.allowTerminal) {
+          throw new Error('Terminal access is disabled.');
+        }
         return {
           exitCode: 0,
           signal: null
@@ -477,6 +481,9 @@ export class AcpClient implements ChatClient {
       },
 
       killTerminal: async (_params: KillTerminalRequest): Promise<KillTerminalResponse | void> => {
+        if (!this.plugin.settings.allowTerminal) {
+          throw new Error('Terminal access is disabled.');
+        }
         return {};
       }
     };
@@ -518,6 +525,17 @@ export class AcpClient implements ChatClient {
           return {
             content: chunk.content.text,
             type: 'message'
+          };
+        }
+      }
+
+      // Reasoning chunks
+      if (update.sessionUpdate === 'agent_thought_chunk') {
+        const chunk = update as { content?: { type: string; text?: string } };
+        if (chunk.content && chunk.content.type === 'text' && typeof chunk.content.text === 'string') {
+          return {
+            reasoning: chunk.content.text,
+            type: 'reasoning'
           };
         }
       }

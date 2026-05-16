@@ -7,6 +7,7 @@ import type { ChatClient } from './ChatClient.ts';
 import type { PluginTypes } from './PluginTypes.ts';
 
 import { AcpClient } from './AcpClient.ts';
+import { FileChangeManager } from './FileChangeManager.ts';
 import { HermesApiClient } from './HermesApiClient.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
 import { PluginSettingsTab } from './PluginSettingsTab.ts';
@@ -20,6 +21,7 @@ import {
 export class Plugin extends PluginBase<PluginTypes> {
   public acpClient!: AcpClient;
   public apiClient!: HermesApiClient;
+  public fileChangeManager!: FileChangeManager;
   public secrets!: SecretsManager;
   public vaultManager!: VaultManager;
 
@@ -56,6 +58,7 @@ export class Plugin extends PluginBase<PluginTypes> {
 
     this.vaultManager = new VaultManager(this);
     this.secrets = new SecretsManager(this);
+    this.fileChangeManager = new FileChangeManager(this);
     this.acpClient = new AcpClient(this);
     this.apiClient = new HermesApiClient(this, this.secrets);
 

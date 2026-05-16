@@ -17,6 +17,7 @@ import { createRoot } from 'react-dom/client';
 
 import type { ChatSessionUpdate } from '../ChatClient.ts';
 import type { PromptContextItem } from '../AcpClient.ts';
+import type { PendingFileChange } from '../FileChangeManager.ts';
 import type { Plugin } from '../Plugin.ts';
 import type { PluginSettings } from '../PluginSettings.ts';
 import { getSlashCommands, parseSlashCommand, setCachedToolCommands } from '../SlashCommands.ts';
@@ -38,7 +39,7 @@ export const HERMES_CHAT_VIEW_TYPE = 'hermes-chat-view';
 
 export interface ChatMessage {
   content: string;
-  role: 'assistant' | 'system' | 'user';
+  role: 'assistant' | 'reasoning' | 'system' | 'tool' | 'user';
   timestamp: number;
 }
 
@@ -173,10 +174,13 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
   const [isSaving, setIsSaving] = useState(false);
   const [isConversationListOpen, setIsConversationListOpen] = useState(false);
   const [conversations, setConversations] = useState<{ filePath: string; title: string }[]>([]);
+  const [pendingChanges, setPendingChanges] = useState<PendingFileChange[]>([]);
 
   const plugin = view.getPlugin();
   const settings = view.getSettings();
   const streamingMessageIdRef = useRef<number | null>(null);
+  const reasoningMessageIdRef = useRef<number | null>(null);
+  const toolMessageIdRef = useRef<number | null>(null);
   const lastChunkTimeRef = useRef<number>(0);
   const typingTimeoutRef = useRef<number | null>(null);
 
@@ -207,12 +211,14 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
         lastChunkTimeRef.current = Date.now();
         resetTypingTimeout();
         setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last && last.role === 'assistant' && last.timestamp === streamingMessageIdRef.current) {
+          const assistantIndex = prev.findIndex(
+            (m) => m.role === 'assistant' && m.timestamp === streamingMessageIdRef.current
+          );
+          if (assistantIndex >= 0) {
             const updated = [...prev];
-            updated[updated.length - 1] = {
-              ...last,
-              content: last.content + (update.content ?? '')
+            updated[assistantIndex] = {
+              ...prev[assistantIndex]!,
+              content: prev[assistantIndex]!.content + (update.content ?? '')
             };
             return updated;
           }
@@ -222,14 +228,60 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
         clearTypingTimeout();
         setIsTyping(false);
         streamingMessageIdRef.current = null;
+        reasoningMessageIdRef.current = null;
+        toolMessageIdRef.current = null;
         // Save conversation after response completes
         setMessages((currentMessages) => {
           void saveConversation(currentMessages);
           return currentMessages;
         });
+      } else if (update.type === 'reasoning' && update.reasoning) {
+        if (settings.showReasoning) {
+          setMessages((prev) => {
+            const reasoningIndex = prev.findIndex(
+              (m) => m.role === 'reasoning' && m.timestamp === reasoningMessageIdRef.current
+            );
+            if (reasoningIndex >= 0) {
+              const updated = [...prev];
+              updated[reasoningIndex] = {
+                ...prev[reasoningIndex]!,
+                content: prev[reasoningIndex]!.content + (update.reasoning ?? '')
+              };
+              return updated;
+            }
+            const newId = Date.now();
+            reasoningMessageIdRef.current = newId;
+            return [...prev, {
+              content: update.reasoning ?? '',
+              role: 'reasoning',
+              timestamp: newId
+            }];
+          });
+        }
       } else if (update.type === 'tool_start' || update.type === 'tool_progress') {
-        // Optionally show tool call status in UI
-        // For now, silently ignore tool events
+        if (settings.showToolUse && update.toolCall) {
+          const toolMsg = `🔧 ${update.toolCall.name} (${update.toolCall.status})`;
+          setMessages((prev) => {
+            const toolIndex = prev.findIndex(
+              (m) => m.role === 'tool' && m.timestamp === toolMessageIdRef.current
+            );
+            if (toolIndex >= 0) {
+              const updated = [...prev];
+              updated[toolIndex] = {
+                ...prev[toolIndex]!,
+                content: toolMsg
+              };
+              return updated;
+            }
+            const newId = Date.now();
+            toolMessageIdRef.current = newId;
+            return [...prev, {
+              content: toolMsg,
+              role: 'tool',
+              timestamp: newId
+            }];
+          });
+        }
       } else if (update.type === 'available_commands' && update.availableCommands) {
         // Update cached tool commands from ACP
         const toolCmds = update.availableCommands.map((cmd) => ({
@@ -275,8 +327,14 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
       }
     });
 
+    // Subscribe to pending file changes for approval UI
+    const unsubscribeChanges = plugin.fileChangeManager.onChanges((changes) => {
+      setPendingChanges(changes.filter((c) => c.status === 'pending'));
+    });
+
     return () => {
       clearTypingTimeout();
+      unsubscribeChanges();
       // Subscriptions are cleaned up by the view's onClose
     };
   }, [view, plugin, clearTypingTimeout, resetTypingTimeout]);
@@ -347,6 +405,8 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
     const streamingMessageId = Date.now();
     streamingMessageIdRef.current = streamingMessageId;
+    reasoningMessageIdRef.current = null;
+    toolMessageIdRef.current = null;
     const assistantPlaceholder: ChatMessage = {
       content: '',
       role: 'assistant',
@@ -417,6 +477,8 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
           const streamingMessageId = Date.now();
           streamingMessageIdRef.current = streamingMessageId;
+          reasoningMessageIdRef.current = null;
+          toolMessageIdRef.current = null;
           const assistantPlaceholder: ChatMessage = {
             content: '',
             role: 'assistant',
@@ -460,6 +522,8 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     // Create a placeholder assistant message for streaming
     const streamingMessageId = Date.now();
     streamingMessageIdRef.current = streamingMessageId;
+    reasoningMessageIdRef.current = null;
+    toolMessageIdRef.current = null;
     const assistantPlaceholder: ChatMessage = {
       content: '',
       role: 'assistant',
@@ -898,6 +962,14 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
             </button>
           </div>
         )}
+        {pendingChanges.length > 0 && (
+          <PendingChangesPanel
+            changes={pendingChanges}
+            onApprove={(id) => void plugin.fileChangeManager.approveChange(id)}
+            onReject={(id) => plugin.fileChangeManager.rejectChange(id)}
+            onClearResolved={() => plugin.fileChangeManager.clearResolved()}
+          />
+        )}
       </div>
 
       <ChatInput
@@ -976,10 +1048,18 @@ interface ChatMessageItemProps {
 }
 
 function ChatMessageItem({ message, view }: ChatMessageItemProps): ReactElement {
+  const roleLabel = {
+    assistant: 'Hermes',
+    reasoning: 'Reasoning',
+    system: 'System',
+    tool: 'Tool',
+    user: 'You'
+  }[message.role];
+
   return (
     <div className={`hermes-message hermes-${message.role}`}>
       <div className="hermes-message-header">
-        <span className="hermes-role">{message.role === 'user' ? 'You' : 'Hermes'}</span>
+        <span className="hermes-role">{roleLabel}</span>
         <span className="hermes-timestamp">
           {new Date(message.timestamp).toLocaleTimeString()}
         </span>
@@ -1219,4 +1299,104 @@ function MarkdownContent({ content, view }: MarkdownContentProps): ReactElement 
   }, [content, view]);
 
   return <div className="hermes-markdown-renderer" ref={containerRef} />;
+}
+
+// --- Diff / Pending Changes Components ---
+
+interface DiffLine {
+  line: string;
+  type: 'added' | 'removed' | 'unchanged';
+}
+
+function computeDiffLines(original: string, updated: string): DiffLine[] {
+  const origLines = original.split('\n');
+  const newLines = updated.split('\n');
+  const result: DiffLine[] = [];
+  let oi = 0;
+  let ni = 0;
+
+  while (oi < origLines.length || ni < newLines.length) {
+    if (oi >= origLines.length) {
+      result.push({ line: newLines[ni]!, type: 'added' });
+      ni++;
+    } else if (ni >= newLines.length) {
+      result.push({ line: origLines[oi]!, type: 'removed' });
+      oi++;
+    } else if (origLines[oi] === newLines[ni]) {
+      result.push({ line: origLines[oi]!, type: 'unchanged' });
+      oi++;
+      ni++;
+    } else {
+      // Simple heuristic: if next original matches next new, this new is an addition
+      if (ni + 1 < newLines.length && origLines[oi] === newLines[ni + 1]) {
+        result.push({ line: newLines[ni]!, type: 'added' });
+        ni++;
+      } else if (oi + 1 < origLines.length && origLines[oi + 1] === newLines[ni]) {
+        result.push({ line: origLines[oi]!, type: 'removed' });
+        oi++;
+      } else {
+        // Treat as replacement: remove old, add new
+        result.push({ line: origLines[oi]!, type: 'removed' });
+        result.push({ line: newLines[ni]!, type: 'added' });
+        oi++;
+        ni++;
+      }
+    }
+  }
+
+  return result;
+}
+
+interface PendingChangesPanelProps {
+  changes: PendingFileChange[];
+  onApprove: (changeId: string) => void;
+  onClearResolved: () => void;
+  onReject: (changeId: string) => void;
+}
+
+function PendingChangesPanel({ changes, onApprove, onReject, onClearResolved }: PendingChangesPanelProps): ReactElement {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  return (
+    <div className="hermes-pending-changes">
+      <div className="hermes-pending-changes-header">
+        <span>Pending Changes ({changes.length})</span>
+        <button className="hermes-icon-btn" onClick={onClearResolved} title="Clear resolved" type="button">
+          ✕
+        </button>
+      </div>
+      {changes.map((change) => {
+        const isExpanded = expandedId === change.id;
+        const diffLines = computeDiffLines(change.originalContent, change.newContent);
+        return (
+          <div className="hermes-pending-change" key={change.id}>
+            <div className="hermes-pending-change-summary" onClick={() => setExpandedId(isExpanded ? null : change.id)} role="button" tabIndex={0}>
+              <span className="hermes-pending-change-path">{change.path}</span>
+              <span className="hermes-pending-change-badge">{change.originalContent ? 'modified' : 'created'}</span>
+            </div>
+            {isExpanded && (
+              <div className="hermes-pending-change-diff">
+                <div className="hermes-diff-view">
+                  {diffLines.map((dl, idx) => (
+                    <div className={`hermes-diff-line hermes-diff-${dl.type}`} key={idx}>
+                      <span className="hermes-diff-marker">{dl.type === 'added' ? '+' : dl.type === 'removed' ? '-' : ' '}</span>
+                      <span className="hermes-diff-text">{dl.line}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="hermes-pending-change-actions">
+                  <button className="hermes-btn-approve" onClick={() => onApprove(change.id)} type="button">
+                    Approve
+                  </button>
+                  <button className="hermes-btn-reject" onClick={() => onReject(change.id)} type="button">
+                    Reject
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }

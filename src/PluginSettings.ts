@@ -21,4 +21,11 @@ export class PluginSettings {
 
   // ACP Configuration
   public hermesBinaryPath = '';
+
+  // Visibility Toggles
+  public showReasoning = false;
+  public showToolUse = false;
+
+  // Security
+  public allowTerminal = false; // Terminal allows file edits that bypass diff approval
 }

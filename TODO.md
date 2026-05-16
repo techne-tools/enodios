@@ -1,7 +1,8 @@
 # Hermes Plugin Development Todo List
 
 **Created:** 14 May 2026  
-**Phase:** Chat UI Enhancement
+**Phase:** Chat UI Enhancement  
+**Current Version:** 0.2.0
 
 ## Core Features (High Priority)
 
@@ -11,6 +12,11 @@
 - [x] Implement chat history persistence (vault folder)
 - [x] Implement file/note attachment to messages
 - [x] Add conversation management (new/clear chat)
+- [x] Dual-mode ACP/API support with secure key storage
+- [x] File change approval with inline diff viewer
+- [x] Reasoning display toggle
+- [x] Tool use display toggle
+- [x] Terminal access security toggle (default off)
 
 ## UX Improvements (Medium Priority)
 
@@ -21,6 +27,7 @@
 - [x] Add keyboard shortcuts (Cmd+H toggle, Cmd+Shift+H focus)
 - [x] Implement code block syntax highlighting
 - [x] Implement rate limiting indicators
+- [x] Add slash command autocomplete with synthetic fallback
 
 ## Completed
 
@@ -30,6 +37,9 @@
 - [x] Create slash commands (use Hermes native tools)
 - [x] Implement context/references feature with precise deduplication (15 May 2026)
 - [x] Add autocomplete for braces {} and wikilinks [[...]] with filesystem path support (15 May 2026)
+- [x] Remove dead code and sample scaffolding (16 May 2026)
+- [x] Fix type safety issues (strictNullChecks enabled)
+- [x] Bump version to 0.2.0 (16 May 2026)
 
 ## Implementation Notes
 
@@ -105,6 +115,46 @@
 - `textareaRef` tracks textarea position for autocomplete placement
 - Autocomplete pane positioned absolutely above textarea
 
+### Dual-Mode Support (16 May 2026)
+
+**New functionality:**
+
+- ACP mode: local subprocess via `hermes acp`
+- API mode: REST API with SSE streaming
+- Connection mode dropdown in settings
+- Secure API key storage via Obsidian localStorage
+- Test connection buttons for each mode
+
+**Implementation:**
+
+- `ChatClient` interface shared by `AcpClient` and `HermesApiClient`
+- `Plugin.getChatClient()` routes to active client
+- `SecretsManager` handles secure credential storage
+
+### File Change Approval (16 May 2026)
+
+**New functionality:**
+
+- Intercept `writeTextFile` ACP calls
+- Queue changes for user approval
+- Inline diff viewer with line-by-line comparison
+- Approve / Reject buttons per change
+- Clear resolved changes
+
+**Implementation:**
+
+- `FileChangeManager` tracks pending changes
+- `PendingChangesPanel` React component in chat view
+- `computeDiffLines()` simple line-based diff algorithm
+
+### Security (16 May 2026)
+
+**New functionality:**
+
+- Terminal access disabled by default
+- Warning in settings about terminal bypassing diff approval
+- All terminal ACP handlers check `allowTerminal` setting
+
 ## Next Steps
 
 1. ✅ Remove dead code and sample scaffolding
@@ -112,8 +162,8 @@
 3. ✅ Gate console logging and remove debug noise
 4. ✅ Fix react-hooks/exhaustive-deps
 5. ✅ Remove eslint-disable for no-explicit-any
-6. ✅ Bump version to 0.1.0
-7. 🔄 Implement permission approval UI in Obsidian (AcpClient)
-8. 🔄 Implement actual terminal support (AcpClient)
-9. 🔄 Add unit tests for VaultManager and SlashCommands
-10. 🔄 Add integration tests for ACP connection flow
+6. ✅ Bump version to 0.2.0
+7. 🔄 Implement permission approval UI in Obsidian (AcpClient) — auto-approved currently
+8. 🔄 Add unit tests for VaultManager and SlashCommands
+9. 🔄 Add integration tests for ACP connection flow
+10. 🔄 Consider: diff for terminal-based edits (Hermes config dependent, not reliably interceptable)
