@@ -46,14 +46,19 @@ let customCommands: SlashCommand[] = [];
 let cachedToolCommands: SlashCommand[] = [];
 
 /**
- * Fetch available tools from Hermes via ACP and convert them to slash commands.
- * Results are cached for 60 seconds.
- * TODO: Implement ACP-based tool discovery when SDK supports it.
+ * Set the cached tool commands from ACP available_commands_update.
+ */
+export function setCachedToolCommands(commands: SlashCommand[]): void {
+  cachedToolCommands = commands;
+}
+
+/**
+ * Fetch available tools from Hermes via ACP.
+ * Commands now arrive via ACP push (available_commands_update), so this is a no-op.
+ * Kept for API compatibility.
  */
 export async function getToolSlashCommands(_plugin: Plugin): Promise<SlashCommand[]> {
-  // ACP migration: tool discovery via REST API disabled.
-  // Will implement via ACP when the SDK exposes tool listing.
-  return [];
+  return cachedToolCommands;
 }
 
 /**

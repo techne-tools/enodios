@@ -17,7 +17,7 @@ import { createRoot } from 'react-dom/client';
 import type { AcpSessionUpdate, PromptContextItem } from '../AcpClient.ts';
 import type { Plugin } from '../Plugin.ts';
 import type { PluginSettings } from '../PluginSettings.ts';
-import { getSlashCommands, getToolSlashCommands, parseSlashCommand } from '../SlashCommands.ts';
+import { getSlashCommands, parseSlashCommand, setCachedToolCommands } from '../SlashCommands.ts';
 
 export const HERMES_CHAT_VIEW_TYPE = 'hermes-chat-view';
 
@@ -132,7 +132,6 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
   const [slashSuggestions, setSlashSuggestions] = useState<{ description: string; name: string }[]>([]);
   const [isSlashOpen, setIsSlashOpen] = useState(false);
   const [slashSelectionIndex, setSlashSelectionIndex] = useState(0);
-  const [toolCommandsLoaded, setToolCommandsLoaded] = useState(false);
 
   const [conversationFilePath, setConversationFilePath] = useState<string | null>(null);
   const [conversationTitle, setConversationTitle] = useState<string>('');
@@ -171,6 +170,17 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
       } else if (update.type === 'tool_start' || update.type === 'tool_progress') {
         // Optionally show tool call status in UI
         // For now, silently ignore tool events
+      } else if (update.type === 'available_commands' && update.availableCommands) {
+        // Update cached tool commands from ACP
+        const toolCmds = update.availableCommands.map((cmd) => ({
+          description: cmd.description,
+          execute: async (): Promise<string | null> => {
+            // Tool commands are sent as regular prompts; the agent handles them
+            return null;
+          },
+          name: cmd.name
+        }));
+        setCachedToolCommands(toolCmds);
       }
     });
 
@@ -665,19 +675,8 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     if (input === '/') {
       setIsSlashOpen(true);
       setSlashSelectionIndex(0);
-      // Show built-in commands immediately, then merge with tool commands
-      const builtIn = getSlashCommands();
-      setSlashSuggestions(builtIn.map((cmd) => ({ description: cmd.description, name: cmd.name })));
-      // Async fetch tool commands from Hermes API (only once per session)
-      if (!toolCommandsLoaded) {
-        void getToolSlashCommands(plugin).then((toolCmds) => {
-          if (toolCmds.length > 0) {
-            const merged = [...builtIn, ...toolCmds];
-            setSlashSuggestions(merged.map((cmd) => ({ description: cmd.description, name: cmd.name })));
-          }
-          setToolCommandsLoaded(true);
-        });
-      }
+      const commands = getSlashCommands();
+      setSlashSuggestions(commands.map((cmd) => ({ description: cmd.description, name: cmd.name })));
       return;
     }
 
@@ -694,7 +693,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
       setIsSlashOpen(false);
       setSlashSuggestions([]);
     }
-  }, [input, plugin, toolCommandsLoaded]);
+  }, [input]);
 
   const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>): void => {
     const value = e.target.value;

@@ -51,12 +51,13 @@ export interface AcpSessionUpdate {
   content?: string;
   stopReason?: string;
   toolCall?: AcpToolCall;
-  type: 'message' | 'tool_start' | 'tool_progress' | 'tool_complete' | 'usage' | 'stop';
+  type: 'message' | 'tool_start' | 'tool_progress' | 'tool_complete' | 'usage' | 'stop' | 'available_commands';
   usage?: {
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
   };
+  availableCommands?: Array<{ description: string; name: string }>;
 }
 
 export interface PromptContextItem {
@@ -76,6 +77,7 @@ export class AcpClient {
   private isConnecting = false;
   private messageCallbacks: Array<(update: AcpSessionUpdate) => void> = [];
   private errorCallbacks: Array<(error: string) => void> = [];
+  private commandsCallbacks: Array<(commands: Array<{ description: string; name: string }>) => void> = [];
   private readonly plugin: Plugin;
 
   constructor(plugin: Plugin) {
@@ -139,6 +141,23 @@ export class AcpClient {
 
       if (!this.childProcess.stdin || !this.childProcess.stdout) {
         throw new Error('Failed to spawn hermes acp: stdio pipes not available');
+      }
+
+      // Forward stderr to error subscribers
+      if (this.childProcess.stderr) {
+        this.childProcess.stderr.on('data', (chunk: Buffer) => {
+          const stderrText = chunk.toString('utf-8').trim();
+          if (stderrText) {
+            console.error('hermes stderr:', stderrText);
+            for (const callback of this.errorCallbacks) {
+              try {
+                callback(stderrText);
+              } catch {
+                // Ignore callback errors
+              }
+            }
+          }
+        });
       }
 
       // Convert Node.js streams to Web Streams
@@ -355,6 +374,19 @@ export class AcpClient {
     };
   }
 
+  /**
+   * Subscribe to available commands updates from the agent.
+   */
+  public onAvailableCommands(callback: (commands: Array<{ description: string; name: string }>) => void): () => void {
+    this.commandsCallbacks.push(callback);
+    return () => {
+      const index = this.commandsCallbacks.indexOf(callback);
+      if (index >= 0) {
+        this.commandsCallbacks.splice(index, 1);
+      }
+    };
+  }
+
   private createClientHandler(): Client {
     return {
       requestPermission: async (params: RequestPermissionRequest): Promise<RequestPermissionResponse> => {
@@ -450,6 +482,17 @@ export class AcpClient {
           // Ignore callback errors
         }
       }
+
+      // Also notify command subscribers when available_commands update arrives
+      if (parsedUpdate.type === 'available_commands' && parsedUpdate.availableCommands) {
+        for (const callback of this.commandsCallbacks) {
+          try {
+            callback(parsedUpdate.availableCommands);
+          } catch {
+            // Ignore callback errors
+          }
+        }
+      }
     }
   }
 
@@ -489,6 +532,17 @@ export class AcpClient {
           },
           type: update.sessionUpdate === 'tool_call_update' ? 'tool_progress' : 'tool_start'
         };
+      }
+
+      // Available commands update (Hermes tools/plugins)
+      if (update.sessionUpdate === 'available_commands_update') {
+        const commandsUpdate = update as { availableCommands?: Array<{ description: string; name: string }> };
+        if (commandsUpdate.availableCommands) {
+          return {
+            availableCommands: commandsUpdate.availableCommands,
+            type: 'available_commands'
+          };
+        }
       }
 
       // Usage updates
