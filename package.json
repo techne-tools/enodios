@@ -12,6 +12,7 @@
     "build:compile": "obsidian-dev-utils build:compile",
     "build:compile:svelte": "obsidian-dev-utils build:compile:svelte",
     "build:compile:typescript": "obsidian-dev-utils build:compile:typescript",
+    "deploy": "cp dist/build/main.js dist/build/styles.css manifest.json '/Users/chris/Development/Obsidian Dev/.obsidian/plugins/hermes/'",
     "dev": "obsidian-dev-utils dev",
     "format": "obsidian-dev-utils format",
     "format:check": "obsidian-dev-utils format:check",

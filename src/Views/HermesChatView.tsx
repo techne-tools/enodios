@@ -106,8 +106,11 @@ export class HermesChatView extends ItemView {
     this.unsubscribeError = this.pluginInstance.acpClient.onError(callback);
   }
 
-  public clearConversation(): void {
+  public clearConversation(onClear?: () => void): void {
     // ACP sessions maintain their own history; just clear local state
+    if (onClear) {
+      onClear();
+    }
   }
 }
 
@@ -218,6 +221,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     setError(null);
     setConversationFilePath(null);
     setConversationTitle('');
+    setContextItems([]);
     view.clearConversation();
   }, [view]);
 
@@ -257,7 +261,9 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
     try {
       await view.sendPrompt(lastPromptRef.current, lastContextItemsRef.current);
-    } catch {
+    } catch (err) {
+      console.error('Retry failed:', err);
+      setError(`Retry failed: ${err instanceof Error ? err.message : String(err)}`);
       setIsTyping(false);
       streamingMessageIdRef.current = null;
     }
@@ -294,6 +300,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
       if (slashCmd.command.name === 'clear') {
         setMessages([]);
+        setContextItems([]);
         view.clearConversation();
         return;
       }
@@ -309,9 +316,10 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
           };
           setMessages((prev) => [...prev, systemMessage]);
         }
-      } catch {
+      } catch (err) {
+        console.error(`Slash command /${slashCmd.command.name} failed:`, err);
         const errorMessage: ChatMessage = {
-          content: `Error executing /${slashCmd.command.name}`,
+          content: `Error executing /${slashCmd.command.name}: ${err instanceof Error ? err.message : String(err)}`,
           role: 'system',
           timestamp: Date.now()
         };
@@ -347,8 +355,9 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
     try {
       await view.sendPrompt(trimmed, contextItems);
-    } catch {
-      setError('Failed to get a response. Click to retry.');
+    } catch (err) {
+      console.error('Send failed:', err);
+      setError(`Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`);
       setIsTyping(false);
       streamingMessageIdRef.current = null;
     }
@@ -528,41 +537,42 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     }
   }, [messages]);
 
-  // Auto-add context when active file changes
+  // Auto-add context when active file changes — use Obsidian event instead of useEffect polling
   useEffect(() => {
-    if (!settings.contextEntireNote) return;
-
-    const currentActiveFile = plugin.app.workspace.getActiveFile();
-    if (!currentActiveFile) return;
-
-    const currentNoteItem = contextItems.find((item) => item.type === 'note');
-    if (currentNoteItem?.id === `note-${currentActiveFile.path}`) return;
-
-    setContextItems((prev) => [
-      ...prev.filter((item) => item.type !== 'note'),
-      {
-        id: `note-${currentActiveFile.path}`,
-        text: currentActiveFile.basename,
-        type: 'note'
-      }
-    ]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plugin.app.workspace.getActiveFile()?.path, settings.contextEntireNote]);
-
-  // Initialize context on mount
-  useEffect(() => {
-    if (!settings.contextEntireNote) return;
-
-    const currentActiveFile = plugin.app.workspace.getActiveFile();
-    if (currentActiveFile) {
-      setContextItems([{
-        id: `note-${currentActiveFile.path}`,
-        text: currentActiveFile.basename,
-        type: 'note'
-      }]);
+    if (!settings.contextEntireNote) {
+      return undefined;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    const handleActiveLeafChange = (): void => {
+      const currentActiveFile = plugin.app.workspace.getActiveFile();
+      if (!currentActiveFile) return;
+
+      setContextItems((prev) => {
+        const currentNoteItem = prev.find((item) => item.type === 'note');
+        if (currentNoteItem?.id === `note-${currentActiveFile.path}`) {
+          return prev;
+        }
+        return [
+          ...prev.filter((item) => item.type !== 'note'),
+          {
+            id: `note-${currentActiveFile.path}`,
+            text: currentActiveFile.basename,
+            type: 'note'
+          }
+        ];
+      });
+    };
+
+    // Set initial context
+    handleActiveLeafChange();
+
+    const eventRef = plugin.app.workspace.on('active-leaf-change', handleActiveLeafChange);
+    plugin.registerEvent(eventRef);
+
+    return () => {
+      plugin.app.workspace.offref(eventRef);
+    };
+  }, [plugin, settings.contextEntireNote]);
 
   // Autocomplete trigger detection
   useEffect(() => {
