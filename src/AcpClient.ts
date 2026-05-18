@@ -1,6 +1,55 @@
 import { existsSync } from 'fs';
 import { spawn, type ChildProcess } from 'child_process';
-import { Notice, TFile } from 'obsidian';
+import { Notice, TFile, normalizePath } from 'obsidian';
+
+const MAX_TERMINAL_OUTPUT = 1024 * 1024; // 1MB cap on terminal output to prevent memory exhaustion
+
+const ALLOWED_SHELL_COMMANDS = new Set([
+  'bash', 'sh', 'zsh', 'fish', 'cmd.exe', 'powershell.exe', 'pwsh', 'python', 'python3', 'node', 'npm', 'pnpm', 'yarn', 'git', 'cat', 'ls', 'echo', 'grep', 'find', 'mkdir', 'touch', 'rm', 'cp', 'mv', 'curl', 'wget'
+]);
+
+/**
+ * Sanitize a shell command to prevent command injection.
+ * Only allows known safe commands; rejects metacharacters.
+ */
+function sanitizeShellCommand(command: string): string {
+  const trimmed = command.trim();
+  // Extract the base command (first token before any whitespace or shell metacharacters)
+  const baseMatch = trimmed.match(/^([a-zA-Z0-9_\-\.]+)/);
+  const base = baseMatch?.[1] ?? '';
+
+  if (!ALLOWED_SHELL_COMMANDS.has(base.toLowerCase())) {
+    throw new Error(`Disallowed shell command: ${base}. Only standard shell interpreters and common utilities are permitted.`);
+  }
+
+  // Reject shell metacharacters that enable injection
+  const dangerous = /[;&|`$(){}\[\]<>\n\r]/;
+  if (dangerous.test(trimmed)) {
+    throw new Error('Shell command contains disallowed metacharacters.');
+  }
+
+  return trimmed;
+}
+
+/**
+ * Strengthened path traversal check.
+ */
+function isPathSafe(filePath: string): boolean {
+  const normalized = normalizePath(filePath);
+  if (normalized.startsWith('..') || normalized.startsWith('/') || normalized.includes('../')) {
+    return false;
+  }
+  // Reject null bytes and control characters
+  if (/[\x00-\x1f]/.test(normalized)) {
+    return false;
+  }
+  // Reject Windows absolute paths
+  if (/^[a-zA-Z]:[\\\/]/.test(normalized)) {
+    return false;
+  }
+  return true;
+}
+
 import {
   ClientSideConnection,
   ndJsonStream,
@@ -32,15 +81,19 @@ import type {
   WriteTextFileResponse
 } from '@agentclientprotocol/sdk';
 
+import { generateMessageId } from './utils/uuid.ts';
 import type { Plugin } from './Plugin.ts';
 import type { ChatClient, ChatSessionUpdate } from './ChatClient.ts';
 
 /**
  * Strip ANSI escape codes from a string.
+ * This is necessary because ACP subprocess stderr outputs often contain
+ * terminal color formatting, which pollutes the internal DevTools logs
+ * and React UI error boundaries if not sanitized.
  * Handles color codes, cursor movements, clear lines, and other terminal sequences.
  */
 function stripAnsi(text: string): string {
-  // eslint-disable-next-line no-control-regex
+  // eslint-disable-next-line no-control-regex -- Stripping ANSI codes requires control character matching
   return text
     .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')   // CSI sequences (colors, cursor, etc.)
     .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
@@ -52,6 +105,13 @@ export interface AcpMessage {
   content: string;
   role: 'assistant' | 'system' | 'user';
   timestamp: number;
+}
+
+export interface PendingPermission {
+  id: string;
+  params: RequestPermissionRequest;
+  resolve: (response: RequestPermissionResponse) => void;
+  reject: (error: Error) => void;
 }
 
 export interface AcpToolCall {
@@ -69,7 +129,17 @@ export interface AcpSessionUpdate extends ChatSessionUpdate {
 export interface PromptContextItem {
   id: string;
   text: string;
-  type: 'folder' | 'note' | 'selection';
+  type: 'folder' | 'note' | 'selection' | 'image' | 'pdf';
+  data?: string;
+  mimeType?: string;
+}
+
+export interface ActiveTerminal {
+  id: string;
+  process: ChildProcess;
+  output: string;
+  exitCode: number | null;
+  signal: string | null;
 }
 
 /**
@@ -80,15 +150,138 @@ export class AcpClient implements ChatClient {
   private childProcess: ChildProcess | null = null;
   private clientConnection: ClientSideConnection | null = null;
   private currentSessionId: string | null = null;
-  private isConnecting = false;
+  private connectPromise: Promise<void> | null = null;
+  private stderrHandler: ((chunk: Buffer) => void) | null = null;
+  private webReadable: ReadableStream<Uint8Array> | null = null;
+  private webWritable: WritableStream<Uint8Array> | null = null;
+  private disconnectKillTimeout: number | null = null;
   private messageCallbacks: Array<(update: ChatSessionUpdate) => void> = [];
   private errorCallbacks: Array<(error: string) => void> = [];
   private commandsCallbacks: Array<(commands: Array<{ description: string; name: string }>) => void> = [];
   private lastAvailableCommands: Array<{ description: string; name: string }> = [];
   private readonly plugin: Plugin;
+  private pendingPermissions: PendingPermission[] = [];
+  private permissionCallbacks: Array<(permissions: PendingPermission[]) => void> = [];
+  private activeTerminals = new Map<string, ActiveTerminal>();
+  private currentAllowedTools: string[] | null = null;
+
+  // Auto-reconnection state
+  private reconnectAttempts = 0;
+  private reconnectTimeout: number | null = null;
+  private readonly MAX_RECONNECT_ATTEMPTS = 5;
+  private readonly BASE_RECONNECT_DELAY_MS = 1000;
+  private readonly MAX_RECONNECT_DELAY_MS = 30000;
+  private isReconnecting = false;
 
   constructor(plugin: Plugin) {
     this.plugin = plugin;
+  }
+
+  /**
+   * Subscribe to pending permission requests.
+   */
+  public onPermissionsChange(callback: (permissions: PendingPermission[]) => void): () => void {
+    this.permissionCallbacks.push(callback);
+    callback(this.getPendingPermissions()); // Immediately notify with current state
+    return () => {
+      const index = this.permissionCallbacks.indexOf(callback);
+      if (index >= 0) {
+        this.permissionCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Get all pending permission requests.
+   */
+  public getPendingPermissions(): PendingPermission[] {
+    return [...this.pendingPermissions];
+  }
+
+  private notifyPermissions(): void {
+    const current = this.getPendingPermissions();
+    for (const callback of this.permissionCallbacks) {
+      try {
+        callback(current);
+      } catch {}
+    }
+  }
+
+  /**
+   * Resolve a pending permission by ID.
+   */
+  public resolvePermission(permissionId: string, optionId: string): void {
+    const pending = this.pendingPermissions.find((p) => p.id === permissionId);
+    if (pending) {
+      const option = pending.params.options?.find((o: Record<string, unknown>) => String(o['optionId']) === optionId);
+      const outcome = option ? String(option['kind'] || optionId) : optionId;
+      const permType = String((pending.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+      this.plugin.auditLog.recordPermission(permType, outcome, 'success');
+      pending.resolve({
+        outcome: 'selected',
+        optionId
+      } as unknown as RequestPermissionResponse);
+      this.pendingPermissions = this.pendingPermissions.filter((p) => p.id !== permissionId);
+      this.notifyPermissions();
+    }
+  }
+
+  /**
+   * Reject/cancel a pending permission by ID.
+   */
+  public cancelPermission(permissionId: string): void {
+    const pending = this.pendingPermissions.find((p) => p.id === permissionId);
+    if (pending) {
+      const permType = String((pending.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+      this.plugin.auditLog.recordPermission(permType, 'cancelled', 'failure');
+      pending.resolve({
+        outcome: 'cancelled'
+      } as unknown as RequestPermissionResponse);
+      this.pendingPermissions = this.pendingPermissions.filter((p) => p.id !== permissionId);
+      this.notifyPermissions();
+    }
+  }
+
+  /**
+   * Resolve all pending permission requests with the first available "allow" option.
+   */
+  public resolveAllPermissions(): void {
+    if (this.pendingPermissions.length === 0) return;
+
+    const pending = [...this.pendingPermissions];
+    this.pendingPermissions = [];
+    for (const p of pending) {
+      const allowOption = p.params.options?.find((o: Record<string, unknown>) => String(o['kind']).startsWith('allow_'));
+      const permType = String((p.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+      if (allowOption) {
+        const outcome = String(allowOption['kind'] || allowOption['optionId']);
+        this.plugin.auditLog.recordPermission(permType, outcome, 'success');
+        p.resolve({
+          outcome: 'selected',
+          optionId: String(allowOption['optionId'])
+        } as unknown as RequestPermissionResponse);
+      } else {
+        this.plugin.auditLog.recordPermission(permType, 'cancelled', 'failure');
+        p.resolve({ outcome: 'cancelled' } as unknown as RequestPermissionResponse);
+      }
+    }
+    this.notifyPermissions();
+  }
+
+  /**
+   * Reject/cancel all pending permission requests.
+   */
+  public cancelAllPermissions(): void {
+    if (this.pendingPermissions.length === 0) return;
+
+    const pending = [...this.pendingPermissions];
+    this.pendingPermissions = [];
+    for (const p of pending) {
+      const permType = String((p.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+      this.plugin.auditLog.recordPermission(permType, 'cancelled', 'failure');
+      p.resolve({ outcome: 'cancelled' } as unknown as RequestPermissionResponse);
+    }
+    this.notifyPermissions();
   }
 
   private resolveHermesPath(): string {
@@ -99,7 +292,7 @@ export class AcpClient implements ChatClient {
 
     // Try common install locations
     const candidates = [
-      '/Users/chris/.local/bin/hermes',
+      `${process.env['HOME'] ?? ''}/.local/bin/hermes`,
       '/usr/local/bin/hermes',
       '/opt/homebrew/bin/hermes',
       '/usr/bin/hermes'
@@ -131,12 +324,22 @@ export class AcpClient implements ChatClient {
    * Spawn hermes acp and establish the ACP connection.
    */
   public async connect(): Promise<void> {
-    if (this.isConnecting || this.isReady()) {
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
+    if (this.isReady()) {
       return;
     }
 
-    this.isConnecting = true;
+    this.connectPromise = this.doConnect();
+    try {
+      await this.connectPromise;
+    } finally {
+      this.connectPromise = null;
+    }
+  }
 
+  private async doConnect(): Promise<void> {
     try {
       // Spawn hermes acp
       const hermesPath = this.resolveHermesPath();
@@ -151,20 +354,36 @@ export class AcpClient implements ChatClient {
 
       // Log stderr for debugging only — Hermes outputs INFO/WARNING to stderr
       if (this.childProcess.stderr) {
-        this.childProcess.stderr.on('data', (chunk: Buffer) => {
+        this.stderrHandler = (chunk: Buffer) => {
           const stderrText = stripAnsi(chunk.toString('utf-8').trim());
           if (stderrText) {
-            // eslint-disable-next-line no-console
-            console.log('[Hermes stderr]', stderrText);
+            this.plugin.debug.debug('Agent stderr', stderrText);
           }
-        });
+        };
+        this.childProcess.stderr.on('data', this.stderrHandler);
       }
+
+      // Handle spawn errors (e.g., binary not found)
+      this.childProcess.on('error', (err) => {
+        this.plugin.debug.error('ACP child process error', err);
+        this.plugin.auditLog.recordConnection('connect', 'acp', 'failure', err.message);
+        this.scheduleReconnect();
+      });
+
+      // Handle unexpected child process exit
+      this.childProcess.on('close', (code, signal) => {
+        if (code !== null || signal !== null) {
+          this.plugin.debug.error('ACP child process exited', { code, signal });
+          this.plugin.auditLog.recordConnection('disconnect', 'acp', 'failure', `exit code ${code}, signal ${signal}`);
+          this.scheduleReconnect();
+        }
+      });
 
       // Convert Node.js streams to Web Streams
       const nodeReadable = this.childProcess.stdout;
       const nodeWritable = this.childProcess.stdin;
 
-      const webReadable = new ReadableStream<Uint8Array>({
+      this.webReadable = new ReadableStream<Uint8Array>({
         start(controller) {
           nodeReadable.on('data', (chunk: Buffer) => {
             controller.enqueue(new Uint8Array(chunk));
@@ -174,7 +393,7 @@ export class AcpClient implements ChatClient {
         }
       });
 
-      const webWritable = new WritableStream<Uint8Array>({
+      this.webWritable = new WritableStream<Uint8Array>({
         write(chunk) {
           return new Promise((resolve, reject) => {
             nodeWritable.write(chunk, (err) => {
@@ -186,7 +405,7 @@ export class AcpClient implements ChatClient {
       });
 
       // Create ndJson stream
-      const stream: Stream = ndJsonStream(webWritable, webReadable);
+      const stream: Stream = ndJsonStream(this.webWritable, this.webReadable);
 
       // Create client-side connection
       this.clientConnection = new ClientSideConnection(
@@ -224,9 +443,20 @@ export class AcpClient implements ChatClient {
 
       // Create a new session
       const vaultPath = this.plugin.app.vault.getRoot().path;
+
+      const mcpServers = this.plugin.settings.mcpServersList
+        .split('\n')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      // Security Note: MCP servers are external executables spawned by the Hermes agent.
+      // Configuring untrusted MCP servers poses a significant security risk, as they can
+      // execute arbitrary code on the user's system with the privileges of the Obsidian process.
+      // Users must be warned about this risk in the plugin documentation.
+
       const sessionRequest: NewSessionRequest = {
         cwd: vaultPath,
-        mcpServers: []
+        mcpServers: mcpServers as unknown as NewSessionRequest['mcpServers']
       };
       const sessionResponse = await this.clientConnection.newSession(sessionRequest);
 
@@ -239,15 +469,41 @@ export class AcpClient implements ChatClient {
       new Notice(`ACP connection failed: ${message}`);
       this.disconnect();
       throw error;
-    } finally {
-      this.isConnecting = false;
     }
   }
 
-  /**
-   * Disconnect from the ACP server and clean up resources.
-   */
   public disconnect(): void {
+    // Cancel any pending auto-reconnect
+    this.cancelReconnect();
+
+    // Kill all active terminals
+    for (const terminal of this.activeTerminals.values()) {
+      if (!terminal.process.killed && terminal.exitCode === null) {
+        terminal.process.kill('SIGKILL');
+      }
+    }
+    this.activeTerminals.clear();
+
+    // Reject all pending permissions
+    for (const pending of this.pendingPermissions) {
+      pending.reject(new Error('Connection closed'));
+    }
+    this.pendingPermissions = [];
+    this.notifyPermissions();
+
+    // Cancel web streams
+    if (this.webReadable) {
+      this.webReadable.cancel().catch(() => {});
+      this.webReadable = null;
+    }
+    this.webWritable = null;
+
+    // Remove stderr listener
+    if (this.childProcess?.stderr && this.stderrHandler) {
+      this.childProcess.stderr.off('data', this.stderrHandler);
+      this.stderrHandler = null;
+    }
+
     if (this.currentSessionId && this.clientConnection) {
       try {
         const closeRequest: CloseSessionRequest = {
@@ -264,10 +520,15 @@ export class AcpClient implements ChatClient {
     this.currentSessionId = null;
     this.clientConnection = null;
 
+    if (this.disconnectKillTimeout) {
+      window.clearTimeout(this.disconnectKillTimeout);
+      this.disconnectKillTimeout = null;
+    }
+
     if (this.childProcess && !this.childProcess.killed) {
       this.childProcess.kill('SIGTERM');
       // Force kill after 2 seconds if still running
-      window.setTimeout(() => {
+      this.disconnectKillTimeout = window.setTimeout(() => {
         if (this.childProcess && !this.childProcess.killed) {
           this.childProcess.kill('SIGKILL');
         }
@@ -278,31 +539,142 @@ export class AcpClient implements ChatClient {
   }
 
   /**
+   * Get current reconnection state for UI display.
+   */
+  public getConnectionState(): { isReconnecting: boolean; reconnectAttempt: number; maxAttempts: number } {
+    return {
+      isReconnecting: this.isReconnecting,
+      maxAttempts: this.MAX_RECONNECT_ATTEMPTS,
+      reconnectAttempt: this.reconnectAttempts
+    };
+  }
+
+  /**
+   * Schedule an automatic reconnection with exponential backoff.
+   */
+  private scheduleReconnect(): void {
+    if (this.isReconnecting) return;
+    if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+      this.emitUpdate({ type: 'message', content: '🔌 ACP connection lost. Max reconnection attempts reached. Please reconnect manually.' });
+      this.plugin.auditLog.recordConnection('reconnect', 'acp', 'failure', 'Max reconnection attempts reached');
+      return;
+    }
+
+    this.isReconnecting = true;
+    this.reconnectAttempts++;
+
+    const delay = Math.min(
+      this.BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts - 1),
+      this.MAX_RECONNECT_DELAY_MS
+    );
+
+    this.emitUpdate({
+      type: 'message',
+      content: `🔌 Reconnecting to Hermes (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`
+    });
+    this.plugin.auditLog.recordConnection('reconnect', 'acp', 'pending', `attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS}`);
+
+    this.reconnectTimeout = window.setTimeout(() => {
+      this.reconnectTimeout = null;
+      this.connect()
+        .then(() => {
+          this.reconnectAttempts = 0;
+          this.isReconnecting = false;
+          this.plugin.auditLog.recordConnection('reconnect', 'acp', 'success');
+        })
+        .catch(() => {
+          this.isReconnecting = false;
+          this.scheduleReconnect();
+        });
+    }, delay);
+  }
+
+  /**
+   * Cancel any pending reconnection.
+   */
+  public cancelReconnect(): void {
+    if (this.reconnectTimeout !== null) {
+      window.clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    this.isReconnecting = false;
+    this.reconnectAttempts = 0;
+  }
+
+  /**
    * Send a prompt to the ACP session.
    */
-  public async sendPrompt(text: string, contextItems: PromptContextItem[] = []): Promise<void> {
+  public async sendPrompt(text: string, contextItems: PromptContextItem[] = [], options?: { allowedTools?: string[] | null }): Promise<void> {
+    this.currentAllowedTools = options?.allowedTools ?? null;
     if (!this.isReady() || !this.clientConnection || !this.currentSessionId) {
       throw new Error('ACP client not connected');
     }
 
     const promptBlocks: PromptRequest['prompt'] = [];
 
+    // Inject active persona system prompt
+    const activePersona = this.plugin.settings.personaTemplates.find(
+      (p) => p.id === this.plugin.settings.activePersonaId
+    );
+    if (activePersona?.systemPrompt) {
+      promptBlocks.push({
+        text: activePersona.systemPrompt,
+        type: 'text'
+      });
+    }
+
     // Add context items as embedded resources before the user message
     for (const item of contextItems) {
       if (item.type === 'note') {
         const notePath = item.id.replace(/^note-/, '');
+        // Handle block references: block-{path}-{startLine}
+        const blockMatch = item.id.match(/^block-(.+)-(\d+)$/);
         try {
-          const file = this.plugin.app.vault.getAbstractFileByPath(notePath);
-          if (file instanceof TFile) {
-            const content = await this.plugin.app.vault.read(file);
-            promptBlocks.push({
-              resource: {
-                mimeType: 'text/markdown',
-                text: content,
-                uri: `vault://${notePath}`
-              },
-              type: 'resource'
-            });
+          if (blockMatch) {
+            const blockPath = blockMatch[1]!;
+            const startLine = parseInt(blockMatch[2]!, 10);
+            const file = this.plugin.app.vault.getAbstractFileByPath(blockPath);
+            if (file instanceof TFile) {
+              const content = await this.plugin.app.vault.read(file);
+              const lines = content.split('\n');
+              // Find the block containing this start line
+              const { parseBlockReferences } = await import('./utils/blockReferences.ts');
+              const blocks = parseBlockReferences(content);
+              const block = blocks.find((b) => b.startLine === startLine);
+              if (block) {
+                promptBlocks.push({
+                  resource: {
+                    mimeType: 'text/markdown',
+                    text: `--- Block from ${blockPath} (${block.type}) ---\n${block.content}`,
+                    uri: `vault://${blockPath}#block-${startLine}`
+                  },
+                  type: 'resource'
+                });
+              } else {
+                // Fallback: just include the single line
+                promptBlocks.push({
+                  resource: {
+                    mimeType: 'text/markdown',
+                    text: lines[startLine] ?? '',
+                    uri: `vault://${blockPath}#L${startLine}`
+                  },
+                  type: 'resource'
+                });
+              }
+            }
+          } else {
+            const file = this.plugin.app.vault.getAbstractFileByPath(notePath);
+            if (file instanceof TFile) {
+              const content = await this.plugin.app.vault.read(file);
+              promptBlocks.push({
+                resource: {
+                  mimeType: 'text/markdown',
+                  text: content,
+                  uri: `vault://${notePath}`
+                },
+                type: 'resource'
+              });
+            }
           }
         } catch {
           // Skip notes that can't be read
@@ -316,6 +688,15 @@ export class AcpClient implements ChatClient {
           },
           type: 'resource'
         });
+      } else if ((item.type === 'image' || item.type === 'pdf') && item.data) {
+        promptBlocks.push({
+          resource: {
+            blob: item.data,
+            mimeType: item.mimeType ?? (item.type === 'pdf' ? 'application/pdf' : 'image/jpeg'),
+            uri: `data:${item.mimeType ?? (item.type === 'pdf' ? 'application/pdf' : 'image/jpeg')};base64,${item.data}`
+          },
+          type: 'resource'
+        });
       }
       // folder type is skipped — no single file to embed
     }
@@ -325,6 +706,13 @@ export class AcpClient implements ChatClient {
       text,
       type: 'text'
     });
+
+    if (this.currentAllowedTools) {
+      promptBlocks.push({
+        text: `System Instruction: For this session, you are ONLY permitted to use the following tools: ${this.currentAllowedTools.join(', ')}. Do not attempt to use any other tools.`,
+        type: 'text'
+      });
+    }
 
     const promptRequest: PromptRequest = {
       prompt: promptBlocks,
@@ -401,20 +789,25 @@ export class AcpClient implements ChatClient {
     return [...this.lastAvailableCommands];
   }
 
+  private checkToolAllowed(toolName: string): void {
+    if (this.currentAllowedTools !== null && !this.currentAllowedTools.includes(toolName)) {
+      throw new Error(`Tool execution rejected: '${toolName}' is disabled for this specific chat session.`);
+    }
+  }
+
   private createClientHandler(): Client {
     return {
       requestPermission: async (params: RequestPermissionRequest): Promise<RequestPermissionResponse> => {
-        // NOTE: Permissions are auto-approved. Future enhancement: show approval UI in Obsidian.
-        const firstOption = params.options[0];
-        if (firstOption) {
-          return {
-            outcome: 'selected' as const,
-            optionId: firstOption.optionId
-          } as unknown as RequestPermissionResponse;
-        }
-        return {
-          outcome: 'cancelled' as const
-        } as unknown as RequestPermissionResponse;
+        return new Promise((resolve, reject) => {
+          const pending: PendingPermission = {
+            id: generateMessageId(),
+            params,
+            resolve,
+            reject
+          };
+          this.pendingPermissions.push(pending);
+          this.notifyPermissions();
+        });
       },
 
       sessionUpdate: async (params: SessionNotification): Promise<void> => {
@@ -422,83 +815,201 @@ export class AcpClient implements ChatClient {
       },
 
       readTextFile: async (params: ReadTextFileRequest): Promise<ReadTextFileResponse> => {
+        this.checkToolAllowed('readTextFile');
+
+        if (!isPathSafe(params.path)) {
+          this.plugin.auditLog.recordToolCall('readTextFile', { path: params.path }, 'blocked', 'Path traversal denied');
+          throw new Error(`Path traversal denied: ${params.path}`);
+        }
+        const normalized = normalizePath(params.path);
+
         try {
-          const file = this.plugin.app.vault.getAbstractFileByPath(params.path);
+          const file = this.plugin.app.vault.getAbstractFileByPath(normalized);
           if (!(file instanceof TFile)) {
+            this.plugin.auditLog.recordToolCall('readTextFile', { path: params.path }, 'failure', 'File not found');
             throw new Error(`File not found: ${params.path}`);
           }
           const content = await this.plugin.app.vault.read(file);
+          this.plugin.auditLog.recordToolCall('readTextFile', { path: params.path }, 'success');
           return { content };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
+          this.plugin.auditLog.recordToolCall('readTextFile', { path: params.path }, 'failure', message);
           throw new Error(`Failed to read file: ${message}`);
         }
       },
 
       writeTextFile: async (params: WriteTextFileRequest): Promise<WriteTextFileResponse> => {
+        this.checkToolAllowed('writeTextFile');
         try {
           // Queue the change for user approval instead of writing immediately
           await this.plugin.fileChangeManager.registerChange(params.path, params.content);
+          this.plugin.auditLog.recordFileChange(params.path, params.content === null ? 'delete' : 'modify', 'pending');
           return {};
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
+          this.plugin.auditLog.recordToolCall('writeTextFile', { path: params.path }, 'failure', message);
           throw new Error(`Failed to queue file change: ${message}`);
         }
       },
 
-      createTerminal: async (_params: CreateTerminalRequest): Promise<CreateTerminalResponse> => {
+      createTerminal: async (params: CreateTerminalRequest & { command?: string; arguments?: string[] }): Promise<CreateTerminalResponse> => {
+        this.checkToolAllowed('createTerminal');
         if (!this.plugin.settings.allowTerminal) {
+          this.plugin.auditLog.recordTerminal(params.command || 'bash', 'blocked');
           throw new Error('Terminal access is disabled in Hermes settings. Enable "Allow Terminal Access" to use terminal tools.');
         }
+
+        const terminalId = `terminal-${Date.now()}`;
+        const rawCommand = params.command || (process.platform === 'win32' ? 'cmd.exe' : 'bash');
+        const args = params.arguments || [];
+
+        // SECURITY: Sanitize the command to prevent injection.
+        // We only allow known-safe base commands and reject shell metacharacters.
+        const command = sanitizeShellCommand(rawCommand);
+
+        const child = spawn(command, args, {
+          cwd: this.plugin.app.vault.getRoot().path,
+          env: { ...process.env, ['PATH']: process.env['PATH'] ?? '' },
+          shell: false // shell: false is required for security — we pass args directly
+        });
+
+        const terminal: ActiveTerminal = {
+          id: terminalId,
+          process: child,
+          output: '',
+          exitCode: null,
+          signal: null
+        };
+
+        const appendOutput = (text: string): void => {
+          if (terminal.output.length + text.length > MAX_TERMINAL_OUTPUT) {
+            const keep = MAX_TERMINAL_OUTPUT - text.length - 100;
+            if (keep > 0) {
+              terminal.output = terminal.output.slice(-keep) + text;
+            } else {
+              terminal.output = text.slice(-MAX_TERMINAL_OUTPUT);
+            }
+          } else {
+            terminal.output += text;
+          }
+        };
+
+        child.stdout?.on('data', (data) => {
+          const text = data.toString();
+          appendOutput(text);
+          this.emitUpdate({ type: 'terminal_output', terminal: { id: terminalId, output: text } });
+        });
+
+        child.stderr?.on('data', (data) => {
+          const text = data.toString();
+          appendOutput(text);
+          this.emitUpdate({ type: 'terminal_output', terminal: { id: terminalId, output: text } });
+        });
+
+        child.on('close', (code, signal) => {
+          terminal.exitCode = code;
+          terminal.signal = signal;
+          const exitMsg = `\n[Process exited with code ${code ?? signal}]\n`;
+          appendOutput(exitMsg);
+          this.emitUpdate({ type: 'terminal_output', terminal: { id: terminalId, output: exitMsg, isExited: true } });
+          this.plugin.auditLog.recordTerminal(`${command} ${args.join(' ')}`, code === 0 ? 'success' : 'failure', code);
+
+          // Self-cleanup after 60 seconds to prevent memory leaks if agent forgets to release
+          window.setTimeout(() => {
+            this.activeTerminals.delete(terminalId);
+          }, 60000);
+        });
+
+        this.activeTerminals.set(terminalId, terminal);
+        this.plugin.auditLog.recordTerminal(`${command} ${args.join(' ')}`, 'success');
+
         return {
-          terminalId: `terminal-${Date.now()}`
+          terminalId
         };
       },
 
-      terminalOutput: async (_params: TerminalOutputRequest): Promise<TerminalOutputResponse> => {
-        if (!this.plugin.settings.allowTerminal) {
-          throw new Error('Terminal access is disabled.');
+      terminalOutput: async (params: TerminalOutputRequest): Promise<TerminalOutputResponse> => {
+        const terminal = this.activeTerminals.get(params.terminalId);
+        if (!terminal) {
+          throw new Error(`Terminal not found: ${params.terminalId}`);
         }
+
+        const exitStatus = (terminal.exitCode !== null || terminal.signal !== null)
+          ? { exitCode: terminal.exitCode ?? 0, signal: terminal.signal ?? null }
+          : undefined;
+
         return {
-          exitStatus: { exitCode: 0, signal: null },
-          output: '',
+          ...(exitStatus ? { exitStatus } : {}),
+          output: terminal.output,
           truncated: false
         };
       },
 
-      releaseTerminal: async (_params: ReleaseTerminalRequest): Promise<ReleaseTerminalResponse | void> => {
+      releaseTerminal: async (params: ReleaseTerminalRequest): Promise<ReleaseTerminalResponse | void> => {
+        const terminal = this.activeTerminals.get(params.terminalId);
+        if (terminal) {
+          if (!terminal.process.killed && terminal.exitCode === null) {
+            terminal.process.kill('SIGKILL');
+          }
+          this.activeTerminals.delete(params.terminalId);
+        }
         return {};
       },
 
-      waitForTerminalExit: async (_params: WaitForTerminalExitRequest): Promise<WaitForTerminalExitResponse> => {
-        if (!this.plugin.settings.allowTerminal) {
-          throw new Error('Terminal access is disabled.');
-        }
-        return {
-          exitCode: 0,
-          signal: null
-        };
+      waitForTerminalExit: async (params: WaitForTerminalExitRequest): Promise<WaitForTerminalExitResponse> => {
+        const terminal = this.activeTerminals.get(params.terminalId);
+        if (!terminal) throw new Error(`Terminal not found: ${params.terminalId}`);
+        if (terminal.exitCode !== null || terminal.signal !== null) return { exitCode: terminal.exitCode ?? 0, signal: terminal.signal ?? null };
+        return new Promise((resolve) => {
+          terminal.process.once('close', (code, signal) => resolve({ exitCode: code ?? 0, signal: signal ?? null }));
+        });
       },
 
-      killTerminal: async (_params: KillTerminalRequest): Promise<KillTerminalResponse | void> => {
-        if (!this.plugin.settings.allowTerminal) {
-          throw new Error('Terminal access is disabled.');
+      killTerminal: async (params: KillTerminalRequest): Promise<KillTerminalResponse | void> => {
+        const terminal = this.activeTerminals.get(params.terminalId);
+        if (terminal && !terminal.process.killed && terminal.exitCode === null) {
+          terminal.process.kill('SIGINT');
         }
         return {};
       }
     };
   }
 
+  private emitUpdate(update: ChatSessionUpdate): void {
+    for (const callback of this.messageCallbacks) {
+      try { callback(update); } catch {}
+    }
+
+    // Dispatch usage events to window for the TokenUsageFooter component
+    if (update.type === 'usage' && update.usage) {
+      const estimatedCost = (update.usage.inputTokens * 0.000003) + (update.usage.outputTokens * 0.000015); // Approximate GPT-4 pricing
+      window.dispatchEvent(new CustomEvent('hermes-usage-update', {
+        detail: {
+          estimatedCost,
+          inputTokens: update.usage.inputTokens,
+          outputTokens: update.usage.outputTokens,
+          totalTokens: update.usage.totalTokens
+        }
+      }));
+    }
+  }
+
+  public abortTerminal(terminalId: string): void {
+    const terminal = this.activeTerminals.get(terminalId);
+    if (terminal && !terminal.process.killed && terminal.exitCode === null) {
+      terminal.process.kill('SIGINT');
+      this.emitUpdate({
+        type: 'terminal_output',
+        terminal: { id: terminalId, output: '\n[Process aborted by user]\n', isExited: true }
+      });
+    }
+  }
+
   private handleSessionUpdate(notification: SessionNotification): void {
     const parsedUpdate = this.parseUpdate(notification);
     if (parsedUpdate) {
-      for (const callback of this.messageCallbacks) {
-        try {
-          callback(parsedUpdate);
-        } catch {
-          // Ignore callback errors
-        }
-      }
+      this.emitUpdate(parsedUpdate);
 
       // Also notify command subscribers when available_commands update arrives
       if (parsedUpdate.type === 'available_commands' && parsedUpdate.availableCommands) {
@@ -546,6 +1057,7 @@ export class AcpClient implements ChatClient {
           status?: string;
           title?: string;
           toolCallId?: string;
+          result?: unknown;
         };
         const statusMap: Record<string, 'running' | 'complete' | 'error'> = {
           'pending': 'running',
@@ -553,13 +1065,24 @@ export class AcpClient implements ChatClient {
           'completed': 'complete',
           'failed': 'error'
         };
+
+        const status = statusMap[toolUpdate.status ?? ''] ?? 'running';
+        const resultStr = toolUpdate.result !== undefined
+          ? (typeof toolUpdate.result === 'string' ? toolUpdate.result : JSON.stringify(toolUpdate.result, null, 2))
+          : undefined;
+
+        const toolCall: AcpToolCall = {
+          callId: String(toolUpdate.toolCallId ?? ''),
+          name: String(toolUpdate.title ?? ''),
+          status
+        };
+        if (resultStr !== undefined) {
+          toolCall.result = resultStr;
+        }
+
         return {
-          toolCall: {
-            callId: String(toolUpdate.toolCallId ?? ''),
-            name: String(toolUpdate.title ?? ''),
-            status: statusMap[toolUpdate.status ?? ''] ?? 'running'
-          },
-          type: update.sessionUpdate === 'tool_call_update' ? 'tool_progress' : 'tool_start'
+          toolCall,
+          type: status === 'complete' || status === 'error' ? 'tool_complete' : (update.sessionUpdate === 'tool_call_update' ? 'tool_progress' : 'tool_start')
         };
       }
 

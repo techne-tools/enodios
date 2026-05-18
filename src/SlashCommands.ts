@@ -1,3 +1,4 @@
+import { TFile } from 'obsidian';
 import type { Plugin } from './Plugin.ts';
 
 export interface SlashCommand {
@@ -39,11 +40,129 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       return `Available commands:\n\n${list}`;
     },
     name: 'help'
+  },
+  {
+    description: 'Read the active Canvas mind-map to context',
+    execute: async (plugin) => {
+      const activeFile = plugin.app.workspace.getActiveFile();
+      if (!activeFile || activeFile.extension !== 'canvas') {
+        return 'No active Canvas file found. Please open a .canvas file first.';
+      }
+      try {
+        const content = await plugin.app.vault.read(activeFile);
+        const canvasData = JSON.parse(content);
+
+        let summary = `Attached current Canvas mind-map (**${activeFile.basename}.canvas**).\n\n`;
+        summary += 'Raw JSON structure:\n```json\n' + JSON.stringify(canvasData, null, 2) + '\n```\n\n';
+        summary += `**Instructions for Hermes:**\nTo create or modify a Canvas, use the \`writeTextFile\` tool to write valid JSON to a \`.canvas\` file path. Ensure you include a \`nodes\` array (id, type: "text"|"file"|"group", x, y, width, height) and an \`edges\` array (id, fromNode, fromSide, toNode, toSide).`;
+
+        return summary;
+      } catch (err) {
+        return `Failed to read Canvas data: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+    name: 'canvas'
+  },
+  {
+    description: 'Switch persona / system prompt template',
+    execute: async (plugin, args) => {
+      const personas = plugin.settings.personaTemplates;
+      const query = args.trim().toLowerCase();
+
+      if (!query) {
+        const list = personas
+          .map((p) => `**${p.name}** (${p.id})${plugin.settings.activePersonaId === p.id ? ' ← active' : ''}`)
+          .join('\n');
+        return `Available personas:\n\n${list}\n\nUse \`/persona \u003cid\u003e\` to switch.`;
+      }
+
+      const match = personas.find((p) =>
+        p.id.toLowerCase() === query ||
+        p.name.toLowerCase().includes(query)
+      );
+
+      if (!match) {
+        return `Persona "${args}" not found. Use \`/persona\` to list available personas.`;
+      }
+
+      // @ts-expect-error - settings are mutable at runtime for persona switching
+      plugin.settings.activePersonaId = match.id;
+      await (plugin as unknown as { saveSettings(): Promise<void> }).saveSettings();
+
+      return `Switched to **${match.name}**. ${match.systemPrompt ? 'System prompt updated.' : 'No system prompt set for this persona.'}`;
+    },
+    name: 'persona'
+  },
+  {
+    description: 'Search the vault and append results to context (Local RAG)',
+    execute: async (plugin, args) => {
+      if (!args.trim()) {
+        return 'Please provide a search query. Example: `/search project goals`';
+      }
+
+      const query = args.toLowerCase();
+      const terms = query.split(/\s+/).filter(Boolean);
+      const files = plugin.app.vault.getMarkdownFiles();
+      const matches: Array<{ file: TFile; score: number; excerpt: string }> = [];
+
+      for (const file of files) {
+        const content = await plugin.app.vault.cachedRead(file);
+        const lowerContent = content.toLowerCase();
+
+        let score = 0;
+        let firstMatchIdx = -1;
+
+        for (const term of terms) {
+          const idx = lowerContent.indexOf(term);
+          if (idx !== -1) {
+            score += 1;
+            if (firstMatchIdx === -1 || idx < firstMatchIdx) {
+              firstMatchIdx = idx;
+            }
+          }
+        }
+
+        if (score > 0) {
+          const start = Math.max(0, firstMatchIdx - 60);
+          const end = Math.min(content.length, firstMatchIdx + 200);
+          let excerpt = content.slice(start, end).replace(/\n/g, ' ');
+          if (start > 0) excerpt = '...' + excerpt;
+          if (end < content.length) excerpt = excerpt + '...';
+
+          matches.push({ file, score, excerpt });
+        }
+      }
+
+      if (matches.length === 0) {
+        return `No vault notes found matching "${args}".`;
+      }
+
+      matches.sort((a, b) => b.score - a.score);
+      const topMatches = matches.slice(0, 5);
+
+      let result = `### 🔍 Vault Search Results for "${args}"\n\n`;
+      result += `*System note: The following excerpts were retrieved from the user's vault. Use them to answer the prompt. To read a full file, use the \`readTextFile\` tool on its path.*\n\n`;
+
+      for (const match of topMatches) {
+        result += `**Path:** \`${match.file.path}\`\n> ${match.excerpt}\n\n`;
+      }
+
+      return result;
+    },
+    name: 'search'
   }
 ];
 
 let customCommands: SlashCommand[] = [];
 let cachedToolCommands: SlashCommand[] = [];
+
+/**
+ * Clear all custom and cached commands. Call on plugin unload.
+ */
+export function clearAllCommands(): void {
+  customCommands = [];
+  cachedToolCommands = [];
+}
 
 /**
  * Set the cached tool commands from ACP available_commands_update.

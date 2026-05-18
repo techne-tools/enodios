@@ -1,3 +1,4 @@
+import { Notice } from 'obsidian';
 import type { ExtractPluginSettingsWrapper } from 'obsidian-dev-utils/obsidian/Plugin/PluginTypesBase';
 import type { ReadonlyDeep } from 'type-fest';
 
@@ -7,6 +8,10 @@ import type { ChatClient } from './ChatClient.ts';
 import type { PluginTypes } from './PluginTypes.ts';
 
 import { AcpClient } from './AcpClient.ts';
+import { clearAllCommands } from './SlashCommands.ts';
+import { ghostTextExtension, setGhostTextEffect } from './styles/GhostTextExtension.ts';
+import { AuditLog } from './AuditLog.ts';
+import { DebugLogger } from './DebugLogger.ts';
 import { FileChangeManager } from './FileChangeManager.ts';
 import { HermesApiClient } from './HermesApiClient.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
@@ -21,9 +26,12 @@ import {
 export class Plugin extends PluginBase<PluginTypes> {
   public acpClient!: AcpClient;
   public apiClient!: HermesApiClient;
+  public auditLog!: AuditLog;
+  public debug!: DebugLogger;
   public fileChangeManager!: FileChangeManager;
   public secrets!: SecretsManager;
   public vaultManager!: VaultManager;
+  private ribbonBadgeEl?: HTMLElement;
 
   /**
    * Get the active chat client based on connection mode.
@@ -59,29 +67,51 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.vaultManager = new VaultManager(this);
     this.secrets = new SecretsManager(this);
     this.fileChangeManager = new FileChangeManager(this);
+    this.auditLog = new AuditLog(this);
+    this.debug = new DebugLogger(this);
     this.acpClient = new AcpClient(this);
     this.apiClient = new HermesApiClient(this, this.secrets);
 
     // Connect on load using the configured mode
     const client = this.getChatClient();
-    client.connect().catch(() => {
-      // Silently ignore connection errors - will retry on first message
+    client.connect().catch((err) => {
+      this.debug.error('Initial connection failed', err);
     });
 
     this.registerView(HERMES_CHAT_VIEW_TYPE, (leaf) => new HermesChatView(leaf, this));
 
+    // Register CodeMirror 6 extension for inline ghost text
+    this.registerEditorExtension(ghostTextExtension);
+
     // Add ribbon icon for Hermes chat
-    this.addRibbonIcon('message-square', 'Open Hermes Chat', () => {
-      this.openView(HERMES_CHAT_VIEW_TYPE).catch(() => {
-        // Silently ignore view open errors
+    const ribbonIconEl = this.addRibbonIcon('message-square', 'Open Hermes Chat', () => {
+      this.openView(HERMES_CHAT_VIEW_TYPE).catch((err) => {
+        this.debug.error('Failed to open view', err);
       });
     });
+
+    ribbonIconEl.classList.add('hermes-ribbon-icon');
+    this.ribbonBadgeEl = ribbonIconEl.createSpan({ cls: 'hermes-ribbon-badge' });
+    this.ribbonBadgeEl.style.display = 'none';
+
+    const updateBadge = (): void => {
+      const fileChanges = this.fileChangeManager.getPendingChanges().length;
+      const perms = this.acpClient.getPendingPermissions().length;
+      const total = fileChanges + perms;
+      if (this.ribbonBadgeEl) {
+        this.ribbonBadgeEl.style.display = total > 0 ? 'flex' : 'none';
+        this.ribbonBadgeEl.textContent = total > 0 ? String(total) : '';
+      }
+    };
+
+    this.fileChangeManager.onChanges(updateBadge);
+    this.acpClient.onPermissionsChange(updateBadge);
 
     // Add command to open Hermes chat view
     this.addCommand({
       callback: () => {
-        this.openView(HERMES_CHAT_VIEW_TYPE).catch(() => {
-          // Silently ignore view open errors
+        this.openView(HERMES_CHAT_VIEW_TYPE).catch((err) => {
+          this.debug.error('Failed to open view', err);
         });
       },
       id: 'open-hermes-chat',
@@ -91,8 +121,8 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Add command to toggle Hermes chat view
     this.addCommand({
       callback: () => {
-        this.toggleView(HERMES_CHAT_VIEW_TYPE).catch(() => {
-          // Silently ignore view toggle errors
+        this.toggleView(HERMES_CHAT_VIEW_TYPE).catch((err) => {
+          this.debug.error('Failed to toggle view', err);
         });
       },
       id: 'toggle-hermes-chat',
@@ -108,8 +138,8 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Add command to focus chat input (when chat is open)
     this.addCommand({
       callback: () => {
-        this.focusChatInput().catch(() => {
-          // Silently ignore focus errors
+        this.focusChatInput().catch((err) => {
+          this.debug.error('Failed to focus input', err);
         });
       },
       id: 'focus-hermes-chat-input',
@@ -120,6 +150,148 @@ export class Plugin extends PluginBase<PluginTypes> {
           key: 'H'
         }
       ]
+    });
+
+    // Add command to trigger inline completion (Ghost Text)
+    this.addCommand({
+      editorCallback: async (editor) => {
+        // @ts-expect-error - Accessing internal CodeMirror 6 view from Obsidian's Editor wrapper
+        const cmView = editor.cm;
+        if (!cmView) return;
+
+        const pos = editor.posToOffset(editor.getCursor());
+        cmView.dispatch({
+          effects: setGhostTextEffect.of({ pos, alternatives: [' ...Hermes is thinking...'], currentIndex: 0 })
+        });
+
+        try {
+          const doc = cmView.state.doc.toString();
+          const prefix = doc.slice(Math.max(0, pos - 1000), pos);
+          const suffix = doc.slice(pos, pos + 1000);
+
+          const systemPrompt = 'You are an inline auto-completion assistant. Continue the text naturally based on the prefix and suffix context. Do NOT repeat the prefix. ONLY output the exact text that should be inserted at the cursor position. Keep it concise.';
+          const userText = `<PREFIX>\n${prefix}\n</PREFIX>\n<SUFFIX>\n${suffix}\n</SUFFIX>`;
+
+          const completion = await this.apiClient.getInlineCompletion(systemPrompt, userText);
+
+          if (completion) {
+            // Only show if the cursor hasn't moved while we were waiting
+            const currentPos = editor.posToOffset(editor.getCursor());
+            if (currentPos === pos) {
+              cmView.dispatch({ effects: setGhostTextEffect.of({ pos, alternatives: [completion], currentIndex: 0 }) });
+            } else {
+              cmView.dispatch({ effects: setGhostTextEffect.of(null) });
+            }
+          } else {
+            cmView.dispatch({ effects: setGhostTextEffect.of(null) });
+          }
+        } catch (error) {
+          this.debug.error('Inline completion failed', error);
+          cmView.dispatch({ effects: setGhostTextEffect.of(null) });
+        }
+      },
+      id: 'hermes-inline-suggest',
+      name: 'Trigger Inline Suggestion'
+    });
+
+    // Shared rate limiter for command palette commands
+    let lastCommandSendTime = 0;
+    const COMMAND_RATE_LIMIT_MS = 2000;
+    const checkRateLimit = (): boolean => {
+      const now = Date.now();
+      if (now - lastCommandSendTime < COMMAND_RATE_LIMIT_MS) {
+        new Notice('Please wait a moment before sending another command.');
+        return false;
+      }
+      lastCommandSendTime = now;
+      return true;
+    };
+
+    // Command Palette: Ask Hermes about selection
+    this.addCommand({
+      editorCallback: async (editor, _view) => {
+        if (!checkRateLimit()) return;
+        const selection = editor.getSelection();
+        if (!selection.trim()) {
+          new Notice('No text selected. Select some text first.');
+          return;
+        }
+
+        await this.openView(HERMES_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+        if (leaves.length === 0) return;
+
+        const chatView = leaves[0]!.view;
+        if (!(chatView instanceof HermesChatView)) return;
+
+        const contextItems = [{
+          id: `selection-${Date.now()}`,
+          text: selection.slice(0, 50) + (selection.length > 50 ? '...' : ''),
+          type: 'selection' as const
+        }];
+
+        await chatView.sendPrompt(`Please explain or elaborate on the following:\n\n${selection}`, contextItems);
+      },
+      id: 'hermes-ask-selection',
+      name: 'Ask Hermes about selection'
+    });
+
+    // Command Palette: Summarize current note
+    this.addCommand({
+      callback: async () => {
+        if (!checkRateLimit()) return;
+        const activeFile = this.app.workspace.getActiveFile();
+        if (!activeFile) {
+          new Notice('No active note to summarize.');
+          return;
+        }
+
+        await this.openView(HERMES_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+        if (leaves.length === 0) return;
+
+        const chatView = leaves[0]!.view;
+        if (!(chatView instanceof HermesChatView)) return;
+
+        const contextItems = [{
+          id: `note-${activeFile.path}`,
+          text: activeFile.basename,
+          type: 'note' as const
+        }];
+
+        await chatView.sendPrompt('Please provide a concise summary of this note.', contextItems);
+      },
+      id: 'hermes-summarize-note',
+      name: 'Summarize current note with Hermes'
+    });
+
+    // Command Palette: Generate tags for current note
+    this.addCommand({
+      callback: async () => {
+        if (!checkRateLimit()) return;
+        const activeFile = this.app.workspace.getActiveFile();
+        if (!activeFile) {
+          new Notice('No active note to generate tags for.');
+          return;
+        }
+
+        await this.openView(HERMES_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+        if (leaves.length === 0) return;
+
+        const chatView = leaves[0]!.view;
+        if (!(chatView instanceof HermesChatView)) return;
+
+        const contextItems = [{
+          id: `note-${activeFile.path}`,
+          text: activeFile.basename,
+          type: 'note' as const
+        }];
+
+        await chatView.sendPrompt('Generate 3-5 relevant tags for this note. Return them as a comma-separated list.', contextItems);
+      },
+      id: 'hermes-generate-tags',
+      name: 'Generate tags for current note'
     });
   }
 
@@ -139,6 +311,9 @@ export class Plugin extends PluginBase<PluginTypes> {
   }
 
   protected override async onunloadImpl(): Promise<void> {
+    this.acpClient?.disconnect();
+    this.apiClient?.disconnect();
+    clearAllCommands();
     await super.onunloadImpl();
   }
 

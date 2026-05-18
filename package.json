@@ -21,6 +21,9 @@
     "lint:md": "obsidian-dev-utils lint:md",
     "lint:md:fix": "obsidian-dev-utils lint:md:fix",
     "spellcheck": "obsidian-dev-utils spellcheck",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
     "version": "obsidian-dev-utils version"
   },
   "devDependencies": {
@@ -31,8 +34,10 @@
     "@types/luxon": "3.4.2",
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5",
+    "@vitest/coverage-v8": "^4.1.6",
     "date-fns": "3.6.0",
     "jiti": "2.4.2",
+    "jsdom": "^29.1.1",
     "luxon": "3.5.0",
     "obsidian": "1.12.3",
     "obsidian-dev-skills": "^1.1.4",
@@ -40,7 +45,8 @@
     "obsidian-typings": "^3.13.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "svelte": "^5.55.5"
+    "svelte": "^5.55.5",
+    "vitest": "^4.1.6"
   },
   "overrides": {
     "@antfu/utils": "9.2.0",

@@ -1,13 +1,26 @@
-import { Notice, TFile, TFolder, type Vault } from 'obsidian';
+import { Notice, TFile, TFolder, type Vault, normalizePath } from 'obsidian';
 
 import type { Plugin } from './Plugin.ts';
 import type { ChatMessage } from './Views/HermesChatView.tsx';
+import { generateMessageId } from './utils/uuid.ts';
+
+const FRONTMATTER_ID_REGEX = /^id:\s*(.+)$/m;
+const FRONTMATTER_TITLE_REGEX = /^title:\s*(.+)$/m;
+const FRONTMATTER_CREATED_REGEX = /^createdAt:\s*(\d+)$/m;
+const FRONTMATTER_UPDATED_REGEX = /^updatedAt:\s*(\d+)$/m;
+const MESSAGE_HEADER_REGEX = /^## \*\*(.+?)\*\* — (.+?)\n\n/;
 
 export interface ConversationMetadata {
+  /** The timestamp when the conversation was originally created */
   createdAt: number;
+  /** Unique identifier for the conversation (e.g., conv-12345678) */
   id: string;
+  /** User-facing title generated from the first prompt or provided by the user */
   title: string;
+  /** The timestamp of the most recent message in the conversation */
   updatedAt: number;
+  /** Specific tools allowed for this session, bypassing global settings if provided */
+  allowedTools?: string[];
 }
 
 /**
@@ -32,18 +45,48 @@ export class VaultManager {
   }
 
   /**
+   * Recursively create folders if they don't exist.
+   */
+  public async ensureFolderExists(folderPath: string): Promise<TFolder> {
+    const parts = folderPath.split('/');
+    let currentPath = '';
+    let currentFolder: TFolder | null = null;
+
+    for (const part of parts) {
+      if (!part) continue;
+      currentPath = currentPath === '' ? part : `${currentPath}/${part}`;
+      const existing = this.vault.getAbstractFileByPath(currentPath);
+
+      if (existing instanceof TFolder) {
+        currentFolder = existing;
+      } else if (existing) {
+        throw new Error(`Path already exists but is not a folder: ${currentPath}`);
+      } else {
+        currentFolder = await this.vault.createFolder(currentPath);
+      }
+    }
+
+    if (!currentFolder) {
+      throw new Error(`Invalid folder path: ${folderPath}`);
+    }
+
+    return currentFolder;
+  }
+
+  /**
    * Ensure the save folder exists in the vault.
    */
   public async ensureSaveFolder(): Promise<TFolder> {
     const folderPath = this.getSaveFolder();
-    const existingFolder = this.vault.getAbstractFileByPath(folderPath);
+    return this.ensureFolderExists(folderPath);
+  }
 
-    if (existingFolder instanceof TFolder) {
-      return existingFolder;
-    }
-
-    // Create folder and any parent folders
-    return await this.vault.createFolder(folderPath);
+  /**
+   * Validate that a path is safe (within vault, no traversal).
+   */
+  private isPathSafe(filePath: string): boolean {
+    const normalized = normalizePath(filePath);
+    return !normalized.startsWith('..') && !normalized.startsWith('/') && !normalized.includes('../');
   }
 
   /**
@@ -63,14 +106,25 @@ export class VaultManager {
   private generateFilePath(title: string, timestamp: number): string {
     const folder = this.getSaveFolder();
     const safeTitle = this.sanitizeFilename(title) || 'conversation';
-    const dateStr = new Date(timestamp).toISOString().split('T')[0];
+    const dateStr = new Date(timestamp).toISOString().split('T')[0] ?? '';
+    const yearMonth = dateStr.slice(0, 7); // YYYY-MM
+
+    // Support folder organization modes
+    const orgMode = this.plugin.settings.conversationOrganization ?? 'flat';
+    const validModes = ['flat', 'by-date', 'by-project'] as const;
+    const validatedMode = validModes.includes(orgMode as typeof validModes[number]) ? orgMode : 'flat';
+
+    if (validatedMode === 'by-date') {
+      return `${folder}/${yearMonth}/${safeTitle}-${dateStr}-${timestamp}.md`;
+    }
+
     return `${folder}/${safeTitle}-${dateStr}-${timestamp}.md`;
   }
 
   /**
    * Convert messages to markdown content with frontmatter.
    */
-  private messagesToMarkdown(messages: ChatMessage[], title: string): string {
+  private messagesToMarkdown(messages: ChatMessage[], title: string, allowedTools: string[] | null): string {
     const now = Date.now();
     const metadata: ConversationMetadata = {
       createdAt: messages[0]?.timestamp ?? now,
@@ -85,6 +139,7 @@ export class VaultManager {
       `title: ${metadata.title}`,
       `createdAt: ${metadata.createdAt}`,
       `updatedAt: ${metadata.updatedAt}`,
+      ...(allowedTools ? [`allowedTools: ${JSON.stringify(allowedTools)}`] : []),
       'type: hermes-conversation',
       '---',
       ''
@@ -93,7 +148,7 @@ export class VaultManager {
     const body = messages.map((msg) => {
       const time = new Date(msg.timestamp).toLocaleString();
       const roleLabel = msg.role === 'user' ? '**You**' : msg.role === 'assistant' ? '**Hermes**' : '**System**';
-      return `## ${roleLabel} — ${time}\n\n${msg.content}\n`;
+      return `## ${roleLabel} — ${time}\n\nid: ${msg.id}\n\n${msg.content}\n`;
     }).join('\n---\n\n');
 
     return `${frontmatter}\n${body}`;
@@ -114,14 +169,20 @@ export class VaultManager {
       if (trimmed.startsWith('---')) continue;
 
       // Parse header: ## **Role** — time
-      const headerMatch = trimmed.match(/^## \*\*(.+?)\*\* — (.+?)\n\n/);
+      const headerMatch = trimmed.match(MESSAGE_HEADER_REGEX);
       if (!headerMatch) continue;
 
       const roleText = headerMatch[1]?.toLowerCase() ?? '';
       const role = roleText === 'you' ? 'user' : roleText === 'hermes' ? 'assistant' : 'system';
-      const contentText = trimmed.slice(headerMatch[0].length);
+
+      // Extract message id if present
+      const idMatch = trimmed.match(/^id:\s*([a-f0-9\-]+)\n\n/m);
+      const messageId = idMatch?.[1] ?? generateMessageId();
+
+      const contentText = trimmed.slice(headerMatch[0].length + (idMatch?.[0]?.length ?? 0));
 
       messages.push({
+        id: messageId,
         content: contentText.trim(),
         role,
         timestamp: Date.now()
@@ -135,7 +196,7 @@ export class VaultManager {
    * Save a conversation to the vault.
    * Returns the file path if successful.
    */
-  public async saveConversation(messages: ChatMessage[], title?: string): Promise<string | null> {
+  public async saveConversation(messages: ChatMessage[], title?: string, allowedTools: string[] | null = null): Promise<string | null> {
     if (messages.length === 0) return null;
 
     try {
@@ -143,7 +204,7 @@ export class VaultManager {
 
       const conversationTitle = title || 'Conversation';
       const filePath = this.generateFilePath(conversationTitle, Date.now());
-      const content = this.messagesToMarkdown(messages, conversationTitle);
+      const content = this.messagesToMarkdown(messages, conversationTitle, allowedTools);
 
       await this.vault.create(filePath, content);
       return filePath;
@@ -156,13 +217,13 @@ export class VaultManager {
   /**
    * Update an existing conversation file.
    */
-  public async updateConversation(filePath: string, messages: ChatMessage[], title?: string): Promise<boolean> {
+  public async updateConversation(filePath: string, messages: ChatMessage[], title?: string, allowedTools: string[] | null = null): Promise<boolean> {
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!(file instanceof TFile)) return false;
 
     try {
       const conversationTitle = title || 'Conversation';
-      const content = this.messagesToMarkdown(messages, conversationTitle);
+      const content = this.messagesToMarkdown(messages, conversationTitle, allowedTools);
       await this.vault.modify(file, content);
       return true;
     } catch (error) {
@@ -173,7 +234,7 @@ export class VaultManager {
   /**
    * Load a conversation from the vault.
    */
-  public async loadConversation(filePath: string): Promise<{ messages: ChatMessage[]; title: string } | null> {
+  public async loadConversation(filePath: string): Promise<{ messages: ChatMessage[]; title: string; allowedTools?: string[] } | null> {
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!(file instanceof TFile)) return null;
 
@@ -182,10 +243,33 @@ export class VaultManager {
       const messages = this.markdownToMessages(content);
 
       // Extract title from frontmatter
-      const titleMatch = content.match(/^title:\s*(.+)$/m);
-      const title = titleMatch?.[1]?.trim() || 'Conversation';
+      let title = 'Conversation';
+      const cache = this.plugin.app.metadataCache.getFileCache(file);
+      if (cache?.frontmatter?.['title']) {
+        title = String(cache.frontmatter['title']);
+      } else {
+        const titleMatch = content.match(/^title:\s*(.+)$/m);
+        if (titleMatch?.[1]) {
+          title = titleMatch[1].trim();
+        }
+      }
 
-      return { messages, title };
+      // Extract allowedTools from frontmatter
+      let allowedTools: string[] | undefined;
+      if (cache?.frontmatter?.['allowedTools']) {
+        const raw = cache.frontmatter['allowedTools'];
+        if (Array.isArray(raw)) {
+          allowedTools = raw.map(String);
+        } else if (typeof raw === 'string') {
+          try {
+            allowedTools = JSON.parse(raw) as string[];
+          } catch {
+            allowedTools = raw.split(',').map((s) => s.trim()).filter(Boolean);
+          }
+        }
+      }
+
+      return { messages, title, ...(allowedTools ? { allowedTools } : {}) };
     } catch (error) {
       return null;
     }
@@ -222,20 +306,41 @@ export class VaultManager {
     for (const child of folder.children) {
       if (child instanceof TFile && child.extension === 'md') {
         try {
-          const content = await this.vault.read(child);
-          const idMatch = content.match(/^id:\s*(.+)$/m);
-          const titleMatch = content.match(/^title:\s*(.+)$/m);
-          const createdMatch = content.match(/^createdAt:\s*(\d+)$/m);
-          const updatedMatch = content.match(/^updatedAt:\s*(\d+)$/m);
+          let id: string | undefined;
+          let title: string | undefined;
+          let createdAt: number | undefined;
+          let updatedAt: number | undefined;
 
-          if (idMatch?.[1] && titleMatch?.[1]) {
+          const cache = this.plugin.app.metadataCache.getFileCache(child);
+          if (cache?.frontmatter) {
+            id = cache.frontmatter['id'] ? String(cache.frontmatter['id']) : undefined;
+            title = cache.frontmatter['title'] ? String(cache.frontmatter['title']) : undefined;
+            createdAt = Number(cache.frontmatter['createdAt']) || undefined;
+            updatedAt = Number(cache.frontmatter['updatedAt']) || undefined;
+          }
+
+          // Fallback to reading file if cache is missing (e.g. newly created file or in tests)
+          if (!id || !title) {
+            const content = await this.vault.read(child);
+            const idMatch = content.match(FRONTMATTER_ID_REGEX);
+            const titleMatch = content.match(FRONTMATTER_TITLE_REGEX);
+            const createdMatch = content.match(FRONTMATTER_CREATED_REGEX);
+            const updatedMatch = content.match(FRONTMATTER_UPDATED_REGEX);
+
+            id = id || idMatch?.[1]?.trim();
+            title = title || titleMatch?.[1]?.trim();
+            createdAt = createdAt || Number(createdMatch?.[1] ?? '');
+            updatedAt = updatedAt || Number(updatedMatch?.[1] ?? '');
+          }
+
+          if (id && title) {
             conversations.push({
               filePath: child.path,
               metadata: {
-                createdAt: Number(createdMatch?.[1] ?? '') || child.stat.ctime,
-                id: idMatch[1].trim(),
-                title: titleMatch[1].trim(),
-                updatedAt: Number(updatedMatch?.[1] ?? '') || child.stat.mtime
+                createdAt: createdAt || child.stat.ctime,
+                id: id.trim(),
+                title: title.trim(),
+                updatedAt: updatedAt || child.stat.mtime
               }
             });
           }
@@ -251,18 +356,114 @@ export class VaultManager {
   }
 
   /**
+   * Export a conversation to HTML (self-contained).
+   */
+  public async exportToHtml(messages: ChatMessage[], title: string): Promise<string> {
+    const escapeHtml = (text: string): string => {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;')
+        .replace(/`/g, '&#96;');
+    };
+
+    const messageHtml = messages.map((msg) => {
+      const roleClass = msg.role === 'user' ? 'user' : msg.role === 'assistant' ? 'assistant' : 'system';
+      const roleLabel = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Hermes' : 'System';
+      const time = new Date(msg.timestamp).toLocaleString();
+      return `
+        <div class="message ${roleClass}">
+          <div class="message-header">
+            <span class="role">${roleLabel}</span>
+            <span class="time">${time}</span>
+          </div>
+          <div class="message-content">${escapeHtml(msg.content).replace(/\n/g, '<br>')}</div>
+        </div>
+      `;
+    }).join('');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(title)}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+  h1 { text-align: center; color: #333; margin-bottom: 30px; }
+  .message { margin-bottom: 16px; padding: 12px 16px; border-radius: 8px; }
+  .message.user { background: #e3f2fd; margin-left: 40px; }
+  .message.assistant { background: #fff; border: 1px solid #e0e0e0; margin-right: 40px; }
+  .message.system { background: #f5f5f5; color: #666; font-size: 13px; text-align: center; }
+  .message-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: #666; }
+  .message-content { line-height: 1.5; white-space: pre-wrap; }
+  .role { font-weight: 600; }
+  .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #999; }
+</style>
+</head>
+<body>
+<h1>${escapeHtml(title)}</h1>
+${messageHtml}
+<div class="footer">Exported from Obsidian Hermes</div>
+</body>
+</html>`;
+  }
+
+  /**
+   * Export a conversation to JSON.
+   */
+  public exportToJson(messages: ChatMessage[], title: string, metadata?: Record<string, unknown>): string {
+    const data = {
+      exportedAt: new Date().toISOString(),
+      messages: messages.map((m) => ({
+        content: m.content,
+        id: m.id,
+        role: m.role,
+        timestamp: m.timestamp
+      })),
+      metadata,
+      title,
+      version: '1.0'
+    };
+    return JSON.stringify(data, null, 2);
+  }
+
+  /**
+   * Export a conversation to PDF by creating a printable HTML page.
+   * Returns a data URI that can be opened for printing to PDF.
+   * Caller MUST call revokeObjectURL on the returned string when done.
+   */
+  public async exportToPdfDataUri(messages: ChatMessage[], title: string): Promise<string> {
+    const html = await this.exportToHtml(messages, title);
+    const printStyles = `
+      <style>
+        @media print {
+          body { background: white !important; }
+          .message { page-break-inside: avoid; }
+          .message.user { margin-left: 20px !important; }
+          .message.assistant { margin-right: 20px !important; }
+        }
+      </style>
+    `;
+    const htmlWithPrint = html.replace('</head>', `${printStyles}</head>`);
+    const blob = new Blob([htmlWithPrint], { type: 'text/html' });
+    return URL.createObjectURL(blob);
+  }
+
+  /**
    * Create a new note in the vault.
    */
   public async createNote(filePath: string, content: string): Promise<TFile | null> {
+    if (!this.isPathSafe(filePath)) return null;
+
     try {
       // Ensure parent folder exists
       const parts = filePath.split('/');
       if (parts.length > 1) {
         const parentPath = parts.slice(0, -1).join('/');
-        const parent = this.vault.getAbstractFileByPath(parentPath);
-        if (!parent) {
-          await this.vault.createFolder(parentPath);
-        }
+        await this.ensureFolderExists(parentPath);
       }
 
       return await this.vault.create(filePath, content);
@@ -276,6 +477,8 @@ export class VaultManager {
    * Read a note from the vault.
    */
   public async readNote(filePath: string): Promise<string | null> {
+    if (!this.isPathSafe(filePath)) return null;
+
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!(file instanceof TFile)) return null;
 
@@ -290,6 +493,8 @@ export class VaultManager {
    * Update an existing note in the vault.
    */
   public async updateNote(filePath: string, content: string): Promise<boolean> {
+    if (!this.isPathSafe(filePath)) return false;
+
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!(file instanceof TFile)) return false;
 
@@ -305,6 +510,8 @@ export class VaultManager {
    * Delete a note from the vault.
    */
   public async deleteNote(filePath: string): Promise<boolean> {
+    if (!this.isPathSafe(filePath)) return false;
+
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!(file instanceof TFile)) return false;
 

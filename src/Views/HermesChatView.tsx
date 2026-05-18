@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 
 import {
+  Component,
   ItemView,
   MarkdownRenderer,
   MarkdownView,
@@ -11,23 +12,26 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useState
+  useState,
+  memo
 } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import type { ChatSessionUpdate } from '../ChatClient.ts';
-import type { PromptContextItem } from '../AcpClient.ts';
+import type { ChatSessionUpdate, TokenUsageStats } from '../ChatClient.ts';
+import type { PendingPermission, PromptContextItem } from '../AcpClient.ts';
 import type { PendingFileChange } from '../FileChangeManager.ts';
 import type { Plugin } from '../Plugin.ts';
-import type { PluginSettings } from '../PluginSettings.ts';
 import { getSlashCommands, parseSlashCommand, setCachedToolCommands } from '../SlashCommands.ts';
+import { useStreamBuffer } from './useStreamBuffer.ts';
+import { parseBlockReferences, resolveBlockReference } from '../utils/blockReferences.ts';
+import { generateMessageId } from '../utils/uuid.ts';
 
 /**
  * Strip ANSI escape codes from a string.
  * Handles color codes, cursor movements, clear lines, and other terminal sequences.
  */
 function stripAnsi(text: string): string {
-  // eslint-disable-next-line no-control-regex
+  // eslint-disable-next-line no-control-regex -- Stripping ANSI codes requires control character matching
   return text
     .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')   // CSI sequences (colors, cursor, etc.)
     .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
@@ -38,9 +42,13 @@ function stripAnsi(text: string): string {
 export const HERMES_CHAT_VIEW_TYPE = 'hermes-chat-view';
 
 export interface ChatMessage {
+  id: string;
   content: string;
-  role: 'assistant' | 'reasoning' | 'system' | 'tool' | 'user';
+  role: 'assistant' | 'reasoning' | 'system' | 'tool' | 'user' | 'terminal';
   timestamp: number;
+  terminalId?: string;
+  toolCallId?: string;
+  isExited?: boolean;
 }
 
 // Re-export ContextItem shape from AcpClient for UI use
@@ -58,9 +66,6 @@ interface HermesChatViewComponentProps {
 
 export class HermesChatView extends ItemView {
   private root: null | ReturnType<typeof createRoot> = null;
-  private unsubscribeCommands: (() => void) | null = null;
-  private unsubscribeError: (() => void) | null = null;
-  private unsubscribeUpdate: (() => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly pluginInstance: Plugin) {
     super(leaf);
@@ -74,7 +79,7 @@ export class HermesChatView extends ItemView {
     return this.pluginInstance;
   }
 
-  public getSettings(): PluginSettings {
+  public getSettings() {
     return this.pluginInstance.settings;
   }
 
@@ -83,18 +88,6 @@ export class HermesChatView extends ItemView {
   }
 
   public override async onClose(): Promise<void> {
-    if (this.unsubscribeUpdate) {
-      this.unsubscribeUpdate();
-      this.unsubscribeUpdate = null;
-    }
-    if (this.unsubscribeError) {
-      this.unsubscribeError();
-      this.unsubscribeError = null;
-    }
-    if (this.unsubscribeCommands) {
-      this.unsubscribeCommands();
-      this.unsubscribeCommands = null;
-    }
     if (this.root) {
       this.root.unmount();
       this.root = null;
@@ -107,39 +100,44 @@ export class HermesChatView extends ItemView {
     this.root.render(<HermesChatViewComponent view={this} />);
   }
 
-  public async sendPrompt(text: string, contextItems: PromptContextItem[] = []): Promise<void> {
+  public async sendPrompt(text: string, contextItems: PromptContextItem[] = [], options?: { allowedTools?: string[] | null }): Promise<void> {
     const client = this.pluginInstance.getChatClient();
     if (!client.isReady()) {
       await client.connect();
     }
-    await client.sendPrompt(text, contextItems);
+    await client.sendPrompt(text, contextItems, options);
   }
 
   public async cancelPrompt(): Promise<void> {
     await this.pluginInstance.getChatClient().cancel();
   }
 
-  public subscribeToUpdates(callback: (update: ChatSessionUpdate) => void): void {
-    this.unsubscribeUpdate = this.pluginInstance.getChatClient().onUpdate(callback);
+  public abortTerminal(terminalId: string): void {
+    this.pluginInstance.getChatClient().abortTerminal?.(terminalId);
   }
 
-  public subscribeToErrors(callback: (error: string) => void): void {
-    this.unsubscribeError = this.pluginInstance.getChatClient().onError(callback);
+  public subscribeToUpdates(callback: (update: ChatSessionUpdate) => void): () => void {
+    return this.pluginInstance.getChatClient().onUpdate(callback);
   }
 
-  public subscribeToAvailableCommands(callback: (commands: Array<{ description: string; name: string }>) => void): void {
-    this.unsubscribeCommands = this.pluginInstance.getChatClient().onAvailableCommands(callback);
+  public subscribeToErrors(callback: (error: string) => void): () => void {
+    return this.pluginInstance.getChatClient().onError(callback);
+  }
+
+  public subscribeToAvailableCommands(callback: (commands: Array<{ description: string; name: string }>) => void): () => void {
+    return this.pluginInstance.getChatClient().onAvailableCommands(callback);
   }
 
   public clearConversation(onClear?: () => void): void {
-    // ACP sessions maintain their own history; just clear local state
+    // Disconnect the client so the next prompt creates a fresh session with no memory
+    this.pluginInstance.getChatClient().disconnect();
     if (onClear) {
       onClear();
     }
   }
 }
 
-function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactElement {
+export function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactElement {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -157,6 +155,14 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
   const [slashSuggestions, setSlashSuggestions] = useState<{ description: string; name: string }[]>([]);
   const [isSlashOpen, setIsSlashOpen] = useState(false);
   const [slashSelectionIndex, setSlashSelectionIndex] = useState(0);
+
+  const [allowedTools, setAllowedTools] = useState<string[] | null>(null);
+  const [isSessionSettingsOpen, setIsSessionSettingsOpen] = useState(false);
+  const [availableTools, setAvailableTools] = useState<{id: string, name: string}[]>([
+    { id: 'readTextFile', name: 'Read Files' },
+    { id: 'writeTextFile', name: 'Write Files' },
+    { id: 'createTerminal', name: 'Terminal Commands' }
+  ]);
   const isSlashOpenRef = useRef(false);
   const inputRef = useRef('');
 
@@ -174,15 +180,36 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
   const [isSaving, setIsSaving] = useState(false);
   const [isConversationListOpen, setIsConversationListOpen] = useState(false);
   const [conversations, setConversations] = useState<{ filePath: string; title: string }[]>([]);
-  const [pendingChanges, setPendingChanges] = useState<PendingFileChange[]>([]);
+  const [fileChanges, setFileChanges] = useState<PendingFileChange[]>([]);
+  const [pendingPermissions, setPendingPermissions] = useState<PendingPermission[]>([]);
+
+  // Conversation search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchMatches, setSearchMatches] = useState<number[]>([]);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const plugin = view.getPlugin();
   const settings = view.getSettings();
-  const streamingMessageIdRef = useRef<number | null>(null);
-  const reasoningMessageIdRef = useRef<number | null>(null);
-  const toolMessageIdRef = useRef<number | null>(null);
   const lastChunkTimeRef = useRef<number>(0);
   const typingTimeoutRef = useRef<number | null>(null);
+
+  // Ref to track the latest volatile state for stable callbacks.
+  // This prevents memoized child components (like ChatMessageItem) from unnecessarily re-rendering.
+  const stateRef = useRef({ isTyping, contextItems, allowedTools });
+  useEffect(() => {
+    stateRef.current = { isTyping, contextItems, allowedTools };
+  }, [isTyping, contextItems, allowedTools]);
+
+  const {
+    streamingMessageIdRef,
+    reasoningMessageIdRef,
+    appendContent,
+    appendReasoning,
+    flushNow
+  } = useStreamBuffer(setMessages, settings.showReasoning, settings.enableTypingSound, settings.enableHapticFeedback);
 
   const clearTypingTimeout = useCallback((): void => {
     if (typingTimeoutRef.current !== null) {
@@ -196,9 +223,12 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     typingTimeoutRef.current = window.setTimeout(() => {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
-      // Save conversation after response completes (timeout-based fallback)
+
+      // We wrap saveConversation in a setTimeout to push the I/O side-effect
+      // outside of the synchronous React render cycle, preventing duplicate saves
+      // during React Strict Mode or concurrent rendering.
       setMessages((currentMessages) => {
-        void saveConversation(currentMessages);
+        setTimeout(() => void saveConversation(currentMessages), 0);
         return currentMessages;
       });
     }, 3000);
@@ -206,64 +236,38 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
   // Subscribe to ACP session updates for streaming
   useEffect(() => {
-    view.subscribeToUpdates((update: ChatSessionUpdate) => {
+    const unsubUpdate = view.subscribeToUpdates((update: ChatSessionUpdate) => {
       if (update.type === 'message' && update.content) {
         lastChunkTimeRef.current = Date.now();
         resetTypingTimeout();
-        setMessages((prev) => {
-          const assistantIndex = prev.findIndex(
-            (m) => m.role === 'assistant' && m.timestamp === streamingMessageIdRef.current
-          );
-          if (assistantIndex >= 0) {
-            const updated = [...prev];
-            updated[assistantIndex] = {
-              ...prev[assistantIndex]!,
-              content: prev[assistantIndex]!.content + (update.content ?? '')
-            };
-            return updated;
-          }
-          return prev;
-        });
+        appendContent(update.content);
       } else if (update.type === 'stop') {
+        flushNow();
         clearTypingTimeout();
         setIsTyping(false);
         streamingMessageIdRef.current = null;
         reasoningMessageIdRef.current = null;
-        toolMessageIdRef.current = null;
         // Save conversation after response completes
         setMessages((currentMessages) => {
-          void saveConversation(currentMessages);
+          setTimeout(() => void saveConversation(currentMessages), 0);
           return currentMessages;
         });
       } else if (update.type === 'reasoning' && update.reasoning) {
         if (settings.showReasoning) {
-          setMessages((prev) => {
-            const reasoningIndex = prev.findIndex(
-              (m) => m.role === 'reasoning' && m.timestamp === reasoningMessageIdRef.current
-            );
-            if (reasoningIndex >= 0) {
-              const updated = [...prev];
-              updated[reasoningIndex] = {
-                ...prev[reasoningIndex]!,
-                content: prev[reasoningIndex]!.content + (update.reasoning ?? '')
-              };
-              return updated;
-            }
-            const newId = Date.now();
-            reasoningMessageIdRef.current = newId;
-            return [...prev, {
-              content: update.reasoning ?? '',
-              role: 'reasoning',
-              timestamp: newId
-            }];
-          });
+          appendReasoning(update.reasoning);
         }
-      } else if (update.type === 'tool_start' || update.type === 'tool_progress') {
+      } else if (update.type === 'tool_start' || update.type === 'tool_progress' || update.type === 'tool_complete') {
+        flushNow();
         if (settings.showToolUse && update.toolCall) {
-          const toolMsg = `🔧 ${update.toolCall.name} (${update.toolCall.status})`;
+          let toolMsg = `🔧 **${update.toolCall.name}** (${update.toolCall.status})`;
+          if (update.toolCall.result) {
+            toolMsg += `\n\n**Result:**\n\`\`\`text\n${update.toolCall.result}\n\`\`\``;
+          }
+
+          const currentCallId = update.toolCall.callId;
           setMessages((prev) => {
             const toolIndex = prev.findIndex(
-              (m) => m.role === 'tool' && m.timestamp === toolMessageIdRef.current
+              (m) => m.role === 'tool' && m.toolCallId === currentCallId
             );
             if (toolIndex >= 0) {
               const updated = [...prev];
@@ -273,15 +277,37 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
               };
               return updated;
             }
-            const newId = Date.now();
-            toolMessageIdRef.current = newId;
             return [...prev, {
+              id: generateMessageId(),
               content: toolMsg,
               role: 'tool',
-              timestamp: newId
+              timestamp: Date.now(),
+              toolCallId: currentCallId
             }];
           });
         }
+      } else if (update.type === 'terminal_output' && update.terminal) {
+        flushNow();
+        setMessages((prev) => {
+          const index = prev.findIndex((m) => m.role === 'terminal' && m.terminalId === update.terminal!.id);
+          if (index >= 0) {
+            const updated = [...prev];
+            updated[index] = {
+              ...updated[index]!,
+              content: updated[index]!.content + update.terminal!.output,
+              isExited: (updated[index]!.isExited ?? false) || (update.terminal!.isExited ?? false)
+            };
+            return updated;
+          }
+          return [...prev, {
+            id: generateMessageId(),
+            role: 'terminal',
+            content: update.terminal!.output,
+            timestamp: Date.now(),
+            terminalId: update.terminal!.id,
+            isExited: update.terminal!.isExited ?? false
+          }];
+        });
       } else if (update.type === 'available_commands' && update.availableCommands) {
         // Update cached tool commands from ACP
         const toolCmds = update.availableCommands.map((cmd) => ({
@@ -296,7 +322,8 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
       }
     });
 
-    view.subscribeToErrors((err: string) => {
+    const unsubError = view.subscribeToErrors((err: string) => {
+      flushNow();
       clearTypingTimeout();
       const cleaned = stripAnsi(err).trim();
       if (!cleaned) return;
@@ -305,7 +332,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
       streamingMessageIdRef.current = null;
     });
 
-    view.subscribeToAvailableCommands((commands) => {
+    const unsubCommands = view.subscribeToAvailableCommands((commands) => {
       const toolCmds = commands.map((cmd) => ({
         description: cmd.description,
         execute: async (): Promise<string | null> => {
@@ -315,6 +342,16 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
         name: cmd.name
       }));
       setCachedToolCommands(toolCmds);
+      setAvailableTools(_prev => {
+        const baseTools = [
+          { id: 'readTextFile', name: 'Read Files' },
+          { id: 'writeTextFile', name: 'Write Files' },
+          { id: 'createTerminal', name: 'Terminal Commands' }
+        ];
+        const dynamicTools = commands.map((c) => ({ id: c.name, name: c.name }));
+        const all = [...baseTools, ...dynamicTools];
+        return Array.from(new Map(all.map((item) => [item.id, item])).values());
+      });
       // Refresh slash suggestions if the dropdown is currently open
       if (isSlashOpenRef.current) {
         const query = inputRef.current.slice(1).toLowerCase();
@@ -329,15 +366,44 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
     // Subscribe to pending file changes for approval UI
     const unsubscribeChanges = plugin.fileChangeManager.onChanges((changes) => {
-      setPendingChanges(changes.filter((c) => c.status === 'pending'));
+      setFileChanges(changes);
     });
+
+    // Subscribe to pending permission requests for approval UI
+    const unsubscribePermissions = plugin.acpClient?.onPermissionsChange((permissions) => {
+      setPendingPermissions(permissions);
+    });
+
+    // Global Cmd+F shortcut for search
+    const handleGlobalKeyDown = (e: KeyboardEvent): void => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        setIsSearchOpen((prev) => {
+          const next = !prev;
+          if (next) {
+            setIsConversationListOpen(false);
+            setIsSessionSettingsOpen(false);
+            setTimeout(() => searchInputRef.current?.focus(), 0);
+          } else {
+            setSearchQuery('');
+            setSearchMatches([]);
+          }
+          return next;
+        });
+      }
+    };
+    document.addEventListener('keydown', handleGlobalKeyDown);
 
     return () => {
       clearTypingTimeout();
       unsubscribeChanges();
-      // Subscriptions are cleaned up by the view's onClose
+      unsubscribePermissions?.();
+      unsubUpdate();
+      unsubError();
+      unsubCommands();
+      document.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [view, plugin, clearTypingTimeout, resetTypingTimeout]);
+  }, [view, plugin, clearTypingTimeout, resetTypingTimeout, appendContent, appendReasoning, flushNow, settings.showReasoning, settings.showToolUse]);
 
   const loadConversationList = useCallback(async (): Promise<void> => {
     try {
@@ -355,6 +421,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
         setMessages(loaded.messages);
         setConversationFilePath(filePath);
         setConversationTitle(loaded.title);
+        setAllowedTools(loaded.allowedTools ?? null);
         view.clearConversation();
       }
     } catch {
@@ -366,67 +433,123 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isAtBottomRef = useRef(true);
   const lastPromptRef = useRef<string>('');
   const lastContextItemsRef = useRef<ContextItem[]>([]);
 
   const handleNewChat = useCallback((): void => {
+    if (conversationFilePath) {
+      const shouldDelete = window.confirm('Do you want to delete the current conversation file? Click Cancel to keep it and just start a new chat.');
+      if (shouldDelete) {
+        plugin.vaultManager.deleteConversation(conversationFilePath).catch(() => {});
+      }
+    }
     setMessages([]);
     setError(null);
     setConversationFilePath(null);
     setConversationTitle('');
     setContextItems([]);
+    setAllowedTools(null);
     view.clearConversation();
-  }, [view]);
+  }, [view, conversationFilePath, plugin]);
 
-  const saveConversation = useCallback(async (currentMessages: ChatMessage[], currentTitle?: string): Promise<void> => {
+  const saveConversation = useCallback(async (currentMessages: ChatMessage[], currentTitle?: string, currentAllowedTools: string[] | null = allowedTools): Promise<void> => {
     if (currentMessages.length === 0) return;
 
     setIsSaving(true);
     try {
       const title = currentTitle || conversationTitle || currentMessages[0]?.content.slice(0, 50) || 'Untitled';
       if (!conversationFilePath) {
-        const filePath = await plugin.vaultManager.saveConversation(currentMessages, title);
+        const filePath = await plugin.vaultManager.saveConversation(currentMessages, title, currentAllowedTools);
         setConversationFilePath(filePath);
         setConversationTitle(title);
       } else {
-        await plugin.vaultManager.updateConversation(conversationFilePath, currentMessages, title);
+        await plugin.vaultManager.updateConversation(conversationFilePath, currentMessages, title, currentAllowedTools);
       }
     } catch {
       // Silently ignore save errors to not disrupt chat flow
     } finally {
       setIsSaving(false);
     }
-  }, [conversationFilePath, conversationTitle, plugin]);
+  }, [conversationFilePath, conversationTitle, plugin, allowedTools]);
+
+  const handleEditSubmit = useCallback(async (messageId: string, newText: string): Promise<void> => {
+    const current = stateRef.current;
+
+    if (current.isTyping || !newText.trim()) return;
+
+    setMessages((prev) => {
+      const index = prev.findIndex((m) => m.id === messageId);
+      if (index < 0) return prev;
+
+      const truncated = prev.slice(0, index);
+      const userMessage: ChatMessage = {
+        id: generateMessageId(),
+        content: newText,
+        role: 'user',
+        timestamp: Date.now()
+      };
+
+      const streamingMessageId = generateMessageId();
+      streamingMessageIdRef.current = streamingMessageId;
+      reasoningMessageIdRef.current = null;
+
+      const assistantPlaceholder: ChatMessage = {
+        id: streamingMessageId,
+        content: '',
+        role: 'assistant',
+        timestamp: Date.now()
+      };
+
+      return [...truncated, userMessage, assistantPlaceholder];
+    });
+
+    setIsTyping(true);
+    setError(null);
+    lastPromptRef.current = newText;
+    lastContextItemsRef.current = [...current.contextItems];
+
+    try {
+      await view.sendPrompt(newText, current.contextItems, { allowedTools: current.allowedTools });
+    } catch (err) {
+      setError(`Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`);
+    } finally {
+      setIsTyping(false);
+      streamingMessageIdRef.current = null;
+    }
+  }, [view]);
 
   const handleRetry = useCallback(async (): Promise<void> => {
-    if (!lastPromptRef.current || isTyping) return;
+    const current = stateRef.current;
+    if (!lastPromptRef.current || current.isTyping) return;
     setError(null);
     setIsTyping(true);
 
-    const streamingMessageId = Date.now();
+    const streamingMessageId = generateMessageId();
     streamingMessageIdRef.current = streamingMessageId;
     reasoningMessageIdRef.current = null;
-    toolMessageIdRef.current = null;
     const assistantPlaceholder: ChatMessage = {
+      id: streamingMessageId,
       content: '',
       role: 'assistant',
-      timestamp: streamingMessageId
+      timestamp: Date.now()
     };
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
     try {
-      await view.sendPrompt(lastPromptRef.current, lastContextItemsRef.current);
+      await view.sendPrompt(lastPromptRef.current, lastContextItemsRef.current, { allowedTools: current.allowedTools });
     } catch (err) {
       setError(`Retry failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
     }
-  }, [isTyping, view]);
+  }, [view]);
 
   const handleSend = useCallback(async (): Promise<void> => {
-    const trimmed = input.trim();
-    if (!trimmed || isTyping) return;
+    const current = stateRef.current;
+    const trimmed = inputRef.current.trim();
+    if (!trimmed || current.isTyping) return;
 
     // Rate limiting
     const now = Date.now();
@@ -447,6 +570,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
       setIsSlashOpen(false);
 
       const userMessage: ChatMessage = {
+        id: generateMessageId(),
         content: trimmed,
         role: 'user',
         timestamp: Date.now()
@@ -454,9 +578,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
       setMessages((prev) => [...prev, userMessage]);
 
       if (slashCmd.command.name === 'clear') {
-        setMessages([]);
-        setContextItems([]);
-        view.clearConversation();
+          handleNewChat();
         return;
       }
 
@@ -465,6 +587,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
         const result = await slashCmd.command.execute(plugin, slashCmd.args);
         if (result) {
           const systemMessage: ChatMessage = {
+            id: generateMessageId(),
             content: result,
             role: 'system',
             timestamp: Date.now()
@@ -473,27 +596,28 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
         } else {
           // Tool commands return null — forward to agent as a prompt
           lastPromptRef.current = trimmed;
-          lastContextItemsRef.current = [...contextItems];
+          lastContextItemsRef.current = [...current.contextItems];
 
-          const streamingMessageId = Date.now();
+          const streamingMessageId = generateMessageId();
           streamingMessageIdRef.current = streamingMessageId;
           reasoningMessageIdRef.current = null;
-          toolMessageIdRef.current = null;
           const assistantPlaceholder: ChatMessage = {
+            id: streamingMessageId,
             content: '',
             role: 'assistant',
-            timestamp: streamingMessageId
+            timestamp: Date.now()
           };
           setMessages((prev) => [...prev, assistantPlaceholder]);
 
           try {
-            await view.sendPrompt(trimmed, contextItems);
+            await view.sendPrompt(trimmed, current.contextItems, { allowedTools: current.allowedTools });
           } catch (err) {
             setError(`Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`);
           }
         }
       } catch (err) {
         const errorMessage: ChatMessage = {
+          id: generateMessageId(),
           content: `Error executing /${slashCmd.command.name}: ${err instanceof Error ? err.message : String(err)}`,
           role: 'system',
           timestamp: Date.now()
@@ -507,6 +631,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     }
 
     const userMessage: ChatMessage = {
+      id: generateMessageId(),
       content: trimmed,
       role: 'user',
       timestamp: Date.now()
@@ -517,29 +642,29 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     setError(null);
     setIsTyping(true);
     lastPromptRef.current = trimmed;
-    lastContextItemsRef.current = [...contextItems];
+    lastContextItemsRef.current = [...current.contextItems];
 
     // Create a placeholder assistant message for streaming
-    const streamingMessageId = Date.now();
+    const streamingMessageId = generateMessageId();
     streamingMessageIdRef.current = streamingMessageId;
     reasoningMessageIdRef.current = null;
-    toolMessageIdRef.current = null;
     const assistantPlaceholder: ChatMessage = {
+      id: streamingMessageId,
       content: '',
       role: 'assistant',
-      timestamp: streamingMessageId
+      timestamp: Date.now()
     };
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
     try {
-      await view.sendPrompt(trimmed, contextItems);
+      await view.sendPrompt(trimmed, current.contextItems, { allowedTools: current.allowedTools });
     } catch (err) {
       setError(`Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`);
     } finally {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
     }
-  }, [input, isTyping, view, plugin, contextItems]);
+  }, [view, plugin, handleNewChat]);
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (isSlashOpen && slashSuggestions.length > 0) {
@@ -636,7 +761,7 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     }, 0);
   }, [input]);
 
-  const handleContextClick = useCallback((): void => {
+  const handleContextClick = useCallback(async (): Promise<void> => {
     const activeFile = plugin.app.workspace.getActiveFile();
     let selectedText = '';
 
@@ -651,6 +776,57 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     const autoAddEnabled = settings.contextEntireNote;
 
     if (selectedText.length > 0) {
+      // Check if selection is a block reference like [[Note#Heading]]
+      const blockRefMatch = selectedText.match(/^\[\[(.+?)(?:#(.+?))?\]\]$/);
+      if (blockRefMatch && activeFile) {
+        const resolved = await resolveBlockReference(plugin, selectedText);
+        if (resolved) {
+          const isDuplicate = contextItems.some((item) =>
+            item.type === 'note' && item.id === `block-${resolved.path}-${blockRefMatch[2] ?? 'full'}`
+          );
+          if (isDuplicate) return;
+
+          setContextItems((prev) => [...prev, {
+            id: `block-${resolved.path}-${blockRefMatch[2] ?? 'full'}`,
+            text: `${activeFile.basename}${blockRefMatch[2] ? ` #${blockRefMatch[2]}` : ''}`,
+            type: 'note'
+          }]);
+          return;
+        }
+      }
+
+      // Check if selection is within a code block, heading, or list
+      if (activeFile) {
+        const content = await plugin.app.vault.read(activeFile);
+        const blocks = parseBlockReferences(content);
+        const editor = plugin.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+        if (editor) {
+          const from = editor.getCursor('from');
+          const to = editor.getCursor('to');
+          const startLine = from.line;
+          const endLine = to.line;
+
+          // Find the block that contains the selection
+          const containingBlock = blocks.find((b) =>
+            b.startLine <= startLine && b.endLine >= endLine
+          );
+
+          if (containingBlock && containingBlock.type !== 'paragraph') {
+            const isDuplicate = contextItems.some((item) =>
+              item.type === 'note' && item.id === `block-${activeFile.path}-${containingBlock.startLine}`
+            );
+            if (isDuplicate) return;
+
+            setContextItems((prev) => [...prev, {
+              id: `block-${activeFile.path}-${containingBlock.startLine}`,
+              text: `${activeFile.basename} (${containingBlock.type})`,
+              type: 'note'
+            }]);
+            return;
+          }
+        }
+      }
+
       const isDuplicate = contextItems.some((item) =>
         item.type === 'selection' && item.text === selectedText
       );
@@ -685,6 +861,11 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     const copied: string[] = [];
 
     for (const file of Array.from(files)) {
+      if (file.size > 5 * 1024 * 1024) {
+        new Notice(`File "${file.name}" exceeds the 5MB limit and was skipped. Please process large files in another app.`);
+        continue;
+      }
+
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileName = file.name;
@@ -710,9 +891,35 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 
   // Auto-scroll to bottom
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    const container = chatContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (!container) return;
+      // Check if user is scrolled to the bottom. The +5 is a buffer for fractional pixels and borders.
+      isAtBottomRef.current = container.scrollHeight - container.clientHeight <= container.scrollTop + 5;
+    };
+
+    // The ResizeObserver will fire whenever the content's size changes.
+    // This is perfect for catching when async content (like Markdown code blocks) finishes rendering.
+    const observer = new ResizeObserver(() => {
+      if (isAtBottomRef.current) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
+
+    observer.observe(container);
+    container.addEventListener('scroll', handleScroll, { passive: true });
+
+    // When new messages are added, if we were at the bottom, scroll to the new bottom.
+    if (isAtBottomRef.current) {
+      container.scrollTop = container.scrollHeight;
     }
+
+    return () => {
+      observer.disconnect();
+      container.removeEventListener('scroll', handleScroll);
+    };
   }, [messages]);
 
   // Auto-add context when active file changes — use Obsidian event instead of useEffect polling
@@ -745,7 +952,6 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     handleActiveLeafChange();
 
     const eventRef = plugin.app.workspace.on('active-leaf-change', handleActiveLeafChange);
-    plugin.registerEvent(eventRef);
 
     return () => {
       plugin.app.workspace.offref(eventRef);
@@ -769,7 +975,8 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     } else if (isAutocompleteOpen) {
       const lastOpen = Math.max(input.lastIndexOf('[['), input.lastIndexOf('{'));
       if (lastOpen >= 0) {
-        const query = input.substring(lastOpen + 2);
+        const isWikiLink = input[lastOpen] === '[';
+        const query = input.substring(lastOpen + (isWikiLink ? 2 : 1));
         setAutocompleteQuery(query);
         if (query.length > 0) {
           setAutocompleteSelectionIndex(0);
@@ -882,20 +1089,127 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
     target.style.height = `${target.scrollHeight}px`;
   }, []);
 
+  // Conversation search handlers
+  const performSearch = useCallback((query: string): void => {
+    if (!query.trim()) {
+      setSearchMatches([]);
+      setCurrentMatchIndex(0);
+      return;
+    }
+    const lower = query.toLowerCase();
+    const indices: number[] = [];
+    messages.forEach((msg, idx) => {
+      if (msg.content.toLowerCase().includes(lower)) {
+        indices.push(idx);
+      }
+    });
+    setSearchMatches(indices);
+    setCurrentMatchIndex(indices.length > 0 ? 0 : 0);
+  }, [messages]);
+
+  const jumpToMatch = useCallback((direction: 'next' | 'prev'): void => {
+    if (searchMatches.length === 0) return;
+    const newIndex = direction === 'next'
+      ? (currentMatchIndex + 1) % searchMatches.length
+      : (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+    setCurrentMatchIndex(newIndex);
+    const msgIndex = searchMatches[newIndex];
+    if (msgIndex !== undefined) {
+      const msgId = messages[msgIndex]?.id;
+      const el = msgId ? messageRefs.current.get(msgId) : undefined;
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('hermes-search-highlight');
+        window.setTimeout(() => el.classList.remove('hermes-search-highlight'), 2000);
+      }
+    }
+  }, [searchMatches, currentMatchIndex, messages]);
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      jumpToMatch('next');
+    } else if (e.key === 'Escape') {
+      setIsSearchOpen(false);
+      setSearchQuery('');
+      setSearchMatches([]);
+    }
+  }, [jumpToMatch]);
+
   return (
     <div className="hermes-chat-container">
       <ChatHeader
         agentName={settings.chatAgentName || 'Hermes'}
         isSaving={isSaving}
+        onExportHtml={async () => {
+          try {
+            const html = await plugin.vaultManager.exportToHtml(messages, conversationTitle || 'Hermes Conversation');
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `hermes-conversation-${Date.now()}.html`;
+            a.click();
+            URL.revokeObjectURL(url);
+            new Notice('Exported conversation as HTML');
+          } catch {
+            new Notice('Failed to export conversation as HTML');
+          }
+        }}
+        onExportJson={() => {
+          try {
+            const json = plugin.vaultManager.exportToJson(messages, conversationTitle || 'Hermes Conversation');
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `hermes-conversation-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            new Notice('Exported conversation as JSON');
+          } catch {
+            new Notice('Failed to export conversation as JSON');
+          }
+        }}
         onNewChat={handleNewChat}
         onOpenSettings={() => plugin.openSettings()}
         onToggleConversationList={() => {
           if (!isConversationListOpen) {
             void loadConversationList();
           }
+          setIsSessionSettingsOpen(false);
           setIsConversationListOpen((prev) => !prev);
         }}
+        onToggleSearch={() => {
+          setIsSearchOpen((prev) => !prev);
+          setIsConversationListOpen(false);
+          setIsSessionSettingsOpen(false);
+          if (!isSearchOpen) {
+            setTimeout(() => searchInputRef.current?.focus(), 0);
+          }
+        }}
+        onToggleSessionSettings={() => {
+          setIsConversationListOpen(false);
+          setIsSessionSettingsOpen((prev) => !prev);
+        }}
       />
+
+    {isSessionSettingsOpen && (
+      <SessionSettingsPanel
+        allowedTools={allowedTools}
+        availableTools={availableTools}
+        onClose={() => setIsSessionSettingsOpen(false)}
+        onToolsChange={(tools) => {
+          setAllowedTools(tools);
+          if (conversationFilePath) {
+             setMessages((current) => {
+                setTimeout(() => void saveConversation(current, conversationTitle, tools), 0);
+                return current;
+             });
+          }
+        }}
+      />
+    )}
 
       {isConversationListOpen && (
         <div className="hermes-conversation-list">
@@ -930,14 +1244,77 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
         </div>
       )}
 
+      {isSearchOpen && (
+        <div className="hermes-search-bar">
+          <input
+            ref={searchInputRef}
+            className="hermes-search-input"
+            placeholder="Search messages..."
+            type="text"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              performSearch(e.target.value);
+            }}
+            onKeyDown={handleSearchKeyDown}
+          />
+          {searchMatches.length > 0 && (
+            <span className="hermes-search-count">
+              {currentMatchIndex + 1} / {searchMatches.length}
+            </span>
+          )}
+          <button
+            className="hermes-icon-btn"
+            onClick={() => jumpToMatch('prev')}
+            title="Previous match"
+            type="button"
+          >
+            ↑
+          </button>
+          <button
+            className="hermes-icon-btn"
+            onClick={() => jumpToMatch('next')}
+            title="Next match"
+            type="button"
+          >
+            ↓
+          </button>
+          <button
+            className="hermes-icon-btn"
+            onClick={() => {
+              setIsSearchOpen(false);
+              setSearchQuery('');
+              setSearchMatches([]);
+            }}
+            title="Close search"
+            type="button"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="hermes-chat-content" ref={chatContainerRef}>
         {messages.length === 0 && !error && (
-          <div className="hermes-empty-state">
-            Start a conversation with {settings.chatAgentName || 'Hermes'}
-          </div>
+          <OnboardingPanel
+            agentName={settings.chatAgentName || 'Hermes'}
+            hasSeenOnboarding={settings.hasSeenOnboarding}
+            onDismiss={() => {
+              // @ts-expect-error - settings are mutable at runtime
+              plugin.settings.hasSeenOnboarding = true;
+              void (plugin as unknown as { saveSettings(): Promise<void> }).saveSettings();
+            }}
+          />
         )}
         {messages.map((msg) => (
-          <ChatMessageItem key={`${msg.timestamp}-${msg.role}`} message={msg} view={view} />
+          <div
+            key={msg.id}
+            ref={(el) => {
+              if (el) messageRefs.current.set(msg.id, el);
+            }}
+          >
+            <ChatMessageItem message={msg} onEdit={handleEditSubmit} view={view} />
+          </div>
         ))}
         {isTyping && <TypingIndicator agentName={settings.chatAgentName || 'Hermes'} />}
         {error && (
@@ -962,14 +1339,34 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
             </button>
           </div>
         )}
-        {pendingChanges.length > 0 && (
+        {fileChanges.length > 0 && (
           <PendingChangesPanel
-            changes={pendingChanges}
-            onApprove={(id) => void plugin.fileChangeManager.approveChange(id)}
+            changes={fileChanges}
+            onApprove={(id, contentOverride) => void plugin.fileChangeManager.approveChange(id, contentOverride)}
+            onApproveAll={() => void plugin.fileChangeManager.approveAll()}
             onReject={(id) => plugin.fileChangeManager.rejectChange(id)}
+            onRejectAll={() => plugin.fileChangeManager.rejectAll()}
             onClearResolved={() => plugin.fileChangeManager.clearResolved()}
           />
         )}
+        {pendingPermissions.length > 0 && (
+          <PendingPermissionsPanel
+            permissions={pendingPermissions}
+            onApprove={(permissionId, optionId) => {
+              plugin.acpClient?.resolvePermission(permissionId, optionId);
+            }}
+            onApproveAll={() => {
+              plugin.acpClient?.resolveAllPermissions();
+            }}
+            onReject={(permissionId) => {
+              plugin.acpClient?.cancelPermission(permissionId);
+            }}
+            onRejectAll={() => {
+              plugin.acpClient?.cancelAllPermissions();
+            }}
+          />
+        )}
+        <TokenUsageFooter />
       </div>
 
       <ChatInput
@@ -1008,12 +1405,28 @@ function HermesChatViewComponent({ view }: HermesChatViewComponentProps): ReactE
 interface ChatHeaderProps {
   agentName: string;
   isSaving: boolean;
+  onExportHtml: () => void;
+  onExportJson: () => void;
   onNewChat: () => void;
   onOpenSettings: () => void;
   onToggleConversationList: () => void;
+  onToggleSearch: () => void;
+  onToggleSessionSettings: () => void;
 }
 
-function ChatHeader({ agentName, isSaving, onNewChat, onOpenSettings, onToggleConversationList }: ChatHeaderProps): ReactElement {
+const ChatHeader = memo(function ChatHeader({ agentName, isSaving, onExportHtml, onExportJson, onNewChat, onOpenSettings, onToggleConversationList, onToggleSearch, onToggleSessionSettings }: ChatHeaderProps): ReactElement {
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent): void => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   return (
     <div className="hermes-chat-header">
       <div className="hermes-chat-header-left">
@@ -1021,9 +1434,20 @@ function ChatHeader({ agentName, isSaving, onNewChat, onOpenSettings, onToggleCo
         {isSaving && <span className="hermes-saving-indicator" title="Saving...">●</span>}
       </div>
       <div className="hermes-chat-header-right">
+        <button className="hermes-icon-btn" onClick={onToggleSearch} title="Search Messages (Cmd+F)" type="button">
+          <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+        </button>
         <button className="hermes-icon-btn" onClick={onToggleConversationList} title="Previous Conversations" type="button">
           <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
             <path d="M3 12h18M3 6h18M3 18h18" />
+          </svg>
+        </button>
+        <button className="hermes-icon-btn" onClick={onToggleSessionSettings} title="Session Tools" type="button">
+          <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
           </svg>
         </button>
         <button className="hermes-icon-btn" onClick={onNewChat} title="New Chat" type="button">
@@ -1037,31 +1461,200 @@ function ChatHeader({ agentName, isSaving, onNewChat, onOpenSettings, onToggleCo
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </button>
+        <div style={{ position: 'relative' }} ref={exportMenuRef}>
+          <button className="hermes-icon-btn" onClick={() => setShowExportMenu((prev) => !prev)} title="Export" type="button">
+            <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" x2="12" y1="15" y2="3" />
+            </svg>
+          </button>
+          {showExportMenu && (
+            <div className="hermes-export-menu">
+              <button className="hermes-export-item" onClick={() => { onExportHtml(); setShowExportMenu(false); }} type="button">Export as HTML</button>
+              <button className="hermes-export-item" onClick={() => { onExportJson(); setShowExportMenu(false); }} type="button">Export as JSON</button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
+});
+
+interface SessionSettingsPanelProps {
+  allowedTools: string[] | null;
+  availableTools: { id: string; name: string }[];
+  onToolsChange: (tools: string[] | null) => void;
+  onClose: () => void;
 }
+
+const SessionSettingsPanel = memo(function SessionSettingsPanel({ allowedTools, availableTools, onToolsChange, onClose }: SessionSettingsPanelProps): ReactElement {
+  const isAllAllowed = allowedTools === null;
+
+  const toggleTool = (toolId: string): void => {
+    if (isAllAllowed) {
+      // If previously using default, start an explicit list excluding the toggled tool
+      onToolsChange(availableTools.map((t) => t.id).filter((id) => id !== toolId));
+    } else {
+      const newTools = allowedTools.includes(toolId)
+        ? allowedTools.filter((id) => id !== toolId)
+        : [...allowedTools, toolId];
+      onToolsChange(newTools);
+    }
+  };
+
+  return (
+    <div className="hermes-session-settings">
+      <div className="hermes-session-settings-header">
+        <span>Session Tools</span>
+        <button className="hermes-icon-btn" onClick={onClose} title="Close" type="button">✕</button>
+      </div>
+      <div className="hermes-session-settings-content">
+        <p className="hermes-session-settings-desc">Select which tools the agent is allowed to use during this specific chat session.</p>
+        <div className="hermes-session-settings-actions">
+           <button className="hermes-btn-secondary" onClick={() => onToolsChange(null)} title="Remove session-specific restrictions" type="button">Reset Default</button>
+           <button className="hermes-btn-secondary" onClick={() => onToolsChange(availableTools.map((t) => t.id))} type="button">Allow All</button>
+           <button className="hermes-btn-secondary" onClick={() => onToolsChange([])} type="button">Disable All</button>
+        </div>
+        {availableTools.map((tool) => (
+          <label className="hermes-session-tool-toggle" key={tool.id}>
+            <input
+              checked={isAllAllowed || allowedTools.includes(tool.id)}
+              onChange={() => toggleTool(tool.id)}
+              type="checkbox"
+            />
+            <span>{tool.name}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+});
 
 interface ChatMessageItemProps {
   message: ChatMessage;
   view: HermesChatView;
+  onEdit?: (messageId: string, newContent: string) => void;
 }
 
-function ChatMessageItem({ message, view }: ChatMessageItemProps): ReactElement {
+const ChatMessageItem = memo(function ChatMessageItem({ message, view, onEdit }: ChatMessageItemProps): ReactElement {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(message.content);
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(message.content).then(() => {
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }).catch(() => {
+      new Notice('Failed to copy to clipboard');
+    });
+  }, [message.content]);
+
   const roleLabel = {
     assistant: 'Hermes',
     reasoning: 'Reasoning',
     system: 'System',
     tool: 'Tool',
-    user: 'You'
+    user: 'You',
+    terminal: 'Terminal Output'
   }[message.role];
+
+  if (message.role === 'terminal') {
+    return (
+      <div className={`hermes-message hermes-${message.role}`}>
+        <div className="hermes-message-header">
+          <span className="hermes-role">{roleLabel}</span>
+          <span className="hermes-message-meta">
+            <button className="hermes-icon-btn hermes-msg-action-btn" onClick={handleCopy} title={isCopied ? 'Copied!' : 'Copy Output'} type="button">
+              {isCopied ? (
+                <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                  <rect height="13" rx="2" ry="2" width="13" x="9" y="9" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              )}
+            </button>
+            <span className="hermes-timestamp">{new Date(message.timestamp).toLocaleTimeString()}</span>
+          </span>
+        </div>
+        <div className="hermes-terminal-content">
+          {message.content}
+        </div>
+        {!message.isExited && (
+          <button className="hermes-abort-btn" onClick={() => view.abortTerminal(message.terminalId!)} title="Stop the running command" type="button">
+            🛑 Abort
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (isEditing) {
+    return (
+      <div className={`hermes-message hermes-${message.role}`}>
+        <div className="hermes-message-header">
+          <span className="hermes-role">{roleLabel}</span>
+        </div>
+        <div className="hermes-message-content">
+          <textarea
+            className="hermes-edit-input"
+            onChange={(e) => setEditValue(e.target.value)}
+            rows={Math.max(3, editValue.split('\n').length)}
+            value={editValue}
+          />
+          <div className="hermes-edit-actions">
+            <button
+              className="hermes-btn-approve"
+              onClick={() => { setIsEditing(false); onEdit?.(message.id, editValue); }}
+              type="button"
+            >
+              Save & Submit
+            </button>
+            <button
+              className="hermes-btn-reject"
+              onClick={() => { setIsEditing(false); setEditValue(message.content); }}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`hermes-message hermes-${message.role}`}>
       <div className="hermes-message-header">
         <span className="hermes-role">{roleLabel}</span>
-        <span className="hermes-timestamp">
-          {new Date(message.timestamp).toLocaleTimeString()}
+        <span className="hermes-message-meta">
+          <button className="hermes-icon-btn hermes-msg-action-btn" onClick={handleCopy} title={isCopied ? 'Copied!' : 'Copy Message'} type="button">
+            {isCopied ? (
+              <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                <rect height="13" rx="2" ry="2" width="13" x="9" y="9" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            )}
+          </button>
+          {message.role === 'user' && (
+            <button className="hermes-icon-btn hermes-msg-action-btn" onClick={() => setIsEditing(true)} title="Edit Message" type="button">
+              <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+          )}
+          <span className="hermes-timestamp">
+            {new Date(message.timestamp).toLocaleTimeString()}
+          </span>
         </span>
       </div>
       <div className="hermes-message-content">
@@ -1069,7 +1662,7 @@ function ChatMessageItem({ message, view }: ChatMessageItemProps): ReactElement 
       </div>
     </div>
   );
-}
+});
 
 interface TypingIndicatorProps {
   agentName: string;
@@ -1077,7 +1670,7 @@ interface TypingIndicatorProps {
 
 const BRAILLE_SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
-function TypingIndicator({ agentName }: TypingIndicatorProps): ReactElement {
+const TypingIndicator = memo(function TypingIndicator({ agentName }: TypingIndicatorProps): ReactElement {
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
@@ -1098,7 +1691,7 @@ function TypingIndicator({ agentName }: TypingIndicatorProps): ReactElement {
       </div>
     </div>
   );
-}
+});
 
 interface ChatInputProps {
   contextItems: ContextItem[];
@@ -1120,10 +1713,10 @@ interface ChatInputProps {
   onSend: () => void;
   onSelectAutocomplete: (text: string) => void;
   onSelectSlash: (name: string) => void;
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  textareaRef: React.RefObject<HTMLTextAreaElement>;
 }
 
-function ChatInput({
+const ChatInput = memo(function ChatInput({
   contextItems,
   input,
   isAutocompleteOpen,
@@ -1144,12 +1737,22 @@ function ChatInput({
   onSelectSlash,
   textareaRef
 }: ChatInputProps): ReactElement {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (autocompleteRef.current) {
+      const selected = autocompleteRef.current.querySelector('.selected');
+      if (selected) {
+        selected.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [slashSelectionIndex, autocompleteSelectionIndex]);
 
   return (
     <div className="hermes-input-wrapper">
       {isSlashOpen && slashSuggestions.length > 0 && (
-        <div className="hermes-autocomplete hermes-slash-commands">
+        <div className="hermes-autocomplete hermes-slash-commands" ref={autocompleteRef}>
           <div className="hermes-autocomplete-hint">Commands</div>
           {slashSuggestions.map((suggestion, index) => (
             <div
@@ -1184,7 +1787,11 @@ function ChatInput({
                   <line x1="6" x2="18" y1="6" y2="18" />
                 </svg>
               </button>
-              <span className="hermes-context-text">{item.text}</span>
+            <span className="hermes-context-text">
+              {item.type === 'image' ? '🖼️ ' : ''}
+              {item.type === 'pdf' ? '📄 ' : ''}
+              {item.text}
+            </span>
             </div>
           ))}
         </div>
@@ -1193,7 +1800,7 @@ function ChatInput({
           onChange={onInputChange}
           onKeyDown={onInputKeyDown}
           placeholder="Message Hermes..."
-          ref={textareaRef as React.RefObject<HTMLTextAreaElement>}
+          ref={textareaRef}
           rows={1}
           value={input}
         />
@@ -1249,7 +1856,7 @@ function ChatInput({
       </div>
 
       {isAutocompleteOpen && autocompleteSuggestions.length > 0 && (
-        <div className="hermes-autocomplete hermes-autocomplete-rich">
+        <div className="hermes-autocomplete hermes-autocomplete-rich" ref={autocompleteRef}>
           <div className="hermes-autocomplete-hint">Type to search files...</div>
           {autocompleteSuggestions.map((suggestion, index) => (
             <div
@@ -1272,14 +1879,14 @@ function ChatInput({
       )}
     </div>
   );
-}
+});
 
 interface MarkdownContentProps {
   content: string;
   view: HermesChatView;
 }
 
-function MarkdownContent({ content, view }: MarkdownContentProps): ReactElement {
+const MarkdownContent = memo(function MarkdownContent({ content, view }: MarkdownContentProps): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1289,17 +1896,58 @@ function MarkdownContent({ content, view }: MarkdownContentProps): ReactElement 
 
     containerRef.current.innerHTML = '';
 
+    const renderChild = new Component();
+    renderChild.load();
+
     try {
-      MarkdownRenderer.render(view.app, content, containerRef.current, view.app.vault.getRoot().path, view).catch(() => {
+      MarkdownRenderer.render(view.app, content, containerRef.current, view.app.vault.getRoot().path, renderChild).then(() => {
+        if (!containerRef.current) return;
+        const preElements = containerRef.current.querySelectorAll('pre');
+        preElements.forEach((pre) => {
+          if (pre.parentElement?.classList.contains('hermes-code-block-wrapper')) return;
+
+          const wrapper = document.createElement('div');
+          wrapper.className = 'hermes-code-block-wrapper';
+          pre.parentNode?.insertBefore(wrapper, pre);
+          wrapper.appendChild(pre);
+
+          const copyBtn = document.createElement('button');
+          copyBtn.className = 'hermes-icon-btn hermes-code-copy-btn';
+          copyBtn.title = 'Copy code';
+          copyBtn.innerHTML = '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><rect height="13" rx="2" ry="2" width="13" x="9" y="9" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>';
+
+          copyBtn.addEventListener('click', async () => {
+            const codeEl = pre.querySelector('code');
+            if (codeEl) {
+              try {
+                await navigator.clipboard.writeText(codeEl.innerText);
+                copyBtn.innerHTML = '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><polyline points="20 6 9 17 4 12" /></svg>';
+                copyBtn.classList.add('copied');
+                setTimeout(() => {
+                  copyBtn.innerHTML = '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><rect height="13" rx="2" ry="2" width="13" x="9" y="9" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>';
+                  copyBtn.classList.remove('copied');
+                }, 2000);
+              } catch (err) {
+                // Ignore copy errors
+              }
+            }
+          });
+          wrapper.appendChild(copyBtn);
+        });
+      }).catch(() => {
         // Ignore render errors
       });
     } catch {
       containerRef.current.textContent = content;
     }
+
+    return () => {
+      renderChild.unload();
+    };
   }, [content, view]);
 
   return <div className="hermes-markdown-renderer" ref={containerRef} />;
-}
+});
 
 // --- Diff / Pending Changes Components ---
 
@@ -1349,49 +1997,126 @@ function computeDiffLines(original: string, updated: string): DiffLine[] {
 
 interface PendingChangesPanelProps {
   changes: PendingFileChange[];
-  onApprove: (changeId: string) => void;
+  onApprove: (changeId: string, contentOverride?: string) => void;
+  onApproveAll: () => void;
   onClearResolved: () => void;
   onReject: (changeId: string) => void;
+  onRejectAll: () => void;
 }
 
-function PendingChangesPanel({ changes, onApprove, onReject, onClearResolved }: PendingChangesPanelProps): ReactElement {
+const PendingChangesPanel = memo(function PendingChangesPanel({ changes, onApprove, onApproveAll, onReject, onRejectAll, onClearResolved }: PendingChangesPanelProps): ReactElement {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedLines, setSelectedLines] = useState<Map<string, Set<number>>>(new Map());
+
+  const pendingCount = changes.filter((c) => c.status === 'pending').length;
+  const resolvedCount = changes.length - pendingCount;
+
+  const toggleLine = (changeId: string, lineIndex: number): void => {
+    setSelectedLines((prev) => {
+      const next = new Map(prev);
+      const current = next.get(changeId) ?? new Set();
+      const updated = new Set(current);
+      if (updated.has(lineIndex)) {
+        updated.delete(lineIndex);
+      } else {
+        updated.add(lineIndex);
+      }
+      next.set(changeId, updated);
+      return next;
+    });
+  };
+
+  const getPartialContent = (change: PendingFileChange, selected: Set<number>): string => {
+    const diffLines = change.diffSnapshot ?? computeDiffLines(change.originalContent, change.newContent ?? '');
+    const result: string[] = [];
+    for (let i = 0; i < diffLines.length; i++) {
+      const dl = diffLines[i]!;
+      const isSelected = selected.has(i);
+      if (dl.type === 'unchanged') {
+        result.push(dl.line);
+      } else if (dl.type === 'added' && isSelected) {
+        result.push(dl.line);
+      } else if (dl.type === 'removed' && !isSelected) {
+        result.push(dl.line);
+      }
+    }
+    return result.join('\n');
+  };
 
   return (
     <div className="hermes-pending-changes">
       <div className="hermes-pending-changes-header">
-        <span>Pending Changes ({changes.length})</span>
-        <button className="hermes-icon-btn" onClick={onClearResolved} title="Clear resolved" type="button">
-          ✕
-        </button>
+        <span>File Changes ({pendingCount} pending{resolvedCount > 0 ? `, ${resolvedCount} resolved` : ''})</span>
+        <div className="hermes-pending-changes-actions">
+          {pendingCount > 1 && (
+            <>
+              <button className="hermes-btn-approve" onClick={onApproveAll} type="button">Approve All</button>
+              <button className="hermes-btn-reject" onClick={onRejectAll} type="button">Reject All</button>
+            </>
+          )}
+          {resolvedCount > 0 && (
+            <button className="hermes-icon-btn" onClick={onClearResolved} title="Clear resolved" type="button">
+              ✕
+            </button>
+          )}
+        </div>
       </div>
       {changes.map((change) => {
         const isExpanded = expandedId === change.id;
-        const diffLines = computeDiffLines(change.originalContent, change.newContent);
+        const diffLines = change.diffSnapshot ?? computeDiffLines(change.originalContent, change.newContent ?? '');
+        const selected = selectedLines.get(change.id) ?? new Set();
+        const hasSelections = selected.size > 0;
         return (
-          <div className="hermes-pending-change" key={change.id}>
+          <div className={`hermes-pending-change hermes-change-${change.status}`} key={change.id}>
             <div className="hermes-pending-change-summary" onClick={() => setExpandedId(isExpanded ? null : change.id)} role="button" tabIndex={0}>
               <span className="hermes-pending-change-path">{change.path}</span>
-              <span className="hermes-pending-change-badge">{change.originalContent ? 'modified' : 'created'}</span>
+              <div className="hermes-pending-change-badges">
+                {change.status !== 'pending' && (
+                  <span className={`hermes-pending-change-badge hermes-badge-${change.status}`}>{change.status}</span>
+                )}
+                <span className={`hermes-pending-change-badge hermes-badge-${change.action}`}>{change.action}</span>
+              </div>
             </div>
             {isExpanded && (
               <div className="hermes-pending-change-diff">
                 <div className="hermes-diff-view">
-                  {diffLines.map((dl, idx) => (
-                    <div className={`hermes-diff-line hermes-diff-${dl.type}`} key={idx}>
-                      <span className="hermes-diff-marker">{dl.type === 'added' ? '+' : dl.type === 'removed' ? '-' : ' '}</span>
-                      <span className="hermes-diff-text">{dl.line}</span>
-                    </div>
-                  ))}
+                  {diffLines.map((dl, idx) => {
+                    const isSelected = selected.has(idx);
+                    const isToggleable = dl.type === 'added' || dl.type === 'removed';
+                    return (
+                      <div className={`hermes-diff-line hermes-diff-${dl.type} ${isSelected ? 'hermes-diff-selected' : ''}`} key={idx}>
+                        {isToggleable && change.status === 'pending' && (
+                          <input
+                            checked={isSelected}
+                            className="hermes-diff-checkbox"
+                            onChange={() => toggleLine(change.id, idx)}
+                            title={isSelected ? 'Include this change' : 'Exclude this change'}
+                            type="checkbox"
+                          />
+                        )}
+                        <span className="hermes-diff-marker">{dl.type === 'added' ? '+' : dl.type === 'removed' ? '-' : ' '}</span>
+                        <span className="hermes-diff-text">{dl.line}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="hermes-pending-change-actions">
-                  <button className="hermes-btn-approve" onClick={() => onApprove(change.id)} type="button">
-                    Approve
-                  </button>
-                  <button className="hermes-btn-reject" onClick={() => onReject(change.id)} type="button">
-                    Reject
-                  </button>
-                </div>
+                {change.status === 'pending' && (
+                  <div className="hermes-pending-change-actions">
+                    <button className="hermes-btn-approve" onClick={() => {
+                      if (hasSelections) {
+                        const partial = getPartialContent(change, selected);
+                        onApprove(change.id, partial);
+                      } else {
+                        onApprove(change.id);
+                      }
+                    }} type="button">
+                      {hasSelections ? 'Approve Selected' : 'Approve All'}
+                    </button>
+                    <button className="hermes-btn-reject" onClick={() => onReject(change.id)} type="button">
+                      Reject
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1399,4 +2124,168 @@ function PendingChangesPanel({ changes, onApprove, onReject, onClearResolved }: 
       })}
     </div>
   );
+});
+
+// --- Permission Request Components ---
+
+interface PendingPermissionsPanelProps {
+  permissions: PendingPermission[];
+  onApprove: (permissionId: string, optionId: string) => void;
+  onApproveAll: () => void;
+  onReject: (permissionId: string) => void;
+  onRejectAll: () => void;
 }
+
+const PendingPermissionsPanel = memo(function PendingPermissionsPanel({ permissions, onApprove, onApproveAll, onReject, onRejectAll }: PendingPermissionsPanelProps): ReactElement {
+  return (
+    <div className="hermes-pending-permissions">
+      <div className="hermes-pending-permissions-header">
+        <span>Permission Requests ({permissions.length})</span>
+        {permissions.length > 1 && (
+          <div className="hermes-pending-permissions-actions">
+            <button className="hermes-btn-approve" onClick={onApproveAll} type="button">Approve All</button>
+            <button className="hermes-btn-reject" onClick={onRejectAll} type="button">Reject All</button>
+          </div>
+        )}
+      </div>
+      {permissions.map((permission) => (
+        <div className="hermes-pending-permission" key={permission.id}>
+          <div className="hermes-pending-permission-summary">
+            <span className="hermes-pending-permission-desc">
+              A tool is requesting permission to run
+            </span>
+          </div>
+          <div className="hermes-pending-permission-options">
+            {permission.params.options.map((option) => (
+              <button
+                className={`hermes-permission-option hermes-permission-option--${option.kind}`}
+                key={option.optionId}
+                onClick={() => onApprove(permission.id, option.optionId)}
+                type="button"
+              >
+                {option.name}
+              </button>
+            ))}
+            <button
+              className="hermes-permission-option hermes-permission-option--reject"
+              onClick={() => onReject(permission.id)}
+              type="button"
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+});
+
+// --- Token Usage Footer ---
+
+const TokenUsageFooter = memo(function TokenUsageFooter(): ReactElement {
+  const [usage, setUsage] = useState<TokenUsageStats>({
+    estimatedCost: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0
+  });
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Listen for usage_update events from the ACP client
+    const handleUsageUpdate = (e: CustomEvent<TokenUsageStats>): void => {
+      setUsage(e.detail);
+      setIsVisible(true);
+    };
+
+    window.addEventListener('hermes-usage-update', handleUsageUpdate as EventListener);
+    return () => {
+      window.removeEventListener('hermes-usage-update', handleUsageUpdate as EventListener);
+    };
+  }, []);
+
+  if (!isVisible) return <></>;
+
+  return (
+    <div className="hermes-token-footer">
+      <span className="hermes-token-stat" title="Input tokens">
+        <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" x2="12" y1="3" y2="15" />
+        </svg>
+        {' '}{usage.inputTokens.toLocaleString()} in
+      </span>
+      <span className="hermes-token-stat" title="Output tokens">
+        <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" x2="12" y1="15" y2="3" />
+        </svg>
+        {' '}{usage.outputTokens.toLocaleString()} out
+      </span>
+      <span className="hermes-token-stat" title="Total tokens">
+        {usage.totalTokens.toLocaleString()} total
+      </span>
+      <span className="hermes-token-stat hermes-token-cost" title="Estimated cost (USD)">
+        ~${usage.estimatedCost.toFixed(4)}
+      </span>
+    </div>
+  );
+});
+
+// --- Onboarding Panel ---
+
+interface OnboardingPanelProps {
+  agentName: string;
+  hasSeenOnboarding: boolean;
+  onDismiss: () => void;
+}
+
+const OnboardingPanel = memo(function OnboardingPanel({ agentName, hasSeenOnboarding, onDismiss }: OnboardingPanelProps): ReactElement {
+  const [isVisible, setIsVisible] = useState(!hasSeenOnboarding);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setIsVisible(false);
+        onDismiss();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isVisible, onDismiss]);
+
+  if (!isVisible) {
+    return (
+      <div className="hermes-empty-state">
+        Start a conversation with {agentName}
+      </div>
+    );
+  }
+
+  return (
+    <div className="hermes-onboarding">
+      <div className="hermes-onboarding-header">
+        <span>👋 Welcome to {agentName}</span>
+        <button className="hermes-icon-btn" onClick={() => { setIsVisible(false); onDismiss(); }} title="Dismiss" type="button">✕</button>
+      </div>
+      <div className="hermes-onboarding-content">
+        <p><strong>{agentName}</strong> is your AI assistant inside Obsidian. Here's how to get started:</p>
+        <ul>
+          <li><strong>💬 Chat:</strong> Type a message and press Enter to send.</li>
+          <li><strong>📎 Context:</strong> Click the @ button to add the current note or selection to the conversation.</li>
+          <li><strong>⚡ Slash Commands:</strong> Type <code>/</code> to see available commands like <code>/clear</code>, <code>/persona</code>, <code>/search</code>.</li>
+          <li><strong>🔧 Tools:</strong> The agent can read files, write files, and run terminal commands (with your approval).</li>
+          <li><strong>🔍 Search:</strong> Press <kbd>Cmd+F</kbd> to search through messages.</li>
+          <li><strong>⚙️ Settings:</strong> Configure connection mode (ACP/API), personas, and security in the settings tab.</li>
+        </ul>
+        <p className="hermes-onboarding-security">🔒 <strong>Security Note:</strong> Terminal access is disabled by default. File changes require your explicit approval via the diff viewer.</p>
+      </div>
+      <button className="hermes-btn-approve" onClick={() => { setIsVisible(false); onDismiss(); }} type="button">
+        Got it!
+      </button>
+    </div>
+  );
+});
