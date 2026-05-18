@@ -1,0 +1,82 @@
+name: Nightly Build
+
+on:
+  schedule:
+    # Run every day at 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    name: Build & Publish Nightly
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Test
+        run: pnpm run test
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Get short SHA
+        id: sha
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Delete previous nightly tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -d nightly || true
+          git push origin :refs/tags/nightly || true
+
+      - name: Create Nightly Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: "🌙 Nightly Build — ${{ steps.sha.outputs.sha }}"
+          body: |
+            ## 🌙 Nightly Build
+
+            **Commit:** `${{ steps.sha.outputs.sha }}`
+            **Branch:** `${{ github.ref_name }}`
+            **Date:** `${{ github.event.repository.updated_at }}`
+
+            This is an automated nightly build from the latest commit on the default branch. It is **not a stable release** and may contain unfinished work.
+
+            ### 📦 Installation (BRAT)
+
+            1. Install the [BRAT plugin](https://obsidian.md/plugins?id=obsidian42-brat) in Obsidian.
+            2. Open **Settings → BRAT → Add Beta plugin**.
+            3. Paste this repository URL: `https://github.com/${{ github.repository }}`
+            4. Enable the plugin in **Settings → Community Plugins**.
+
+            > ⚠️ **Note:** BRAT users will automatically receive updates when a new nightly or beta is published.
+          prerelease: true
+          files: |
+            dist/build/main.js
+            dist/build/styles.css
+            manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

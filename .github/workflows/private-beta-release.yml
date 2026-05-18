@@ -1,0 +1,113 @@
+name: Private Beta Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.3.0-beta.1)'
+        required: true
+        type: string
+      minAppVersion:
+        description: 'Minimum Obsidian app version (e.g., 1.12.3)'
+        required: true
+        type: string
+        default: '1.12.3'
+      notes:
+        description: 'Release notes (markdown supported)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Publish Private Beta
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Test
+        run: pnpm run test
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Update manifest.json version
+        run: |
+          jq '.version = "${{ inputs.version }}"' manifest.json > manifest.json.tmp && mv manifest.json.tmp manifest.json
+
+      - name: Update versions.json
+        run: |
+          jq '. + {"${{ inputs.version }}": "${{ inputs.minAppVersion }}"}' versions.json > versions.json.tmp && mv versions.json.tmp versions.json
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json versions.json
+          git commit -m "chore(release): bump to ${{ inputs.version }}" || echo "No changes to commit"
+          git push
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          name: "🧪 Private Beta — ${{ inputs.version }}"
+          body: |
+            ## 🧪 Private Beta Release
+
+            **Version:** `${{ inputs.version }}`
+            **Minimum Obsidian Version:** `${{ inputs.minAppVersion }}`
+
+            ---
+
+            ${{ inputs.notes }}
+
+            ---
+
+            ## 📦 Installation (BRAT)
+
+            This is a **private beta** release. Do not share the download link publicly.
+
+            1. Install the [BRAT plugin](https://obsidian.md/plugins?id=obsidian42-brat) in Obsidian.
+            2. Open **Settings → BRAT → Add Beta plugin**.
+            3. Paste this repository URL: `https://github.com/${{ github.repository }}`
+            4. Enable the plugin in **Settings → Community Plugins**.
+
+            ## 📋 Files Included
+
+            | File | Purpose |
+            |------|---------|
+            | `main.js` | Plugin code |
+            | `styles.css` | Plugin styles |
+            | `manifest.json` | Plugin metadata |
+
+            ## ⚠️ Beta Disclaimer
+
+            This release is for **testing purposes only**. It may contain bugs, incomplete features, or breaking changes. Please report issues via GitHub Issues (private repo access required).
+          prerelease: true
+          files: |
+            dist/build/main.js
+            dist/build/styles.css
+            manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
