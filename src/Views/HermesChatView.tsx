@@ -1302,7 +1302,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
             onDismiss={() => {
               // @ts-expect-error - settings are mutable at runtime
               plugin.settings.hasSeenOnboarding = true;
-              void (plugin as unknown as { saveSettings(): Promise<void> }).saveSettings();
+              void plugin.settingsManager.saveToFile();
             }}
           />
         )}
@@ -1366,7 +1366,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
             }}
           />
         )}
-        <TokenUsageFooter />
+        <TokenUsageFooter visible={settings.showTokenCount} />
       </div>
 
       <ChatInput
@@ -1739,6 +1739,15 @@ const ChatInput = memo(function ChatInput({
 }: ChatInputProps): ReactElement {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<HTMLDivElement>(null);
+
+  // Auto-resize textarea whenever input changes (including programmatic insertions like file paths)
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [input, textareaRef]);
 
   useEffect(() => {
     if (autocompleteRef.current) {
@@ -2182,7 +2191,11 @@ const PendingPermissionsPanel = memo(function PendingPermissionsPanel({ permissi
 
 // --- Token Usage Footer ---
 
-const TokenUsageFooter = memo(function TokenUsageFooter(): ReactElement {
+interface TokenUsageFooterProps {
+  visible: boolean;
+}
+
+const TokenUsageFooter = memo(function TokenUsageFooter({ visible }: TokenUsageFooterProps): ReactElement {
   const [usage, setUsage] = useState<TokenUsageStats>({
     estimatedCost: 0,
     inputTokens: 0,
@@ -2204,7 +2217,7 @@ const TokenUsageFooter = memo(function TokenUsageFooter(): ReactElement {
     };
   }, []);
 
-  if (!isVisible) return <></>;
+  if (!visible || !isVisible) return <></>;
 
   return (
     <div className="hermes-token-footer">

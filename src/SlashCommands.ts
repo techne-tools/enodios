@@ -87,7 +87,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       // @ts-expect-error - settings are mutable at runtime for persona switching
       plugin.settings.activePersonaId = match.id;
-      await plugin.settingsManager.editAndSave(() => {});
+      await plugin.settingsManager.saveToFile();
 
       return `Switched to **${match.name}**. ${match.systemPrompt ? 'System prompt updated.' : 'No system prompt set for this persona.'}`;
     },

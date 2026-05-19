@@ -161,6 +161,14 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         toggle.setValue(this.plugin.settings.showToolUse);
         this.bind(toggle, 'showToolUse');
       });
+
+    new SettingEx(this.containerEl)
+      .setName('Show Token Count')
+      .setDesc('Display the real-time token usage counter in the chat footer. Shows input/output tokens and estimated cost per conversation.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.showTokenCount);
+        this.bind(toggle, 'showTokenCount');
+      });
   }
 
   // ─── Context ───
@@ -271,7 +279,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         button.setButtonText('Reset')
           .onClick(() => {
             (this.plugin.settings as unknown as { hasSeenOnboarding: boolean }).hasSeenOnboarding = false;
-            void this.plugin.settingsManager.editAndSave(() => {});
+            void this.plugin.settingsManager.saveToFile();
             new Notice('Welcome message will appear next time you open chat.');
           });
       });

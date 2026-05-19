@@ -83,10 +83,21 @@ export function useStreamBuffer(
       return;
     }
 
+    // Capture and clear pending content atomically inside the setMessages updater
+    // to prevent race conditions where a chunk arrives between capture and clear.
     setMessages((prev) => {
+      // Read the latest pending content (may have grown since the outer capture)
+      const latestContent = pendingContentRef.current;
+      const latestReasoning = pendingReasoningRef.current;
+
+      // Clear the refs atomically with the state update
+      pendingContentRef.current = '';
+      pendingReasoningRef.current = '';
+      flushAnimationFrameRef.current = null;
+
       let updated = prev;
 
-      if (content) {
+      if (latestContent) {
         const assistantIndex = updated.findIndex(
           (m) => m.role === 'assistant' && m.id === streamingMessageIdRef.current
         );
@@ -94,13 +105,13 @@ export function useStreamBuffer(
           const newArray = [...updated];
           newArray[assistantIndex] = {
             ...newArray[assistantIndex]!,
-            content: newArray[assistantIndex]!.content + content
+            content: newArray[assistantIndex]!.content + latestContent
           };
           updated = newArray;
         }
       }
 
-      if (reasoning && showReasoning) {
+      if (latestReasoning && showReasoning) {
         const reasoningIndex = updated.findIndex(
           (m) => m.role === 'reasoning' && m.id === reasoningMessageIdRef.current
         );
@@ -108,7 +119,7 @@ export function useStreamBuffer(
           const newArray = [...updated];
           newArray[reasoningIndex] = {
             ...newArray[reasoningIndex]!,
-            content: newArray[reasoningIndex]!.content + reasoning
+            content: newArray[reasoningIndex]!.content + latestReasoning
           };
           updated = newArray;
         } else {
@@ -116,7 +127,7 @@ export function useStreamBuffer(
           reasoningMessageIdRef.current = newId;
           updated = [...updated, {
             id: newId,
-            content: reasoning,
+            content: latestReasoning,
             role: 'reasoning',
             timestamp: Date.now()
           }];
@@ -125,10 +136,6 @@ export function useStreamBuffer(
 
       return updated;
     });
-
-    pendingContentRef.current = '';
-    pendingReasoningRef.current = '';
-    flushAnimationFrameRef.current = null;
   }, [setMessages, showReasoning]);
 
   const scheduleFlush = useCallback(() => {

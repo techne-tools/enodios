@@ -23,6 +23,7 @@ export class PluginSettings {
   // Chat Display
   public showReasoning = false;
   public showToolUse = false;
+  public showTokenCount = true;
 
   // Security
   public allowTerminal = false;
