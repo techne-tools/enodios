@@ -148,6 +148,181 @@
 
 - ACP mode: local subprocess via `hermes acp`
 - API mode: REST API with SSE streaming
+
+---
+
+## Cross-Platform Feature Porting Plan (19 May 2026)
+
+### 📚 Features from Zotero Plugin to Port to Obsidian
+
+Based on analysis of both codebases, the following Zotero features could usefully be ported to Obsidian Hermes:
+
+### **Tier 1: High Impact, High Feasibility** ⭐⭐⭐
+
+#### 1. Citation Management System
+**Zotero Implementation**: `CitationManager.ts`
+- Get configured citation style from Zotero prefs
+- Generate formatted citations using CSL engine
+- Support for in-text citations and bibliography
+- Multiple citation styles support (APA, MLA, Chicago, etc.)
+
+**Obsidian Implementation Plan**:
+- Add `CitationManager.ts` module
+- Use `citeproc` or similar JavaScript CSL library
+- Add `/cite` slash command with style selector
+- Support citation insertion with `[@citation-key]` syntax
+- Generate bibliography section at end of notes
+- **Estimated**: 2-3 days
+- **Dependencies**: None (standalone feature)
+
+#### 2. PDF Annotation Management
+**Zotero Implementation**: `AnnotationManager.ts`
+- Read PDF annotations (native Zotero and PDF.js)
+- Extract annotation data: type, text, comment, page, color
+- Support for both PDF and native annotation types
+
+**Obsidian Implementation Plan**:
+- Add `PDFAnnotationManager.ts` module
+- Use PDF.js or Obsidian's PDF viewer API
+- Extract highlights, notes, and comments from PDFs in vault
+- Link annotations to specific text in markdown
+- Add `/annotations` slash command to attach PDF annotations
+- **Estimated**: 3-4 days
+- **Dependencies**: None (standalone feature)
+
+#### 3. Enhanced Item/Note Context Extraction
+**Zotero Implementation**: `ItemManager.ts`
+- Extract metadata from selected Zotero items
+- Format item context for Hermes prompts
+- Support multiple item selection
+- Extractors for: title, creators, date, abstract, tags, URL, DOI
+
+**Obsidian Enhancement Plan**:
+- Enhance existing context system with more metadata
+- Extract: title, frontmatter, tags, word count, last modified
+- Add `/context` command with metadata preview
+- Support multiple note selection with batch context
+- **Estimated**: 1-2 days
+- **Dependencies**: Existing context system
+
+### **Tier 2: Medium Impact, Medium Feasibility** ⭐⭐
+
+#### 4. Tag Suggestions & Auto-Tagging
+**Zotero Implementation**: `TagManager.ts`
+- Get all library tags with counts
+- Add/remove tags from items
+- Suggest tags based on title/abstract keyword matching
+- Confidence scoring for tag suggestions
+
+**Obsidian Implementation Plan**:
+- Add `TagManager.ts` module
+- Analyze note content for tag suggestions
+- Use NLP for content analysis (title, frontmatter, first paragraph)
+- Show suggested tags with confidence scores
+- Bulk apply tags to multiple notes
+- **Estimated**: 2-3 days
+- **Dependencies**: None (standalone feature)
+
+#### 5. Conversation Templates
+**Zotero Implementation**: `ConversationManager.ts`
+- Persistent conversation storage
+- Create/load/save conversations
+- Message tracking with timestamps
+- Context item association
+
+**Obsidian Enhancement Plan**:
+- Enhance existing `VaultManager.ts`
+- Add conversation templates (predefined conversation starters)
+- Save conversation templates to vault
+- Load templates via `/template` slash command
+- **Estimated**: 1-2 days
+- **Dependencies**: Existing conversation management
+
+#### 6. Better PDF Integration
+**Zotero Implementation**: AnnotationManager + PDF support
+- PDF.js integration for annotation reading
+- PDF metadata extraction
+- Page-specific context
+
+**Obsidian Enhancement Plan**:
+- Enhance existing PDF attachment support
+- Add PDF.js for annotation extraction
+- Extract page-specific content from PDFs
+- Link PDF annotations to markdown notes
+- **Estimated**: 2-3 days
+- **Dependencies**: Existing PDF support
+
+### **Tier 3: Low Impact, High Feasibility** ⭐
+
+#### 7. Preference Organization
+**Zotero Implementation**: `PreferencesManager.ts`
+- Zotero preference-based configuration
+- Settings: binary path, connection mode, auto-save, reasoning, typing effects
+- Feature toggles: citations, annotations, tags
+
+**Obsidian Enhancement Plan**:
+- Minor UI improvements to settings tab
+- Better organization of settings sections
+- Group related settings together
+- **Estimated**: 1 day
+- **Dependencies**: None
+
+#### 8. Simplified Approval UI
+**Zotero Implementation**: `ApprovalDialog.ts`
+- XUL-based approval dialog for note modifications
+- Diff display between current and proposed content
+- Three options: Approve, Modify, Reject
+
+**Obsidian Enhancement Plan**:
+- Learn from Zotero's XUL approach for inspiration
+- Current React implementation is already robust
+- Could add keyboard shortcuts for approval actions
+- **Estimated**: 0.5 days
+- **Dependencies**: None
+
+---
+
+## Implementation Priority Matrix
+
+| Feature | Zotero Value | Obsidian Port Difficulty | Obsidian Impact | Priority |
+|---------|-------------|-------------------------|-----------------|----------|
+| Citation Management | ⭐⭐⭐⭐⭐ | Low | ⭐⭐⭐⭐⭐ | **1** |
+| Annotation Management | ⭐⭐⭐⭐⭐ | Medium | ⭐⭐⭐⭐⭐ | **2** |
+| Enhanced Context | ⭐⭐⭐⭐ | Low | ⭐⭐⭐⭐ | **3** |
+| Tag Suggestions | ⭐⭐⭐⭐ | Low | ⭐⭐⭐⭐ | **4** |
+| Conversation Templates | ⭐⭐⭐ | Low | ⭐⭐⭐ | **5** |
+| PDF Integration | ⭐⭐⭐⭐ | Medium | ⭐⭐⭐⭐ | **6** |
+| Preference Organization | ⭐⭐ | Low | ⭐⭐ | **7** |
+| Approval UI Refinement | ⭐⭐ | Low | ⭐⭐ | **8** |
+
+---
+
+## Implementation Timeline
+
+### Week 1 (May 20-26): Foundation
+- [ ] Citation Management System (Tier 1)
+- [ ] Tag Suggestions & Auto-Tagging (Tier 2)
+- [ ] Enhanced Context Extraction (Tier 1)
+
+### Week 2 (May 27-June 2): Advanced Features
+- [ ] PDF Annotation Management (Tier 1)
+- [ ] Conversation Templates (Tier 2)
+- [ ] Better PDF Integration (Tier 2)
+
+### Week 3 (June 3-9): Polish & Refinement
+- [ ] Preference Organization (Tier 3)
+- [ ] Approval UI Refinement (Tier 3)
+- [ ] Testing and documentation
+
+---
+
+## Notes
+
+- All features should follow Obsidian Hermes coding conventions
+- TypeScript strict mode must be maintained
+- Security considerations: approval system for file modifications
+- Test across different Obsidian versions (1.12.3+)
+- Update `manifest.json` version after each major feature
 - Connection mode dropdown in settings
 - Secure API key storage via Obsidian localStorage
 - Test connection buttons for each mode
