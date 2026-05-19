@@ -271,7 +271,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         button.setButtonText('Reset')
           .onClick(() => {
             (this.plugin.settings as unknown as { hasSeenOnboarding: boolean }).hasSeenOnboarding = false;
-            void (this.plugin as unknown as { saveSettings(): Promise<void> }).saveSettings();
+            void this.plugin.settingsManager.editAndSave(() => {});
             new Notice('Welcome message will appear next time you open chat.');
           });
       });
