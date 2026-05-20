@@ -67,6 +67,17 @@
 - [x] Added 5MB safety limit for file attachments (16 May 2026)
 - [x] Added copy-to-clipboard buttons for chat messages and code blocks (16 May 2026)
 - [x] Added full integration test suites for UI, `FileChangeManager`, and streaming hooks (16 May 2026)
+- [x] **Beta Testing Fixes (20 May 2026)**:
+  - Fixed SSE buffer not being processed when stream ends — empty assistant responses now populate correctly (`HermesApiClient.ts`)
+  - Fixed status bar overlapping chat input — container height now accounts for `--status-bar-height`
+  - Fixed duplicate chat bubbles during typing — empty assistant placeholder is hidden while `TypingIndicator` is active
+  - Fixed conversation save failures with `by-date` organization mode — `ensureFolderExists()` now creates date subfolders recursively (`VaultManager.ts`)
+  - Added diagnostic logging to `saveConversation` and `updateConversation` to surface errors in DevTools
+  - Added `getIcon()` to `HermesChatView` so tab bar shows `message-square` icon matching the ribbon
+  - Improved Previous Conversations dropdown — text wraps, better delineation, limited to 5 most recent
+  - Added **Export as Markdown** to the export dropdown (`VaultManager.exportToMarkdown()`)
+  - Removed grey border from inner textarea for cleaner visual appearance
+  - Added `margin-bottom: 20px` to input container to raise it from the bottom edge
 
 ## Implementation Notes
 
