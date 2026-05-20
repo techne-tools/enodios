@@ -20,6 +20,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-and-release:
     name: Build & Publish Private Beta
@@ -28,16 +31,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version-file: package.json
           cache: pnpm
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -69,9 +72,16 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ inputs.version }}
           name: "🧪 Private Beta — ${{ inputs.version }}"
+          prerelease: true
+          files: |
+            dist/build/main.js
+            dist/build/styles.css
+            manifest.json
           body: |
             ## 🧪 Private Beta Release
 
@@ -104,10 +114,3 @@ jobs:
             ## ⚠️ Beta Disclaimer
 
             This release is for **testing purposes only**. It may contain bugs, incomplete features, or breaking changes. Please report issues via GitHub Issues (private repo access required).
-          prerelease: true
-          files: |
-            dist/build/main.js
-            dist/build/styles.css
-            manifest.json
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
