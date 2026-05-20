@@ -51,7 +51,10 @@ const configs: Linter.Config[] = [
       '@typescript-eslint/no-misused-promises': 'off',
       'no-bitwise': 'off',
       'no-lonely-if': 'off',
-      '@typescript-eslint/no-unnecessary-type-assertion': 'off'
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+      '@typescript-eslint/no-redundant-type-constituents': 'off',
+      '@typescript-eslint/prefer-promise-reject-errors': 'off',
+      '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off'
     }
   },
   {
