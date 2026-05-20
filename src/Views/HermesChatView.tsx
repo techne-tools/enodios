@@ -87,6 +87,10 @@ export class HermesChatView extends ItemView {
     return HERMES_CHAT_VIEW_TYPE;
   }
 
+  public override getIcon(): string {
+    return 'message-square';
+  }
+
   public override async onClose(): Promise<void> {
     if (this.root) {
       this.root.unmount();
@@ -461,13 +465,18 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       const title = currentTitle || conversationTitle || currentMessages[0]?.content.slice(0, 50) || 'Untitled';
       if (!conversationFilePath) {
         const filePath = await plugin.vaultManager.saveConversation(currentMessages, title, currentAllowedTools);
-        setConversationFilePath(filePath);
-        setConversationTitle(title);
+        if (filePath) {
+          setConversationFilePath(filePath);
+          setConversationTitle(title);
+        }
       } else {
-        await plugin.vaultManager.updateConversation(conversationFilePath, currentMessages, title, currentAllowedTools);
+        const success = await plugin.vaultManager.updateConversation(conversationFilePath, currentMessages, title, currentAllowedTools);
+        if (!success) {
+          console.warn('[Hermes] updateConversation returned false for', conversationFilePath);
+        }
       }
-    } catch {
-      // Silently ignore save errors to not disrupt chat flow
+    } catch (err) {
+      console.error('[Hermes] saveConversation error:', err);
     } finally {
       setIsSaving(false);
     }
@@ -1141,6 +1150,21 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       <ChatHeader
         agentName={settings.chatAgentName || 'Hermes'}
         isSaving={isSaving}
+        onExportMarkdown={() => {
+          try {
+            const md = plugin.vaultManager.exportToMarkdown(messages, conversationTitle || 'Hermes Conversation');
+            const blob = new Blob([md], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `hermes-conversation-${Date.now()}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+            new Notice('Exported conversation as Markdown');
+          } catch {
+            new Notice('Failed to export conversation as Markdown');
+          }
+        }}
         onExportHtml={async () => {
           try {
             const html = await plugin.vaultManager.exportToHtml(messages, conversationTitle || 'Hermes Conversation');
@@ -1228,7 +1252,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
             <div className="hermes-conversation-empty">No saved conversations</div>
           ) : (
             <ul>
-              {conversations.map((conv) => (
+              {conversations.slice(0, 5).map((conv) => (
                 <li key={conv.filePath}>
                   <button
                     className="hermes-conversation-item"
@@ -1306,16 +1330,23 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
             }}
           />
         )}
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            ref={(el) => {
-              if (el) messageRefs.current.set(msg.id, el);
-            }}
-          >
-            <ChatMessageItem message={msg} onEdit={handleEditSubmit} view={view} />
-          </div>
-        ))}
+        {messages.map((msg) => {
+          // Skip rendering the empty assistant placeholder while the typing indicator is shown;
+          // once content streams in, the message will render normally.
+          if (isTyping && msg.role === 'assistant' && !msg.content) {
+            return null;
+          }
+          return (
+            <div
+              key={msg.id}
+              ref={(el) => {
+                if (el) messageRefs.current.set(msg.id, el);
+              }}
+            >
+              <ChatMessageItem message={msg} onEdit={handleEditSubmit} view={view} />
+            </div>
+          );
+        })}
         {isTyping && <TypingIndicator agentName={settings.chatAgentName || 'Hermes'} />}
         {error && (
           <div className="hermes-error" role="alert">
@@ -1407,6 +1438,7 @@ interface ChatHeaderProps {
   isSaving: boolean;
   onExportHtml: () => void;
   onExportJson: () => void;
+  onExportMarkdown: () => void;
   onNewChat: () => void;
   onOpenSettings: () => void;
   onToggleConversationList: () => void;
@@ -1414,7 +1446,7 @@ interface ChatHeaderProps {
   onToggleSessionSettings: () => void;
 }
 
-const ChatHeader = memo(function ChatHeader({ agentName, isSaving, onExportHtml, onExportJson, onNewChat, onOpenSettings, onToggleConversationList, onToggleSearch, onToggleSessionSettings }: ChatHeaderProps): ReactElement {
+const ChatHeader = memo(function ChatHeader({ agentName, isSaving, onExportHtml, onExportJson, onExportMarkdown, onNewChat, onOpenSettings, onToggleConversationList, onToggleSearch, onToggleSessionSettings }: ChatHeaderProps): ReactElement {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
@@ -1471,6 +1503,7 @@ const ChatHeader = memo(function ChatHeader({ agentName, isSaving, onExportHtml,
           </button>
           {showExportMenu && (
             <div className="hermes-export-menu">
+              <button className="hermes-export-item" onClick={() => { onExportMarkdown(); setShowExportMenu(false); }} type="button">Export as Markdown</button>
               <button className="hermes-export-item" onClick={() => { onExportHtml(); setShowExportMenu(false); }} type="button">Export as HTML</button>
               <button className="hermes-export-item" onClick={() => { onExportJson(); setShowExportMenu(false); }} type="button">Export as JSON</button>
             </div>

@@ -200,16 +200,28 @@ export class VaultManager {
     if (messages.length === 0) return null;
 
     try {
-      await this.ensureSaveFolder();
-
       const conversationTitle = title || 'Conversation';
       const filePath = this.generateFilePath(conversationTitle, Date.now());
       const content = this.messagesToMarkdown(messages, conversationTitle, allowedTools);
 
+      // Ensure the full folder path (including date subfolders) exists before creating the file
+      const folderPath = filePath.split('/').slice(0, -1).join('/');
+      if (folderPath) {
+        await this.ensureFolderExists(folderPath);
+      }
+
+      // Check if file already exists (shouldn't happen with timestamp, but safety first)
+      const existing = this.vault.getAbstractFileByPath(filePath);
+      if (existing) {
+        console.warn(`[Hermes] Conversation file already exists: ${filePath}`);
+      }
+
       await this.vault.create(filePath, content);
       return filePath;
     } catch (error) {
-      new Notice('Failed to save conversation to vault');
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[Hermes] Failed to save conversation:', error);
+      new Notice(`Failed to save conversation: ${message}`);
       return null;
     }
   }
@@ -219,7 +231,10 @@ export class VaultManager {
    */
   public async updateConversation(filePath: string, messages: ChatMessage[], title?: string, allowedTools: string[] | null = null): Promise<boolean> {
     const file = this.vault.getAbstractFileByPath(filePath);
-    if (!(file instanceof TFile)) return false;
+    if (!(file instanceof TFile)) {
+      console.warn(`[Hermes] updateConversation: file not found or not a TFile: ${filePath}`);
+      return false;
+    }
 
     try {
       const conversationTitle = title || 'Conversation';
@@ -227,6 +242,9 @@ export class VaultManager {
       await this.vault.modify(file, content);
       return true;
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[Hermes] Failed to update conversation:', error);
+      new Notice(`Failed to update conversation: ${message}`);
       return false;
     }
   }
@@ -409,6 +427,19 @@ ${messageHtml}
 <div class="footer">Exported from Obsidian Hermes</div>
 </body>
 </html>`;
+  }
+
+  /**
+   * Export a conversation to clean Markdown (no frontmatter, just messages).
+   */
+  public exportToMarkdown(messages: ChatMessage[], title: string): string {
+    const header = `# ${title}\n\n*Exported from Obsidian Hermes on ${new Date().toLocaleString()}*\n\n---\n\n`;
+    const body = messages.map((msg) => {
+      const roleLabel = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Hermes' : 'System';
+      const time = new Date(msg.timestamp).toLocaleString();
+      return `## ${roleLabel} — ${time}\n\n${msg.content}\n`;
+    }).join('\n---\n\n');
+    return `${header}${body}`;
   }
 
   /**

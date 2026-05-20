@@ -3,7 +3,7 @@
 .hermes-chat-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: calc(100% - var(--status-bar-height, 22px));
   width: 100%;
   overflow: hidden;
 }
@@ -176,6 +176,7 @@
   padding: 12px;
   border-top: 1px solid var(--background-modifier-border);
   background-color: var(--background-primary);
+  margin-bottom: 20px;
 }
 
 .hermes-input-wrapper {
@@ -215,7 +216,7 @@
 .hermes-input {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--background-modifier-border);
+  border: none;
   border-radius: 8px;
   background-color: var(--background-primary);
   color: var(--text-normal);
@@ -229,8 +230,7 @@
 
 .hermes-input:focus {
   outline: none;
-  border-color: var(--text-accent);
-  box-shadow: 0 0 0 2px var(--background-modifier-hover);
+  box-shadow: none;
 }
 
 .hermes-input::placeholder {

@@ -275,10 +275,9 @@ export class HermesApiClient implements ChatClient {
           if (done) {
             // Flush any remaining characters in the decoder
             buffer += decoder.decode();
-            break;
+          } else {
+            buffer += decoder.decode(value, { stream: true });
           }
-
-          buffer += decoder.decode(value, { stream: true });
 
           // Split by newline to process complete SSE events.
           // The last element is retained in the buffer as it may be an incomplete chunk.
@@ -310,6 +309,34 @@ export class HermesApiClient implements ChatClient {
             } catch {
               // Ignore malformed SSE lines
             }
+          }
+
+          if (done) {
+            // Process any trailing buffer that wasn't terminated by a newline
+            if (buffer.trim()) {
+              const trimmed = buffer.trim();
+              if (trimmed.startsWith('data:')) {
+                const data = trimmed.slice(5).trim();
+                if (data === '[DONE]') {
+                  return;
+                }
+                try {
+                  const parsed = JSON.parse(data) as {
+                    choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>;
+                  };
+                  const delta = parsed.choices?.[0]?.delta?.content;
+                  if (delta) {
+                    this.emit({ content: delta, type: 'message' });
+                  }
+                  if (parsed.choices?.[0]?.finish_reason) {
+                    return;
+                  }
+                } catch {
+                  // Ignore malformed SSE lines
+                }
+              }
+            }
+            break;
           }
         }
       } finally {

@@ -117,14 +117,18 @@
   .hermes-conversation-item {
     width: 100%;
     text-align: left;
-    padding: 8px 12px;
+    padding: 10px 12px;
     background: none;
     border: none;
     border-bottom: 1px solid var(--background-modifier-border);
     color: var(--text-normal);
     font-size: 13px;
+    line-height: 1.4;
     cursor: pointer;
     transition: background-color 0.15s ease;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 
     &:hover {
       background-color: var(--background-modifier-hover);
@@ -738,6 +742,7 @@
   border: 1px solid var(--interactive-accent);
   transition: all 0.2s ease;
   position: relative;
+  margin-bottom: 20px;
   /* Cache bust: 2026-05-14-1603 */
 }
 
