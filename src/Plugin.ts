@@ -1,15 +1,13 @@
-import { Notice } from 'obsidian';
 import type { ExtractPluginSettingsWrapper } from 'obsidian-dev-utils/obsidian/Plugin/PluginTypesBase';
 import type { ReadonlyDeep } from 'type-fest';
 
+import { Notice } from 'obsidian';
 import { PluginBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginBase';
 
 import type { ChatClient } from './ChatClient.ts';
 import type { PluginTypes } from './PluginTypes.ts';
 
 import { AcpClient } from './AcpClient.ts';
-import { clearAllCommands } from './SlashCommands.ts';
-import { ghostTextExtension, setGhostTextEffect } from './styles/GhostTextExtension.ts';
 import { AuditLog } from './AuditLog.ts';
 import { DebugLogger } from './DebugLogger.ts';
 import { FileChangeManager } from './FileChangeManager.ts';
@@ -17,6 +15,11 @@ import { HermesApiClient } from './HermesApiClient.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
 import { PluginSettingsTab } from './PluginSettingsTab.ts';
 import { SecretsManager } from './SecretsManager.ts';
+import { clearAllCommands } from './SlashCommands.ts';
+import {
+ ghostTextExtension,
+setGhostTextEffect
+} from './styles/GhostTextExtension.ts';
 import { VaultManager } from './VaultManager.ts';
 import {
   HERMES_CHAT_VIEW_TYPE,
@@ -125,14 +128,14 @@ export class Plugin extends PluginBase<PluginTypes> {
           this.debug.error('Failed to toggle view', err);
         });
       },
-      id: 'toggle-hermes-chat',
-      name: 'Toggle Hermes Chat',
       hotkeys: [
         {
-          modifiers: ['Mod'],
-          key: 'H'
+          key: 'H',
+          modifiers: ['Mod']
         }
-      ]
+      ],
+      id: 'toggle-hermes-chat',
+      name: 'Toggle Hermes Chat'
     });
 
     // Add command to focus chat input (when chat is open)
@@ -142,14 +145,14 @@ export class Plugin extends PluginBase<PluginTypes> {
           this.debug.error('Failed to focus input', err);
         });
       },
-      id: 'focus-hermes-chat-input',
-      name: 'Focus Hermes Chat Input',
       hotkeys: [
         {
-          modifiers: ['Mod', 'Shift'],
-          key: 'H'
+          key: 'H',
+          modifiers: ['Mod', 'Shift']
         }
-      ]
+      ],
+      id: 'focus-hermes-chat-input',
+      name: 'Focus Hermes Chat Input'
     });
 
     // Add command to trigger inline completion (Ghost Text)
@@ -157,11 +160,11 @@ export class Plugin extends PluginBase<PluginTypes> {
       editorCallback: async (editor) => {
         // @ts-expect-error - Accessing internal CodeMirror 6 view from Obsidian's Editor wrapper
         const cmView = editor.cm;
-        if (!cmView) return;
+        if (!cmView) { return; }
 
         const pos = editor.posToOffset(editor.getCursor());
         cmView.dispatch({
-          effects: setGhostTextEffect.of({ pos, alternatives: [' ...Hermes is thinking...'], currentIndex: 0 })
+          effects: setGhostTextEffect.of({ alternatives: [' ...Hermes is thinking...'], currentIndex: 0, pos })
         });
 
         try {
@@ -178,7 +181,7 @@ export class Plugin extends PluginBase<PluginTypes> {
             // Only show if the cursor hasn't moved while we were waiting
             const currentPos = editor.posToOffset(editor.getCursor());
             if (currentPos === pos) {
-              cmView.dispatch({ effects: setGhostTextEffect.of({ pos, alternatives: [completion], currentIndex: 0 }) });
+              cmView.dispatch({ effects: setGhostTextEffect.of({ alternatives: [completion], currentIndex: 0, pos }) });
             } else {
               cmView.dispatch({ effects: setGhostTextEffect.of(null) });
             }
@@ -210,7 +213,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Command Palette: Ask Hermes about selection
     this.addCommand({
       editorCallback: async (editor, _view) => {
-        if (!checkRateLimit()) return;
+        if (!checkRateLimit()) { return; }
         const selection = editor.getSelection();
         if (!selection.trim()) {
           new Notice('No text selected. Select some text first.');
@@ -219,10 +222,10 @@ export class Plugin extends PluginBase<PluginTypes> {
 
         await this.openView(HERMES_CHAT_VIEW_TYPE);
         const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
-        if (leaves.length === 0) return;
+        if (leaves.length === 0) { return; }
 
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) return;
+        if (!(chatView instanceof HermesChatView)) { return; }
 
         const contextItems = [{
           id: `selection-${Date.now()}`,
@@ -239,7 +242,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Command Palette: Summarize current note
     this.addCommand({
       callback: async () => {
-        if (!checkRateLimit()) return;
+        if (!checkRateLimit()) { return; }
         const activeFile = this.app.workspace.getActiveFile();
         if (!activeFile) {
           new Notice('No active note to summarize.');
@@ -248,10 +251,10 @@ export class Plugin extends PluginBase<PluginTypes> {
 
         await this.openView(HERMES_CHAT_VIEW_TYPE);
         const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
-        if (leaves.length === 0) return;
+        if (leaves.length === 0) { return; }
 
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) return;
+        if (!(chatView instanceof HermesChatView)) { return; }
 
         const contextItems = [{
           id: `note-${activeFile.path}`,
@@ -268,7 +271,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Command Palette: Generate tags for current note
     this.addCommand({
       callback: async () => {
-        if (!checkRateLimit()) return;
+        if (!checkRateLimit()) { return; }
         const activeFile = this.app.workspace.getActiveFile();
         if (!activeFile) {
           new Notice('No active note to generate tags for.');
@@ -277,10 +280,10 @@ export class Plugin extends PluginBase<PluginTypes> {
 
         await this.openView(HERMES_CHAT_VIEW_TYPE);
         const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
-        if (leaves.length === 0) return;
+        if (leaves.length === 0) { return; }
 
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) return;
+        if (!(chatView instanceof HermesChatView)) { return; }
 
         const contextItems = [{
           id: `note-${activeFile.path}`,
@@ -317,6 +320,24 @@ export class Plugin extends PluginBase<PluginTypes> {
     await super.onunloadImpl();
   }
 
+  private async focusChatInput(): Promise<void> {
+    const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+    if (leaves.length === 0) {
+      await this.openView(HERMES_CHAT_VIEW_TYPE);
+      return;
+    }
+
+    await this.app.workspace.revealLeaf(leaves[0]!);
+    // Focus the textarea after a short delay to allow the view to render
+    window.setTimeout(() => {
+      const container = leaves[0]!.view.containerEl;
+      const textarea = container.querySelector('.hermes-input') as HTMLElement | null;
+      if (textarea) {
+        textarea.focus();
+      }
+    }, 100);
+  }
+
   private async openView(viewType: string): Promise<void> {
     const leaves = this.app.workspace.getLeavesOfType(viewType);
     if (leaves.length > 0) {
@@ -346,23 +367,5 @@ export class Plugin extends PluginBase<PluginTypes> {
 
     // Open if not exists
     await this.openView(viewType);
-  }
-
-  private async focusChatInput(): Promise<void> {
-    const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
-    if (leaves.length === 0) {
-      await this.openView(HERMES_CHAT_VIEW_TYPE);
-      return;
-    }
-
-    await this.app.workspace.revealLeaf(leaves[0]!);
-    // Focus the textarea after a short delay to allow the view to render
-    window.setTimeout(() => {
-      const container = leaves[0]!.view.containerEl;
-      const textarea = container.querySelector('.hermes-input') as HTMLTextAreaElement | null;
-      if (textarea) {
-        textarea.focus();
-      }
-    }, 100);
   }
 }

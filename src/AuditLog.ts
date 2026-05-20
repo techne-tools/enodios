@@ -3,11 +3,11 @@ import { TFile } from 'obsidian';
 import type { Plugin } from './Plugin.ts';
 
 export interface AuditEntry {
-  timestamp: number;
-  action: 'tool_call' | 'file_change' | 'permission' | 'terminal' | 'connection' | 'error';
-  status: 'success' | 'failure' | 'pending' | 'blocked';
+  action: 'connection' | 'error' | 'file_change' | 'permission' | 'terminal' | 'tool_call';
   details: string;
   metadata?: Record<string, unknown>;
+  status: 'blocked' | 'failure' | 'pending' | 'success';
+  timestamp: number;
 }
 
 /**
@@ -26,19 +26,60 @@ export interface AuditEntry {
  * and subject to the user's vault encryption/backup policies.
  */
 export class AuditLog {
-  private readonly plugin: Plugin;
-  private readonly maxEntries = 1000;
-  private writeQueue: AuditEntry[] = [];
-  private flushTimeout: number | null = null;
   private readonly FLUSH_DELAY_MS = 500;
+  private flushTimeout: null | number = null;
+  private readonly maxEntries = 1000;
+  private readonly plugin: Plugin;
+  private writeQueue: AuditEntry[] = [];
+
+  private get logFilePath(): string {
+    const folder = this.plugin.settings.chatSaveFolder || 'hermes';
+    return `${folder}/audit-log.md`;
+  }
 
   constructor(plugin: Plugin) {
     this.plugin = plugin;
   }
 
-  private get logFilePath(): string {
-    const folder = this.plugin.settings.chatSaveFolder || 'hermes';
-    return `${folder}/audit-log.md`;
+  /**
+   * Flush queued entries to the log file.
+   */
+  public async flush(): Promise<void> {
+    if (this.writeQueue.length === 0) { return; }
+
+    const entries = [...this.writeQueue];
+    this.writeQueue = [];
+
+    try {
+      await this.ensureLogFile();
+      const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
+      if (!(file instanceof TFile)) { return; }
+
+      const existing = await this.plugin.app.vault.read(file);
+      const newLines = entries.map((e) => this.formatEntry(e)).join('\n');
+      const updated = `${existing}\n${newLines}`;
+
+      // Trim to max entries if needed
+      const trimmed = this.trimToMaxEntries(updated);
+      await this.plugin.app.vault.modify(file, trimmed);
+    } catch (error) {
+      this.plugin.debug.error('AuditLog flush failed', error);
+    }
+  }
+
+  /**
+   * Get recent audit entries from the log file.
+   */
+  public async getRecentEntries(count = 50): Promise<AuditEntry[]> {
+    try {
+      const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
+      if (!(file instanceof TFile)) { return []; }
+
+      const content = await this.plugin.app.vault.read(file);
+      return this.parseEntries(content).slice(-count);
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -53,13 +94,13 @@ export class AuditLog {
   }
 
   /**
-   * Convenience method for tool calls.
+   * Convenience method for connection events.
    */
-  public recordToolCall(toolName: string, params: Record<string, unknown>, status: AuditEntry['status'], error?: string): void {
+  public recordConnection(event: 'connect' | 'disconnect' | 'reconnect', mode: string, status: AuditEntry['status'], error?: string): void {
     this.record({
-      action: 'tool_call',
-      details: `${toolName}: ${JSON.stringify(params)}`,
-      metadata: { error, params, toolName },
+      action: 'connection',
+      details: `${event.toUpperCase()} (${mode})${error ? `: ${error}` : ''}`,
+      metadata: { error, event, mode },
       status
     });
   }
@@ -67,7 +108,7 @@ export class AuditLog {
   /**
    * Convenience method for file changes.
    */
-  public recordFileChange(path: string, action: 'create' | 'modify' | 'delete', status: AuditEntry['status']): void {
+  public recordFileChange(path: string, action: 'create' | 'delete' | 'modify', status: AuditEntry['status']): void {
     this.record({
       action: 'file_change',
       details: `${action.toUpperCase()} ${path}`,
@@ -91,7 +132,7 @@ export class AuditLog {
   /**
    * Convenience method for terminal commands.
    */
-  public recordTerminal(command: string, status: AuditEntry['status'], exitCode?: number | null): void {
+  public recordTerminal(command: string, status: AuditEntry['status'], exitCode?: null | number): void {
     this.record({
       action: 'terminal',
       details: `\`${command}\`${exitCode !== null && exitCode !== undefined ? ` (exit: ${exitCode})` : ''}`,
@@ -101,71 +142,20 @@ export class AuditLog {
   }
 
   /**
-   * Convenience method for connection events.
+   * Convenience method for tool calls.
    */
-  public recordConnection(event: 'connect' | 'disconnect' | 'reconnect', mode: string, status: AuditEntry['status'], error?: string): void {
+  public recordToolCall(toolName: string, params: Record<string, unknown>, status: AuditEntry['status'], error?: string): void {
     this.record({
-      action: 'connection',
-      details: `${event.toUpperCase()} (${mode})${error ? `: ${error}` : ''}`,
-      metadata: { error, event, mode },
+      action: 'tool_call',
+      details: `${toolName}: ${JSON.stringify(params)}`,
+      metadata: { error, params, toolName },
       status
     });
   }
 
-  /**
-   * Get recent audit entries from the log file.
-   */
-  public async getRecentEntries(count = 50): Promise<AuditEntry[]> {
-    try {
-      const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
-      if (!(file instanceof TFile)) return [];
-
-      const content = await this.plugin.app.vault.read(file);
-      return this.parseEntries(content).slice(-count);
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Flush queued entries to the log file.
-   */
-  public async flush(): Promise<void> {
-    if (this.writeQueue.length === 0) return;
-
-    const entries = [...this.writeQueue];
-    this.writeQueue = [];
-
-    try {
-      await this.ensureLogFile();
-      const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
-      if (!(file instanceof TFile)) return;
-
-      const existing = await this.plugin.app.vault.read(file);
-      const newLines = entries.map((e) => this.formatEntry(e)).join('\n');
-      const updated = existing + '\n' + newLines;
-
-      // Trim to max entries if needed
-      const trimmed = this.trimToMaxEntries(updated);
-      await this.plugin.app.vault.modify(file, trimmed);
-    } catch (error) {
-      this.plugin.debug.error('AuditLog flush failed', error);
-    }
-  }
-
-  private scheduleFlush(): void {
-    if (this.flushTimeout !== null) {
-      window.clearTimeout(this.flushTimeout);
-    }
-    this.flushTimeout = window.setTimeout(() => {
-      this.flushTimeout = null;
-      void this.flush();
-    }, this.FLUSH_DELAY_MS);
-  }
-
   private async ensureLogFile(): Promise<void> {
     const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
-    if (file instanceof TFile) return;
+    if (file instanceof TFile) { return; }
 
     // Ensure parent folder exists
     const parts = this.logFilePath.split('/');
@@ -174,7 +164,7 @@ export class AuditLog {
       await this.plugin.vaultManager.ensureFolderExists(parentPath);
     }
 
-    const header = `---\ntype: hermes-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n`;
+    const header = '---\ntype: hermes-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n';
     await this.plugin.app.vault.create(this.logFilePath, header);
   }
 
@@ -204,7 +194,7 @@ export class AuditLog {
     const lines = content.split('\n');
 
     for (const line of lines) {
-      const match = line.match(/^- [🚫❌⏳✅] [🔌💥📝🔐💻🔧] \*\*(\w+)\*\* — (.+)$/);
+      const match = /^- [🚫❌⏳✅] [🔌💥📝🔐💻🔧] \*\*(\w+)\*\* — (.+)$/.exec(line);
       if (match?.[2]) {
         const action = match[1] as AuditEntry['action'];
         const timestamp = new Date(match[2]).getTime();
@@ -222,10 +212,20 @@ export class AuditLog {
     return entries;
   }
 
+  private scheduleFlush(): void {
+    if (this.flushTimeout !== null) {
+      window.clearTimeout(this.flushTimeout);
+    }
+    this.flushTimeout = window.setTimeout(() => {
+      this.flushTimeout = null;
+      void this.flush();
+    }, this.FLUSH_DELAY_MS);
+  }
+
   private trimToMaxEntries(content: string): string {
     const lines = content.split('\n');
     const entryLines = lines.filter((l) => l.startsWith('- '));
-    if (entryLines.length <= this.maxEntries) return content;
+    if (entryLines.length <= this.maxEntries) { return content; }
 
     const excess = entryLines.length - this.maxEntries;
     let skipped = 0;

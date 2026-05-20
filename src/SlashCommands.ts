@@ -1,9 +1,10 @@
 import { TFile } from 'obsidian';
+
 import type { Plugin } from './Plugin.ts';
 
 export interface SlashCommand {
   description: string;
-  execute: (plugin: Plugin, args: string) => Promise<string | null>;
+  execute: (plugin: Plugin, args: string) => Promise<null | string>;
   name: string;
 }
 
@@ -45,7 +46,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     description: 'Read the active Canvas mind-map to context',
     execute: async (plugin) => {
       const activeFile = plugin.app.workspace.getActiveFile();
-      if (!activeFile || activeFile.extension !== 'canvas') {
+      if (activeFile?.extension !== 'canvas') {
         return 'No active Canvas file found. Please open a .canvas file first.';
       }
       try {
@@ -53,8 +54,8 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         const canvasData = JSON.parse(content);
 
         let summary = `Attached current Canvas mind-map (**${activeFile.basename}.canvas**).\n\n`;
-        summary += 'Raw JSON structure:\n```json\n' + JSON.stringify(canvasData, null, 2) + '\n```\n\n';
-        summary += `**Instructions for Hermes:**\nTo create or modify a Canvas, use the \`writeTextFile\` tool to write valid JSON to a \`.canvas\` file path. Ensure you include a \`nodes\` array (id, type: "text"|"file"|"group", x, y, width, height) and an \`edges\` array (id, fromNode, fromSide, toNode, toSide).`;
+        summary += `Raw JSON structure:\n\`\`\`json\n${JSON.stringify(canvasData, null, 2)}\n\`\`\`\n\n`;
+        summary += '**Instructions for Hermes:**\nTo create or modify a Canvas, use the `writeTextFile` tool to write valid JSON to a `.canvas` file path. Ensure you include a `nodes` array (id, type: "text"|"file"|"group", x, y, width, height) and an `edges` array (id, fromNode, fromSide, toNode, toSide).';
 
         return summary;
       } catch (err) {
@@ -77,8 +78,8 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
 
       const match = personas.find((p) =>
-        p.id.toLowerCase() === query ||
-        p.name.toLowerCase().includes(query)
+        p.id.toLowerCase() === query
+        || p.name.toLowerCase().includes(query)
       );
 
       if (!match) {
@@ -103,7 +104,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       const query = args.toLowerCase();
       const terms = query.split(/\s+/).filter(Boolean);
       const files = plugin.app.vault.getMarkdownFiles();
-      const matches: Array<{ file: TFile; score: number; excerpt: string }> = [];
+      const matches: { excerpt: string; file: TFile; score: number }[] = [];
 
       for (const file of files) {
         const content = await plugin.app.vault.cachedRead(file);
@@ -126,10 +127,10 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
           const start = Math.max(0, firstMatchIdx - 60);
           const end = Math.min(content.length, firstMatchIdx + 200);
           let excerpt = content.slice(start, end).replace(/\n/g, ' ');
-          if (start > 0) excerpt = '...' + excerpt;
-          if (end < content.length) excerpt = excerpt + '...';
+          if (start > 0) { excerpt = `...${excerpt}`; }
+          if (end < content.length) { excerpt += '...'; }
 
-          matches.push({ file, score, excerpt });
+          matches.push({ excerpt, file, score });
         }
       }
 
@@ -141,7 +142,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       const topMatches = matches.slice(0, 5);
 
       let result = `### 🔍 Vault Search Results for "${args}"\n\n`;
-      result += `*System note: The following excerpts were retrieved from the user's vault. Use them to answer the prompt. To read a full file, use the \`readTextFile\` tool on its path.*\n\n`;
+      result += '*System note: The following excerpts were retrieved from the user\'s vault. Use them to answer the prompt. To read a full file, use the `readTextFile` tool on its path.*\n\n';
 
       for (const match of topMatches) {
         result += `**Path:** \`${match.file.path}\`\n> ${match.excerpt}\n\n`;
@@ -165,40 +166,10 @@ export function clearAllCommands(): void {
 }
 
 /**
- * Set the cached tool commands from ACP available_commands_update.
- */
-export function setCachedToolCommands(commands: SlashCommand[]): void {
-  cachedToolCommands = commands;
-}
-
-/**
- * Fetch available tools from Hermes via ACP.
- * Commands now arrive via ACP push (available_commands_update), so this is a no-op.
- * Kept for API compatibility.
- */
-export async function getToolSlashCommands(_plugin: Plugin): Promise<SlashCommand[]> {
-  return cachedToolCommands;
-}
-
-/**
  * Clear the cached tool commands (e.g. after settings change).
  */
 export function clearToolCache(): void {
   cachedToolCommands = [];
-}
-
-/**
- * Register a custom slash command at runtime.
- */
-export function registerSlashCommand(command: SlashCommand): void {
-  customCommands.push(command);
-}
-
-/**
- * Unregister a custom slash command by name.
- */
-export function unregisterSlashCommand(name: string): void {
-  customCommands = customCommands.filter((cmd) => cmd.name !== name);
 }
 
 /**
@@ -219,13 +190,22 @@ export function getSlashCommands(): SlashCommand[] {
 }
 
 /**
+ * Fetch available tools from Hermes via ACP.
+ * Commands now arrive via ACP push (available_commands_update), so this is a no-op.
+ * Kept for API compatibility.
+ */
+export async function getToolSlashCommands(_plugin: Plugin): Promise<SlashCommand[]> {
+  return cachedToolCommands;
+}
+
+/**
  * Parse a message to detect if it starts with a slash command.
  * Checks built-in, custom, and cached tool commands.
  * Returns the command and remaining args, or null if not a slash command.
  */
 export function parseSlashCommand(message: string): { args: string; command: SlashCommand } | null {
   const trimmed = message.trim();
-  if (!trimmed.startsWith('/')) return null;
+  if (!trimmed.startsWith('/')) { return null; }
 
   const parts = trimmed.slice(1).split(/\s+(.*)/);
   const name = parts[0] ?? '';
@@ -233,7 +213,28 @@ export function parseSlashCommand(message: string): { args: string; command: Sla
 
   const allCommands = [...BUILT_IN_COMMANDS, ...customCommands, ...cachedToolCommands];
   const command = allCommands.find((cmd) => cmd.name === name);
-  if (!command) return null;
+  if (!command) { return null; }
 
   return { args, command };
+}
+
+/**
+ * Register a custom slash command at runtime.
+ */
+export function registerSlashCommand(command: SlashCommand): void {
+  customCommands.push(command);
+}
+
+/**
+ * Set the cached tool commands from ACP available_commands_update.
+ */
+export function setCachedToolCommands(commands: SlashCommand[]): void {
+  cachedToolCommands = commands;
+}
+
+/**
+ * Unregister a custom slash command by name.
+ */
+export function unregisterSlashCommand(name: string): void {
+  customCommands = customCommands.filter((cmd) => cmd.name !== name);
 }

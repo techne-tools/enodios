@@ -1,48 +1,12 @@
-import { useCallback, useEffect, useRef } from 'react';
+import {
+ useCallback,
+useEffect,
+useRef
+} from 'react';
+
 import type { ChatMessage } from './HermesChatView.tsx';
+
 import { generateMessageId } from '../utils/uuid.ts';
-
-/**
- * Play a subtle typing sound effect.
- * Uses Web Audio API for a soft mechanical keyboard-like click.
- */
-function playTypingSound(): void {
-  try {
-    const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-
-    // Soft high-frequency click
-    oscillator.frequency.value = 800 + Math.random() * 400;
-    oscillator.type = 'sine';
-    gainNode.gain.setValueAtTime(0.03, audioCtx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-
-    oscillator.start(audioCtx.currentTime);
-    oscillator.stop(audioCtx.currentTime + 0.05);
-
-    // Clean up
-    setTimeout(() => {
-      oscillator.disconnect();
-      gainNode.disconnect();
-      audioCtx.close().catch(() => {});
-    }, 100);
-  } catch {
-    // Audio not available
-  }
-}
-
-/**
- * Trigger haptic feedback if supported.
- */
-function triggerHaptic(): void {
-  if (navigator.vibrate) {
-    navigator.vibrate(5);
-  }
-}
 
 /**
  * Custom hook to buffer rapid Server-Sent Events or ACP stream chunks
@@ -67,11 +31,11 @@ export function useStreamBuffer(
   enableTypingSound = false,
   enableHaptic = false
 ) {
-  const streamingMessageIdRef = useRef<string | null>(null);
-  const reasoningMessageIdRef = useRef<string | null>(null);
+  const streamingMessageIdRef = useRef<null | string>(null);
+  const reasoningMessageIdRef = useRef<null | string>(null);
   const pendingContentRef = useRef<string>('');
   const pendingReasoningRef = useRef<string>('');
-  const flushAnimationFrameRef = useRef<number | null>(null);
+  const flushAnimationFrameRef = useRef<null | number>(null);
   const lastSoundTimeRef = useRef<number>(0);
 
   const flushBuffer = useCallback(() => {
@@ -84,7 +48,7 @@ export function useStreamBuffer(
     }
 
     // Capture and clear pending content atomically inside the setMessages updater
-    // to prevent race conditions where a chunk arrives between capture and clear.
+    // To prevent race conditions where a chunk arrives between capture and clear.
     setMessages((prev) => {
       // Read the latest pending content (may have grown since the outer capture)
       const latestContent = pendingContentRef.current;
@@ -126,8 +90,8 @@ export function useStreamBuffer(
           const newId = generateMessageId();
           reasoningMessageIdRef.current = newId;
           updated = [...updated, {
-            id: newId,
             content: latestReasoning,
+            id: newId,
             role: 'reasoning',
             timestamp: Date.now()
           }];
@@ -182,10 +146,52 @@ export function useStreamBuffer(
   }, []);
 
   return {
-    streamingMessageIdRef,
-    reasoningMessageIdRef,
     appendContent,
     appendReasoning,
-    flushNow
+    flushNow,
+    reasoningMessageIdRef,
+    streamingMessageIdRef
   };
+}
+
+/**
+ * Play a subtle typing sound effect.
+ * Uses Web Audio API for a soft mechanical keyboard-like click.
+ */
+function playTypingSound(): void {
+  try {
+    const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    // Soft high-frequency click
+    oscillator.frequency.value = 800 + Math.random() * 400;
+    oscillator.type = 'sine';
+    gainNode.gain.setValueAtTime(0.03, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + 0.05);
+
+    // Clean up
+    setTimeout(() => {
+      oscillator.disconnect();
+      gainNode.disconnect();
+      audioCtx.close().catch(() => {});
+    }, 100);
+  } catch {
+    // Audio not available
+  }
+}
+
+/**
+ * Trigger haptic feedback if supported.
+ */
+function triggerHaptic(): void {
+  if (navigator.vibrate) {
+    navigator.vibrate(5);
+  }
 }

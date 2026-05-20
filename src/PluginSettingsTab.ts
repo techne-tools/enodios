@@ -1,4 +1,7 @@
-import { Notice, TFile } from 'obsidian';
+import {
+ Notice,
+TFile
+} from 'obsidian';
 import { PluginSettingsTabBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginSettingsTabBase';
 import { SettingEx } from 'obsidian-dev-utils/obsidian/SettingEx';
 
@@ -27,6 +30,49 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
     this.renderFeedbackSection();
     this.renderSecuritySection();
     this.renderDebugSection();
+  }
+
+  // ─── Agent Identity ───
+  private renderAgentIdentitySection(): void {
+    this.containerEl.createEl('h3', { text: '🤖 Agent Personality' });
+
+    new SettingEx(this.containerEl)
+      .setName('Agent Display Name')
+      .setDesc('What you call your assistant in the chat. Change it to whatever feels right — "Claude", "Friday", "Research Buddy", etc.')
+      .addText((text) => {
+        text.setPlaceholder('Hermes')
+          .setValue(this.plugin.settings.chatAgentName);
+        this.bind(text, 'chatAgentName');
+      });
+  }
+
+  // ─── Chat Display ───
+  private renderChatDisplaySection(): void {
+    this.containerEl.createEl('h3', { text: '💬 What You See in Chat' });
+
+    new SettingEx(this.containerEl)
+      .setName('Show Reasoning Steps')
+      .setDesc('When the agent "thinks out loud" before answering, show those thoughts in the chat. Useful for understanding how it reached a conclusion.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.showReasoning);
+        this.bind(toggle, 'showReasoning');
+      });
+
+    new SettingEx(this.containerEl)
+      .setName('Show Tool Use')
+      .setDesc('Show a notice when the agent reads a file, searches your vault, or runs a command. Helpful for understanding what it is doing behind the scenes.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.showToolUse);
+        this.bind(toggle, 'showToolUse');
+      });
+
+    new SettingEx(this.containerEl)
+      .setName('Show Token Count')
+      .setDesc('Display the real-time token usage counter in the chat footer. Shows input/output tokens and estimated cost per conversation.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.showTokenCount);
+        this.bind(toggle, 'showTokenCount');
+      });
   }
 
   // ─── Connection ───
@@ -128,49 +174,6 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
     }
   }
 
-  // ─── Agent Identity ───
-  private renderAgentIdentitySection(): void {
-    this.containerEl.createEl('h3', { text: '🤖 Agent Personality' });
-
-    new SettingEx(this.containerEl)
-      .setName('Agent Display Name')
-      .setDesc('What you call your assistant in the chat. Change it to whatever feels right — "Claude", "Friday", "Research Buddy", etc.')
-      .addText((text) => {
-        text.setPlaceholder('Hermes')
-          .setValue(this.plugin.settings.chatAgentName);
-        this.bind(text, 'chatAgentName');
-      });
-  }
-
-  // ─── Chat Display ───
-  private renderChatDisplaySection(): void {
-    this.containerEl.createEl('h3', { text: '💬 What You See in Chat' });
-
-    new SettingEx(this.containerEl)
-      .setName('Show Reasoning Steps')
-      .setDesc('When the agent "thinks out loud" before answering, show those thoughts in the chat. Useful for understanding how it reached a conclusion.')
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.showReasoning);
-        this.bind(toggle, 'showReasoning');
-      });
-
-    new SettingEx(this.containerEl)
-      .setName('Show Tool Use')
-      .setDesc('Show a notice when the agent reads a file, searches your vault, or runs a command. Helpful for understanding what it is doing behind the scenes.')
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.showToolUse);
-        this.bind(toggle, 'showToolUse');
-      });
-
-    new SettingEx(this.containerEl)
-      .setName('Show Token Count')
-      .setDesc('Display the real-time token usage counter in the chat footer. Shows input/output tokens and estimated cost per conversation.')
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.showTokenCount);
-        this.bind(toggle, 'showTokenCount');
-      });
-  }
-
   // ─── Context ───
   private renderContextSection(): void {
     this.containerEl.createEl('h3', { text: '📎 Automatic Context' });
@@ -206,40 +209,6 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         dropdown.addOption('by-project', 'By Project — tag-based (coming soon)');
         dropdown.setValue(this.plugin.settings.conversationOrganization);
         this.bind(dropdown, 'conversationOrganization');
-      });
-  }
-
-  // ─── Feedback ───
-  private renderFeedbackSection(): void {
-    this.containerEl.createEl('h3', { text: '🔊 Sound & Feel' });
-
-    new SettingEx(this.containerEl)
-      .setName('Typing Sounds')
-      .setDesc('Play a soft click sound while the agent is writing a response. Makes it feel more like a real conversation.')
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.enableTypingSound);
-        this.bind(toggle, 'enableTypingSound');
-      });
-
-    new SettingEx(this.containerEl)
-      .setName('Haptic Feedback')
-      .setDesc('Vibrate briefly when the agent starts responding. Only works on devices with vibration support (most phones and some laptops).')
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.enableHapticFeedback);
-        this.bind(toggle, 'enableHapticFeedback');
-      });
-  }
-
-  // ─── Security ───
-  private renderSecuritySection(): void {
-    this.containerEl.createEl('h3', { text: '🛡️ Security' });
-
-    new SettingEx(this.containerEl)
-      .setName('Allow Terminal Commands')
-      .setDesc('⚠️ DANGER: This lets the agent run shell commands on your computer — things like deleting files, installing software, or accessing the internet. These commands bypass the file-change approval system. ONLY enable this if you completely trust the agent and understand the risks.')
-      .addToggle((toggle) => {
-        toggle.setValue(this.plugin.settings.allowTerminal);
-        this.bind(toggle, 'allowTerminal');
       });
   }
 
@@ -282,6 +251,40 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
             void this.plugin.settingsManager.saveToFile();
             new Notice('Welcome message will appear next time you open chat.');
           });
+      });
+  }
+
+  // ─── Feedback ───
+  private renderFeedbackSection(): void {
+    this.containerEl.createEl('h3', { text: '🔊 Sound & Feel' });
+
+    new SettingEx(this.containerEl)
+      .setName('Typing Sounds')
+      .setDesc('Play a soft click sound while the agent is writing a response. Makes it feel more like a real conversation.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.enableTypingSound);
+        this.bind(toggle, 'enableTypingSound');
+      });
+
+    new SettingEx(this.containerEl)
+      .setName('Haptic Feedback')
+      .setDesc('Vibrate briefly when the agent starts responding. Only works on devices with vibration support (most phones and some laptops).')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.enableHapticFeedback);
+        this.bind(toggle, 'enableHapticFeedback');
+      });
+  }
+
+  // ─── Security ───
+  private renderSecuritySection(): void {
+    this.containerEl.createEl('h3', { text: '🛡️ Security' });
+
+    new SettingEx(this.containerEl)
+      .setName('Allow Terminal Commands')
+      .setDesc('⚠️ DANGER: This lets the agent run shell commands on your computer — things like deleting files, installing software, or accessing the internet. These commands bypass the file-change approval system. ONLY enable this if you completely trust the agent and understand the risks.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.allowTerminal);
+        this.bind(toggle, 'allowTerminal');
       });
   }
 

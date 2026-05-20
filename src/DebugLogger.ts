@@ -19,38 +19,18 @@ import type { Plugin } from './Plugin.ts';
 export class DebugLogger {
   private readonly plugin: Plugin;
 
-  constructor(plugin: Plugin) {
-    this.plugin = plugin;
-  }
-
   private get isEnabled(): boolean {
     return this.plugin.settings.enableDebugMode ?? false;
   }
 
-  private format(level: string, message: string, ...args: unknown[]): string {
-    const timestamp = new Date().toISOString();
-    const argsStr = args.length > 0 ? ' ' + args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ') : '';
-    return `[${timestamp}] [Hermes ${level}] ${message}${argsStr}`;
+  constructor(plugin: Plugin) {
+    this.plugin = plugin;
   }
 
   /** Detailed diagnostics — only shown when debug mode is on. */
   public debug(message: string, ...args: unknown[]): void {
     if (this.isEnabled) {
       console.debug(this.format('DEBUG', message, ...args));
-    }
-  }
-
-  /** General information — only shown when debug mode is on. */
-  public info(message: string, ...args: unknown[]): void {
-    if (this.isEnabled) {
-      console.info(this.format('INFO', message, ...args));
-    }
-  }
-
-  /** Warnings — only shown when debug mode is on. */
-  public warn(message: string, ...args: unknown[]): void {
-    if (this.isEnabled) {
-      console.warn(this.format('WARN', message, ...args));
     }
   }
 
@@ -71,5 +51,25 @@ export class DebugLogger {
     } else {
       fn();
     }
+  }
+
+  /** General information — only shown when debug mode is on. */
+  public info(message: string, ...args: unknown[]): void {
+    if (this.isEnabled) {
+      console.info(this.format('INFO', message, ...args));
+    }
+  }
+
+  /** Warnings — only shown when debug mode is on. */
+  public warn(message: string, ...args: unknown[]): void {
+    if (this.isEnabled) {
+      console.warn(this.format('WARN', message, ...args));
+    }
+  }
+
+  private format(level: string, message: string, ...args: unknown[]): string {
+    const timestamp = new Date().toISOString();
+    const argsStr = args.length > 0 ? ` ${args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}` : '';
+    return `[${timestamp}] [Hermes ${level}] ${message}${argsStr}`;
   }
 }

@@ -17,18 +17,6 @@ export class SecretsManager {
   }
 
   /**
-   * Save a secret value securely.
-   */
-  public async set(key: string, value: string): Promise<void> {
-    const fullKey = `${this.prefix}${key}`;
-    try {
-      this.plugin.app.saveLocalStorage(fullKey, value);
-    } catch {
-      new Notice(`Failed to save secret: ${key}`);
-    }
-  }
-
-  /**
    * Retrieve a secret value.
    * Returns empty string if not found.
    */
@@ -51,6 +39,18 @@ export class SecretsManager {
       this.plugin.app.saveLocalStorage(fullKey, '');
     } catch {
       // Ignore removal errors
+    }
+  }
+
+  /**
+   * Save a secret value securely.
+   */
+  public async set(key: string, value: string): Promise<void> {
+    const fullKey = `${this.prefix}${key}`;
+    try {
+      this.plugin.app.saveLocalStorage(fullKey, value);
+    } catch {
+      new Notice(`Failed to save secret: ${key}`);
     }
   }
 }

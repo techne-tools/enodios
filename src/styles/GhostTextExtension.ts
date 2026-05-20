@@ -1,5 +1,16 @@
-import { StateEffect, StateField } from '@codemirror/state';
-import { Decoration, type DecorationSet, EditorView, WidgetType, keymap } from '@codemirror/view';
+import type { DecorationSet } from '@codemirror/view';
+
+import {
+ StateEffect,
+StateField
+} from '@codemirror/state';
+import {
+ Decoration,
+
+EditorView,
+keymap,
+WidgetType
+} from '@codemirror/view';
 
 /**
  * Ghost Text Inline Suggestions for CodeMirror 6
@@ -38,6 +49,10 @@ class GhostTextWidget extends WidgetType {
     super();
   }
 
+  override eq(other: GhostTextWidget): boolean {
+    return this.text === other.text && this.currentIndex === other.currentIndex && this.total === other.total;
+  }
+
   toDOM(): HTMLElement {
     const span = document.createElement('span');
     span.className = 'hermes-ghost-text';
@@ -46,10 +61,6 @@ class GhostTextWidget extends WidgetType {
       span.setAttribute('data-alternatives', `${this.currentIndex + 1}/${this.total}`);
     }
     return span;
-  }
-
-  override eq(other: GhostTextWidget): boolean {
-    return this.text === other.text && this.currentIndex === other.currentIndex && this.total === other.total;
   }
 }
 
@@ -103,7 +114,7 @@ export const ghostTextKeymap = keymap.of([
     key: 'Tab',
     run: (view: EditorView) => {
       const field = view.state.field(ghostTextStateField, false);
-      if (!field) return false;
+      if (!field) { return false; }
 
       let accepted = false;
       field.between(0, view.state.doc.length, (from, _to, value) => {
@@ -117,7 +128,7 @@ export const ghostTextKeymap = keymap.of([
           accepted = true;
           return false;
         }
-        return;
+        return false;
       });
 
       return accepted; // Return true to prevent default Tab behavior if we handled it
@@ -127,7 +138,7 @@ export const ghostTextKeymap = keymap.of([
     key: 'Alt-ArrowRight',
     run: (view: EditorView) => {
       const field = view.state.field(ghostTextStateField, false);
-      if (!field) return false;
+      if (!field) { return false; }
 
       let cycled = false;
       field.between(0, view.state.doc.length, (_from, _to, value) => {
@@ -143,7 +154,7 @@ export const ghostTextKeymap = keymap.of([
           cycled = true;
           return false;
         }
-        return;
+        return false;
       });
 
       return cycled;

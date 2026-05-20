@@ -15,7 +15,29 @@ export interface BlockReference {
   /** Zero-based start line index */
   startLine: number;
   /** Classification of the block type */
-  type: 'heading' | 'code-block' | 'list' | 'paragraph' | 'block-id';
+  type: 'block-id' | 'code-block' | 'heading' | 'list' | 'paragraph';
+}
+
+/**
+ * Extract a specific block from a note by heading name.
+ * Returns the full note content if heading not found.
+ */
+export function extractBlockByHeading(content: string, heading: string): string {
+  const blocks = parseBlockReferences(content);
+  const target = heading.toLowerCase().trim();
+  const match = blocks.find((b) =>
+    b.type === 'heading'
+    && b.content.toLowerCase().includes(target)
+  );
+  return match?.content ?? content;
+}
+
+/**
+ * Extract a specific block from a note by line range.
+ */
+export function extractBlockByRange(content: string, startLine: number, endLine: number): string {
+  const lines = content.split('\n');
+  return lines.slice(startLine, endLine + 1).join('\n');
 }
 
 /**
@@ -39,8 +61,8 @@ export function parseBlockReferences(content: string): BlockReference[] {
     const line = lines[i]!;
 
     // Heading: match # through ###### and collect until next heading
-    // of same or higher level (lower number = higher level)
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    // Of same or higher level (lower number = higher level)
+    const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line);
     if (headingMatch) {
       const level = headingMatch[1]!.length;
       const startLine = i;
@@ -48,7 +70,7 @@ export function parseBlockReferences(content: string): BlockReference[] {
       // Collect until next heading of same or higher level
       while (i < lines.length) {
         const nextLine = lines[i]!;
-        const nextHeading = nextLine.match(/^(#{1,6})\s+/);
+        const nextHeading = /^(#{1,6})\s+/.exec(nextLine);
         if (nextHeading && nextHeading[1]!.length <= level) {
           break;
         }
@@ -65,14 +87,14 @@ export function parseBlockReferences(content: string): BlockReference[] {
 
     // Code block: match opening ``` and collect until closing ```
     // Handles optional language specifier (e.g., ```typescript)
-    const codeFenceMatch = line.match(/^```(\w*)/);
+    const codeFenceMatch = /^```(\w*)/.exec(line);
     if (codeFenceMatch) {
       const startLine = i;
       i++;
       while (i < lines.length && !lines[i]!.startsWith('```')) {
         i++;
       }
-      if (i < lines.length) i++; // include closing ```
+      if (i < lines.length) { i++; } // Include closing ```
       blocks.push({
         content: lines.slice(startLine, i).join('\n'),
         endLine: i - 1,
@@ -84,7 +106,7 @@ export function parseBlockReferences(content: string): BlockReference[] {
 
     // List item: match bullet (-, *, +) or numbered (1., 2., etc.)
     // Collect continuation lines (indented more or blank lines)
-    const listMatch = line.match(/^(\s*)([-*+]|\d+\.)\s+/);
+    const listMatch = /^(\s*)([-*+]|\d+\.)\s+/.exec(line);
     if (listMatch) {
       const startLine = i;
       const indent = listMatch[1]!.length;
@@ -96,8 +118,8 @@ export function parseBlockReferences(content: string): BlockReference[] {
           i++;
           continue;
         }
-        const nextIndent = nextLine.match(/^(\s*)/)?.[1]?.length ?? 0;
-        const nextList = nextLine.match(/^(\s*)([-*+]|\d+\.)\s+/);
+        const nextIndent = (/^(\s*)/.exec(nextLine))?.[1]?.length ?? 0;
+        const nextList = /^(\s*)([-*+]|\d+\.)\s+/.exec(nextLine);
         if (nextList) {
           if (nextIndent > indent) {
             i++;
@@ -123,7 +145,7 @@ export function parseBlockReferences(content: string): BlockReference[] {
 
     // Block ID reference: ^block-id on its own line
     // Attach to the previous non-empty line as the block content
-    const blockIdMatch = line.match(/\^([a-zA-Z0-9_-]+)$/);
+    const blockIdMatch = /\^([a-zA-Z0-9_-]+)$/.exec(line);
     if (blockIdMatch) {
       // Find the block this ID is attached to (previous non-empty line)
       let blockStart = i - 1;
@@ -147,7 +169,7 @@ export function parseBlockReferences(content: string): BlockReference[] {
     if (line.trim() !== '') {
       const startLine = i;
       i++;
-      while (i < lines.length && lines[i]!.trim() !== '' && !lines[i]!.match(/^(#{1,6}\s|```|\s*[-*+]|\s*\d+\.|\^)/)) {
+      while (i < lines.length && lines[i]!.trim() !== '' && !(/^(#{1,6}\s|```|\s*[-*+]|\s*\d+\.|\^)/.exec((lines[i]!)))) {
         i++;
       }
       if (startLine !== i - 1 || lines[startLine]!.trim() !== '') {
@@ -168,28 +190,6 @@ export function parseBlockReferences(content: string): BlockReference[] {
 }
 
 /**
- * Extract a specific block from a note by heading name.
- * Returns the full note content if heading not found.
- */
-export function extractBlockByHeading(content: string, heading: string): string {
-  const blocks = parseBlockReferences(content);
-  const target = heading.toLowerCase().trim();
-  const match = blocks.find((b) =>
-    b.type === 'heading' &&
-    b.content.toLowerCase().includes(target)
-  );
-  return match?.content ?? content;
-}
-
-/**
- * Extract a specific block from a note by line range.
- */
-export function extractBlockByRange(content: string, startLine: number, endLine: number): string {
-  const lines = content.split('\n');
-  return lines.slice(startLine, endLine + 1).join('\n');
-}
-
-/**
  * Resolve a wikilink with optional block reference to content.
  * Supports:
  * - [[Note]] → full note
@@ -199,16 +199,16 @@ export function extractBlockByRange(content: string, startLine: number, endLine:
 export async function resolveBlockReference(
   plugin: Plugin,
   link: string
-): Promise<{ content: string; path: string; type: 'full' | 'heading' | 'block-id' } | null> {
+): Promise<{ content: string; path: string; type: 'block-id' | 'full' | 'heading' } | null> {
   // Parse [[path#heading]] or [[path#^block-id]]
-  const match = link.match(/^\[\[(.+?)(?:#(.+?))?\]\]$/);
-  if (!match) return null;
+  const match = /^\[\[(.+?)(?:#(.+?))?\]\]$/.exec(link);
+  if (!match) { return null; }
 
   const notePath = match[1]!;
   const blockRef = match[2];
 
   const file = plugin.app.vault.getAbstractFileByPath(notePath);
-  if (!(file instanceof TFile)) return null;
+  if (!(file instanceof TFile)) { return null; }
 
   const content = await plugin.app.vault.read(file);
 

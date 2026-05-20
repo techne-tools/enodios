@@ -1,69 +1,70 @@
 export class PluginSettings {
+  public activePersonaId = 'default';
+
+  // Security
+  public allowTerminal = false;
+
   // Agent Identity
   public chatAgentName = 'Hermes';
 
+  // Conversation Persistence
+  public chatSaveFolder = 'hermes';
   // Connection
   public connectionMode: 'acp' | 'api' = 'acp';
 
   // Context Behavior
   public contextEntireNote = false;
+  public conversationOrganization: 'by-date' | 'by-project' | 'flat' = 'flat';
 
-  // Conversation Persistence
-  public chatSaveFolder = 'hermes';
-  public conversationOrganization: 'flat' | 'by-date' | 'by-project' = 'flat';
+  // Debug Mode — enables verbose console logging for troubleshooting
+  public enableDebugMode = false;
+  public enableHapticFeedback = false;
 
+  // Audio / Haptic Feedback
+  public enableTypingSound = false;
+  // Onboarding
+  public hasSeenOnboarding = false;
   // API Configuration
   public hermesAgentName = 'hermes-agent';
+
   public hermesApiUrl = 'http://localhost:8642';
 
   // ACP Configuration
   public hermesBinaryPath = '';
   public mcpServersList = '';
 
-  // Chat Display
-  public showReasoning = false;
-  public showToolUse = false;
-  public showTokenCount = true;
-
-  // Security
-  public allowTerminal = false;
-
-  // Audio / Haptic Feedback
-  public enableTypingSound = false;
-  public enableHapticFeedback = false;
-
   // Persona Templates
-  public personaTemplates: Array<{ id: string; name: string; systemPrompt: string; defaultTools: string[] }> = [
+  public personaTemplates: { defaultTools: string[]; id: string; name: string; systemPrompt: string }[] = [
     {
+      defaultTools: [],
       id: 'default',
       name: 'Default',
-      systemPrompt: '',
-      defaultTools: []
+      systemPrompt: ''
     },
     {
+      defaultTools: ['readTextFile', 'writeTextFile', 'createTerminal'],
       id: 'coding',
       name: 'Coding Assistant',
-      systemPrompt: 'You are a senior software engineer. Provide concise, correct code. Prefer TypeScript. Explain trade-offs briefly.',
-      defaultTools: ['readTextFile', 'writeTextFile', 'createTerminal']
+      systemPrompt: 'You are a senior software engineer. Provide concise, correct code. Prefer TypeScript. Explain trade-offs briefly.'
     },
     {
+      defaultTools: ['readTextFile', 'writeTextFile'],
       id: 'writing',
       name: 'Writing Coach',
-      systemPrompt: 'You are an experienced editor and writing coach. Help refine prose, fix grammar, and suggest structural improvements.',
-      defaultTools: ['readTextFile', 'writeTextFile']
+      systemPrompt: 'You are an experienced editor and writing coach. Help refine prose, fix grammar, and suggest structural improvements.'
     },
     {
+      defaultTools: ['readTextFile', 'writeTextFile'],
       id: 'research',
       name: 'Research Assistant',
-      systemPrompt: 'You are a research assistant. Synthesize information, cite sources when possible, and ask clarifying questions.',
-      defaultTools: ['readTextFile', 'writeTextFile']
+      systemPrompt: 'You are a research assistant. Synthesize information, cite sources when possible, and ask clarifying questions.'
     }
   ];
-  public activePersonaId = 'default';
 
-  // Onboarding
-  public hasSeenOnboarding = false;
+  // Chat Display
+  public showReasoning = false;
 
-  // Debug Mode — enables verbose console logging for troubleshooting
-  public enableDebugMode = false;
+  public showTokenCount = true;
+
+  public showToolUse = false;
 }
