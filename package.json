@@ -6,6 +6,9 @@
   "license": "MIT",
   "author": "prismatic7",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "build": "obsidian-dev-utils build",
     "build:clean": "obsidian-dev-utils build:clean",
