@@ -244,6 +244,31 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     streamingMessageIdRef
   } = useStreamBuffer(setMessages, settings.showReasoning, settings.enableTypingSound, settings.enableHapticFeedback);
 
+  const saveConversation = useCallback(async (currentMessages: ChatMessage[], currentTitle?: string, currentAllowedTools: null | string[] = allowedTools): Promise<void> => {
+    if (currentMessages.length === 0) { return; }
+
+    setIsSaving(true);
+    try {
+      const title = currentTitle || conversationTitle || currentMessages[0]?.content.slice(0, 50) || 'Untitled';
+      if (!conversationFilePath) {
+        const filePath = await plugin.vaultManager.saveConversation(currentMessages, title, currentAllowedTools);
+        if (filePath) {
+          setConversationFilePath(filePath);
+          setConversationTitle(title);
+        }
+      } else {
+        const success = await plugin.vaultManager.updateConversation(conversationFilePath, currentMessages, title, currentAllowedTools);
+        if (!success) {
+          console.warn('[Hermes] updateConversation returned false for', conversationFilePath);
+        }
+      }
+    } catch (err) {
+      console.error('[Hermes] saveConversation error:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [conversationFilePath, conversationTitle, plugin, allowedTools]);
+
   const clearTypingTimeout = useCallback((): void => {
     if (typingTimeoutRef.current !== null) {
       window.clearTimeout(typingTimeoutRef.current);
@@ -251,21 +276,51 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     }
   }, []);
 
+  // Debounced save to prevent duplicate writes when multiple events fire rapidly
+  const debouncedSaveRef = useRef<{ timeoutId: number | null; lastSaveTime: number }>({
+    timeoutId: null,
+    lastSaveTime: 0
+  });
+
+  const scheduleSave = useCallback((currentMessages: ChatMessage[], currentTitle?: string, currentAllowedTools?: null | string[]): void => {
+    const now = Date.now();
+    const MIN_SAVE_INTERVAL = 500; // Minimum 500ms between saves
+
+    // Clear any pending save
+    if (debouncedSaveRef.current.timeoutId !== null) {
+      clearTimeout(debouncedSaveRef.current.timeoutId);
+    }
+
+    // Schedule a new save with debounce
+    debouncedSaveRef.current.timeoutId = window.setTimeout(() => {
+      // Skip if too soon after last save
+      if (now - debouncedSaveRef.current.lastSaveTime < MIN_SAVE_INTERVAL) {
+        // Schedule for later
+        debouncedSaveRef.current.timeoutId = window.setTimeout(() => {
+          debouncedSaveRef.current.lastSaveTime = Date.now();
+          void saveConversation(currentMessages, currentTitle, currentAllowedTools);
+        }, MIN_SAVE_INTERVAL);
+      } else {
+        debouncedSaveRef.current.lastSaveTime = Date.now();
+        void saveConversation(currentMessages, currentTitle, currentAllowedTools);
+      }
+      debouncedSaveRef.current.timeoutId = null;
+    }, 100); // 100ms debounce window
+  }, [saveConversation]);
+
   const resetTypingTimeout = useCallback((): void => {
     clearTypingTimeout();
     typingTimeoutRef.current = window.setTimeout(() => {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
 
-      // We wrap saveConversation in a setTimeout to push the I/O side-effect
-      // Outside of the synchronous React render cycle, preventing duplicate saves
-      // During React Strict Mode or concurrent rendering.
+      // Schedule a debounced save after typing stops
       setMessages((currentMessages) => {
-        setTimeout(() => void saveConversation(currentMessages), 0);
+        scheduleSave(currentMessages);
         return currentMessages;
       });
     }, 3000);
-  }, [clearTypingTimeout]);
+  }, [clearTypingTimeout, scheduleSave]);
 
   // Subscribe to ACP session updates for streaming
   useEffect(() => {
@@ -280,9 +335,9 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         setIsTyping(false);
         streamingMessageIdRef.current = null;
         reasoningMessageIdRef.current = null;
-        // Save conversation after response completes
+        // Save conversation after response completes (debounced)
         setMessages((currentMessages) => {
-          setTimeout(() => void saveConversation(currentMessages), 0);
+          scheduleSave(currentMessages);
           return currentMessages;
         });
       } else if (update.type === 'reasoning' && update.reasoning) {
@@ -429,6 +484,10 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
 
     return () => {
       clearTypingTimeout();
+      // Clear any pending debounced save
+      if (debouncedSaveRef.current.timeoutId !== null) {
+        clearTimeout(debouncedSaveRef.current.timeoutId);
+      }
       unsubscribeChanges();
       unsubscribePermissions?.();
       unsubUpdate();
@@ -436,7 +495,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       unsubCommands();
       document.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [view, plugin, clearTypingTimeout, resetTypingTimeout, appendContent, appendReasoning, flushNow, settings.showReasoning, settings.showToolUse]);
+  }, [view, plugin, clearTypingTimeout, scheduleSave, appendContent, appendReasoning, flushNow, settings.showReasoning, settings.showToolUse]);
 
   const loadConversationList = useCallback(async (): Promise<void> => {
     try {
@@ -485,31 +544,6 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     setAllowedTools(null);
     view.clearConversation();
   }, [view, conversationFilePath, plugin]);
-
-  const saveConversation = useCallback(async (currentMessages: ChatMessage[], currentTitle?: string, currentAllowedTools: null | string[] = allowedTools): Promise<void> => {
-    if (currentMessages.length === 0) { return; }
-
-    setIsSaving(true);
-    try {
-      const title = currentTitle || conversationTitle || currentMessages[0]?.content.slice(0, 50) || 'Untitled';
-      if (!conversationFilePath) {
-        const filePath = await plugin.vaultManager.saveConversation(currentMessages, title, currentAllowedTools);
-        if (filePath) {
-          setConversationFilePath(filePath);
-          setConversationTitle(title);
-        }
-      } else {
-        const success = await plugin.vaultManager.updateConversation(conversationFilePath, currentMessages, title, currentAllowedTools);
-        if (!success) {
-          console.warn('[Hermes] updateConversation returned false for', conversationFilePath);
-        }
-      }
-    } catch (err) {
-      console.error('[Hermes] saveConversation error:', err);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [conversationFilePath, conversationTitle, plugin, allowedTools]);
 
   const handleEditSubmit = useCallback(async (messageId: string, newText: string): Promise<void> => {
     const current = stateRef.current;
@@ -1256,7 +1290,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           setAllowedTools(tools);
           if (conversationFilePath) {
              setMessages((current) => {
-                setTimeout(() => void saveConversation(current, conversationTitle, tools), 0);
+                scheduleSave(current, conversationTitle, tools);
                 return current;
              });
           }
@@ -1401,35 +1435,37 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
             </button>
           </div>
         )}
-        {fileChanges.length > 0 && (
-          <PendingChangesPanel
-            changes={fileChanges}
-            onApprove={(id, contentOverride) => void plugin.fileChangeManager.approveChange(id, contentOverride)}
-            onApproveAll={() => void plugin.fileChangeManager.approveAll()}
-            onClearResolved={() => { plugin.fileChangeManager.clearResolved(); }}
-            onReject={(id) => { plugin.fileChangeManager.rejectChange(id); }}
-            onRejectAll={() => { plugin.fileChangeManager.rejectAll(); }}
-          />
-        )}
-        {pendingPermissions.length > 0 && (
-          <PendingPermissionsPanel
-            onApprove={(permissionId, optionId) => {
-              plugin.acpClient?.resolvePermission(permissionId, optionId);
-            }}
-            onApproveAll={() => {
-              plugin.acpClient?.resolveAllPermissions();
-            }}
-            onReject={(permissionId) => {
-              plugin.acpClient?.cancelPermission(permissionId);
-            }}
-            onRejectAll={() => {
-              plugin.acpClient?.cancelAllPermissions();
-            }}
-            permissions={pendingPermissions}
-          />
-        )}
         <TokenUsageFooter visible={settings.showTokenCount} />
       </div>
+
+      {/* Pending changes and permissions panels outside scrollable area */}
+      {fileChanges.length > 0 && (
+        <PendingChangesPanel
+          changes={fileChanges}
+          onApprove={(id, contentOverride) => void plugin.fileChangeManager.approveChange(id, contentOverride)}
+          onApproveAll={() => void plugin.fileChangeManager.approveAll()}
+          onClearResolved={() => { plugin.fileChangeManager.clearResolved(); }}
+          onReject={(id) => { plugin.fileChangeManager.rejectChange(id); }}
+          onRejectAll={() => { plugin.fileChangeManager.rejectAll(); }}
+        />
+      )}
+      {pendingPermissions.length > 0 && (
+        <PendingPermissionsPanel
+          onApprove={(permissionId, optionId) => {
+            plugin.acpClient?.resolvePermission(permissionId, optionId);
+          }}
+          onApproveAll={() => {
+            plugin.acpClient?.resolveAllPermissions();
+          }}
+          onReject={(permissionId) => {
+            plugin.acpClient?.cancelPermission(permissionId);
+          }}
+          onRejectAll={() => {
+            plugin.acpClient?.cancelAllPermissions();
+          }}
+          permissions={pendingPermissions}
+        />
+      )}
 
       <ChatInput
         autocompleteQuery={autocompleteQuery}

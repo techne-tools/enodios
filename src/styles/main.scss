@@ -1316,9 +1316,12 @@
   gap: 8px;
   padding: 8px 12px;
   border-top: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
   background-color: var(--background-secondary);
   max-height: 250px;
   overflow-y: auto;
+  flex-shrink: 0;
+  z-index: 10;
 
   &-header {
     display: flex;
@@ -1516,9 +1519,12 @@
   gap: 8px;
   padding: 8px 12px;
   border-top: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
   background-color: var(--background-secondary);
   max-height: 250px;
   overflow-y: auto;
+  flex-shrink: 0;
+  z-index: 10;
 
   &-header {
     display: flex;
