@@ -1489,6 +1489,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           setTimeout(() => textareaRef.current?.focus(), 0);
         }}
         onSend={handleSend}
+        onStop={() => { view.cancelPrompt(); }}
         rateLimitSeconds={rateLimitSeconds}
         slashSelectionIndex={slashSelectionIndex}
         slashSuggestions={slashSuggestions}
@@ -1799,6 +1800,7 @@ interface ChatInputProps {
   onSelectAutocomplete: (text: string) => void;
   onSelectSlash: (name: string) => void;
   onSend: () => void;
+  onStop: () => void;
   rateLimitSeconds: number;
   slashSelectionIndex: number;
   slashSuggestions: { description: string; name: string }[];
@@ -1821,6 +1823,7 @@ const ChatInput = memo(({
   onSelectAutocomplete,
   onSelectSlash,
   onSend,
+  onStop,
   rateLimitSeconds,
   slashSelectionIndex,
   slashSuggestions,
@@ -1871,27 +1874,40 @@ const ChatInput = memo(({
       )}
 
       <div className="hermes-input-container">
-        <div className="hermes-context-list">
-          {contextItems.map((item) => (
-            <div className="hermes-context-chip" key={item.id}>
-              <button
-                className="hermes-context-remove"
-                onClick={() => { onRemoveContextItem(item.id); }}
-                title="Remove from context"
-                type="button"
-              >
-                <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
-                  <line x1="18" x2="6" y1="6" y2="18" />
-                  <line x1="6" x2="18" y1="6" y2="18" />
-                </svg>
-              </button>
-            <span className="hermes-context-text">
-              {item.type === 'image' ? '🖼️ ' : ''}
-              {item.type === 'pdf' ? '📄 ' : ''}
-              {item.text}
-            </span>
-            </div>
-          ))}
+        <div className="hermes-input-top">
+          <div className="hermes-context-list">
+            {contextItems.map((item) => (
+              <div className="hermes-context-chip" key={item.id}>
+                <button
+                  className="hermes-context-remove"
+                  onClick={() => { onRemoveContextItem(item.id); }}
+                  title="Remove from context"
+                  type="button"
+                >
+                  <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="18" x2="6" y1="6" y2="18" />
+                    <line x1="6" x2="18" y1="6" y2="18" />
+                  </svg>
+                </button>
+              <span className="hermes-context-text">
+                {item.type === 'image' ? '🖼️ ' : ''}
+                {item.type === 'pdf' ? '📄 ' : ''}
+                {item.text}
+              </span>
+              </div>
+            ))}
+          </div>
+          <button
+            className="hermes-stop-btn"
+            disabled={!isTyping}
+            onClick={() => { onStop(); }}
+            title="Stop generating"
+            type="button"
+          >
+            <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+              <rect height="12" width="12" x="6" y="6" />
+            </svg>
+          </button>
         </div>
         <textarea
           className="hermes-input"

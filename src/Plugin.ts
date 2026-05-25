@@ -20,6 +20,9 @@ import {
  ghostTextExtension,
 setGhostTextEffect
 } from './styles/GhostTextExtension.ts';
+import {
+ inlineDiffExtension
+} from './styles/InlineDiffExtension.ts';
 import { VaultManager } from './VaultManager.ts';
 import {
   HERMES_CHAT_VIEW_TYPE,
@@ -34,6 +37,7 @@ export class Plugin extends PluginBase<PluginTypes> {
   public fileChangeManager!: FileChangeManager;
   public secrets!: SecretsManager;
   public vaultManager!: VaultManager;
+  public activeEditorView?: any;
   private ribbonBadgeEl?: HTMLElement;
 
   /**
@@ -83,8 +87,9 @@ export class Plugin extends PluginBase<PluginTypes> {
 
     this.registerView(HERMES_CHAT_VIEW_TYPE, (leaf) => new HermesChatView(leaf, this));
 
-    // Register CodeMirror 6 extension for inline ghost text
+    // Register CodeMirror 6 extensions for inline ghost text and diff
     this.registerEditorExtension(ghostTextExtension);
+    this.registerEditorExtension(inlineDiffExtension);
 
     // Add ribbon icon for Hermes chat
     const ribbonIconEl = this.addRibbonIcon('message-square', 'Open Hermes Chat', () => {
@@ -161,6 +166,9 @@ export class Plugin extends PluginBase<PluginTypes> {
         // @ts-expect-error - Accessing internal CodeMirror 6 view from Obsidian's Editor wrapper
         const cmView = editor.cm;
         if (!cmView) { return; }
+
+        // Store the active editor view for use by FileChangeManager
+        this.activeEditorView = cmView;
 
         const pos = editor.posToOffset(editor.getCursor());
         cmView.dispatch({

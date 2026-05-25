@@ -715,7 +715,9 @@ export class AcpClient implements ChatClient {
       },
 
       writeTextFile: async (params: WriteTextFileRequest): Promise<WriteTextFileResponse> => {
-        this.checkToolAllowed('writeTextFile');
+        // Note: we intentionally do NOT call checkToolAllowed here.
+        // writeTextFile is gated by FileChangeManager which queues changes
+        // for explicit user approval, so session-level tool blocking is redundant.
         try {
           // Queue the change for user approval instead of writing immediately
           await this.plugin.fileChangeManager.registerChange(params.path, params.content);

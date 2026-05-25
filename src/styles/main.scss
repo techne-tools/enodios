@@ -746,6 +746,13 @@
   /* Cache bust: 2026-05-14-1603 */
 }
 
+.hermes-input-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
 .hermes-input-bottom {
   display: flex;
   justify-content: space-between;
@@ -808,7 +815,7 @@
   background-color: var(--interactive-accent);
   color: var(--text-on-accent);
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 10.8px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -860,6 +867,7 @@
   min-height: 24px;
   max-height: none;
   outline: none;
+  box-shadow: none;
   line-height: 1.4;
   overflow-y: hidden;
 
@@ -992,6 +1000,36 @@
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   padding-right: 4px;
+}
+
+.hermes-stop-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  background-color: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
 }
 
 /* Context Modal Styles */
@@ -1609,4 +1647,38 @@
 .hermes-ghost-text {
   color: var(--text-faint);
   font-style: italic;
+}
+
+/* Inline Diff Extension Styles */
+.hermes-diff-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  margin: 2px 0;
+  border-radius: 2px;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: default;
+}
+
+.hermes-diff-added {
+  background-color: rgba(0, 128, 0, 0.15);
+  border-left: 2px solid var(--interactive-success);
+}
+
+.hermes-diff-removed {
+  background-color: rgba(255, 0, 0, 0.15);
+  border-left: 2px solid var(--interactive-error);
+}
+
+.hermes-diff-marker {
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.hermes-diff-text {
+  word-break: break-all;
+  white-space: pre-wrap;
 }

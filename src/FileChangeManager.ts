@@ -234,7 +234,30 @@ export class FileChangeManager {
       this.changes = this.changes.slice(-this.MAX_HISTORY);
     }
     this.notify();
+    
+    // Trigger inline diff in the active editor (if available)
+    if (this.plugin.activeEditorView) {
+      this.triggerInlineDiff(change, this.plugin.activeEditorView);
+    }
+    
     return change;
+  }
+
+  /**
+   * Trigger inline diff rendering in the provided editor view.
+   */
+  private triggerInlineDiff(change: PendingFileChange, view: any): void {
+    const { setInlineDiffEffect } = require('./styles/InlineDiffExtension.ts');
+    
+    // Find the position to insert the diff (at the start of the file content)
+    const startPos = 0;
+    
+    view.dispatch({
+      effects: setInlineDiffEffect.of({
+        lines: change.diffSnapshot ?? [],
+        startPos
+      })
+    });
   }
 
   /**
