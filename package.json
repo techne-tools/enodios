@@ -35,24 +35,26 @@
     "@codemirror/view": "6.38.6",
     "@tsconfig/strictest": "latest",
     "@types/luxon": "3.4.2",
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.19.19",
+    "@types/prismjs": "^1.26.6",
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5",
-    "@vitest/coverage-v8": "^4.1.6",
+    "@vitest/coverage-v8": "^4.1.7",
     "date-fns": "3.6.0",
+    "eslint": "^10.4.0",
     "jiti": "2.4.2",
     "jsdom": "^29.1.1",
     "luxon": "3.5.0",
     "obsidian": "1.12.3",
-    "obsidian-dev-skills": "^1.1.4",
-    "obsidian-dev-utils": "^30.2.0",
-    "obsidian-typings": "^3.13.2",
+    "obsidian-dev-skills": "^1.2.4",
+    "obsidian-dev-utils": "^30.7.0",
+    "obsidian-typings": "^3.16.6",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "svelte": "^5.55.5",
-    "type-fest": "^4.0.0",
+    "svelte": "^5.55.9",
+    "type-fest": "^4.41.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.7"
   },
   "overrides": {
     "@antfu/utils": "9.2.0",
@@ -63,6 +65,6 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.21.1",
     "markdownlint-cli2": "^0.22.1",
-    "prismjs": "^1.29.0"
+    "prismjs": "^1.30.0"
   }
 }

@@ -1,6 +1,15 @@
 packages:
   - '.'
 
+overrides:
+  ajv: '>=8.18.0'
+  devalue: '>=5.8.1'
+  lodash-es: '>=4.17.24'
+  mermaid: '>=11.14.1'
+  qs: '>=6.15.2'
+  svelte: '>=5.55.7'
+  uuid: '>=11.1.1'
+
 allowBuilds:
   '@parcel/watcher': true
   dprint: true
