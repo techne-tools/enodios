@@ -44,7 +44,7 @@ export class HermesApiClient implements ChatClient {
   private readonly plugin: Plugin;
   // Auto-reconnection state
   private reconnectAttempts = 0;
-  private reconnectTimeout: null | number = null;
+  private reconnectTimeout: null | ReturnType<typeof setTimeout> = null;
   private readonly secrets: SecretsManager;
 
   constructor(plugin: Plugin, secrets: SecretsManager) {
@@ -234,6 +234,12 @@ export class HermesApiClient implements ChatClient {
 
     if (options?.allowedTools) {
       messages.push({ content: `System Instruction: You are restricted to ONLY using the following tools in this session: ${options.allowedTools.join(', ')}. Do not attempt to use any other tools.`, role: 'system' });
+    } else if (options?.allowedTools !== null && this.plugin.settings.personaTemplates.find((p) => p.id === this.plugin.settings.activePersonaId)?.defaultTools) {
+      // Apply persona default tool restrictions when no explicit session override is set
+      const defaultTools = this.plugin.settings.personaTemplates.find((p) => p.id === this.plugin.settings.activePersonaId)?.defaultTools;
+      if (defaultTools && defaultTools.length > 0) {
+        messages.push({ content: `System Instruction: You are restricted to ONLY using the following tools in this session: ${defaultTools.join(', ')}. Do not attempt to use any other tools.`, role: 'system' });
+      }
     }
 
     const userContentParts: Record<string, unknown>[] = [];
@@ -412,7 +418,7 @@ export class HermesApiClient implements ChatClient {
    */
   private cancelReconnect(): void {
     if (this.reconnectTimeout !== null) {
-      window.clearTimeout(this.reconnectTimeout);
+      clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
     this.isReconnecting = false;
@@ -513,7 +519,7 @@ export class HermesApiClient implements ChatClient {
     });
     this.plugin.auditLog.recordConnection('reconnect', 'api', 'pending', `attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS}`);
 
-    this.reconnectTimeout = window.setTimeout(() => {
+    this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
       this.connect()
         .then(() => {

@@ -1,4 +1,4 @@
-import { TFile } from 'obsidian';
+import { Notice, TFile } from 'obsidian';
 
 import type { Plugin } from './Plugin.ts';
 
@@ -27,7 +27,7 @@ export interface AuditEntry {
  */
 export class AuditLog {
   private readonly FLUSH_DELAY_MS = 500;
-  private flushTimeout: null | number = null;
+  private flushTimeout: null | ReturnType<typeof setTimeout> = null;
   private readonly maxEntries = 1000;
   private readonly plugin: Plugin;
   private writeQueue: AuditEntry[] = [];
@@ -43,27 +43,50 @@ export class AuditLog {
 
   /**
    * Flush queued entries to the log file.
+   * Retries up to 3 times with exponential backoff. If all retries fail,
+   * entries are kept in the queue and a user-visible notice is shown.
    */
   public async flush(): Promise<void> {
     if (this.writeQueue.length === 0) { return; }
 
     const entries = [...this.writeQueue];
-    this.writeQueue = [];
+    let attempts = 0;
+    const maxAttempts = 3;
 
-    try {
-      await this.ensureLogFile();
-      const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
-      if (!(file instanceof TFile)) { return; }
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        await this.ensureLogFile();
+        const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
+        if (!(file instanceof TFile)) {
+          throw new Error('Audit log file not found after creation');
+        }
 
-      const existing = await this.plugin.app.vault.read(file);
-      const newLines = entries.map((e) => this.formatEntry(e)).join('\n');
-      const updated = `${existing}\n${newLines}`;
+        const existing = await this.plugin.app.vault.read(file);
+        const newLines = entries.map((e) => this.formatEntry(e)).join('\n');
+        const updated = `${existing}\n${newLines}`;
 
-      // Trim to max entries if needed
-      const trimmed = this.trimToMaxEntries(updated);
-      await this.plugin.app.vault.modify(file, trimmed);
-    } catch (error) {
-      this.plugin.debug.error('AuditLog flush failed', error);
+        // Trim to max entries if needed
+        const trimmed = this.trimToMaxEntries(updated);
+        await this.plugin.app.vault.modify(file, trimmed);
+
+        // Success: clear the queue and exit
+        this.writeQueue = [];
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.plugin.debug.error(`AuditLog flush failed (attempt ${attempts}/${maxAttempts})`, error);
+
+        if (attempts >= maxAttempts) {
+          // All retries exhausted: keep entries in queue for next flush
+          // and alert the user that audit logging is broken
+          new Notice(`Hermes audit log failed after ${maxAttempts} attempts. ${entries.length} entries queued for retry.`);
+          console.error('[Hermes] AuditLog flush failed permanently:', message);
+        } else {
+          // Exponential backoff: 500ms, 1000ms, 2000ms
+          await new Promise((resolve) => setTimeout(resolve, 500 * Math.pow(2, attempts - 1)));
+        }
+      }
     }
   }
 
@@ -96,7 +119,7 @@ export class AuditLog {
   /**
    * Convenience method for connection events.
    */
-  public recordConnection(event: 'connect' | 'disconnect' | 'reconnect', mode: string, status: AuditEntry['status'], error?: string): void {
+  public recordConnection(event: 'connect' | 'disconnect' | 'mcp_servers' | 'reconnect', mode: string, status: AuditEntry['status'], error?: string): void {
     this.record({
       action: 'connection',
       details: `${event.toUpperCase()} (${mode})${error ? `: ${error}` : ''}`,
@@ -214,9 +237,9 @@ export class AuditLog {
 
   private scheduleFlush(): void {
     if (this.flushTimeout !== null) {
-      window.clearTimeout(this.flushTimeout);
+      clearTimeout(this.flushTimeout);
     }
-    this.flushTimeout = window.setTimeout(() => {
+    this.flushTimeout = setTimeout(() => {
       this.flushTimeout = null;
       void this.flush();
     }, this.FLUSH_DELAY_MS);

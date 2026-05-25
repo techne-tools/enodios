@@ -474,10 +474,21 @@ ${messageHtml}
 
   /**
    * Validate that a path is safe (within vault, no traversal).
+   * Rejects absolute paths, parent-directory traversal, null bytes, control
+   * characters, and Windows drive-letter paths.
    */
   private isPathSafe(filePath: string): boolean {
     const normalized = normalizePath(filePath);
-    return !normalized.startsWith('..') && !normalized.startsWith('/') && !normalized.includes('../');
+    if (normalized.startsWith('..') || normalized.startsWith('/') || normalized.includes('../')) {
+      return false;
+    }
+    if (/[\x00-\x1f]/.test(normalized)) {
+      return false;
+    }
+    if (/^[a-zA-Z]:[\\\/]/.test(normalized)) {
+      return false;
+    }
+    return true;
   }
 
   /**

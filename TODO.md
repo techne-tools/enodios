@@ -2,7 +2,7 @@
 
 **Created:** 14 May 2026
 **Phase:** Phase 4 - Polish & Release Prep
-**Current Version:** 0.2.0
+**Current Version:** 0.3.0
 
 ## Core Features (High Priority)
 
@@ -78,6 +78,27 @@
   - Added **Export as Markdown** to the export dropdown (`VaultManager.exportToMarkdown()`)
   - Removed grey border from inner textarea for cleaner visual appearance
   - Added `margin-bottom: 20px` to input container to raise it from the bottom edge
+
+- [x] **Security Hardening & Bug Fixes (25 May 2026)** — since `f4a27fb`:
+  - Fixed `window.*` timer references (`setTimeout`/`clearTimeout`) across 6 files for jsdom test compatibility
+  - Fixed `FileChangeManager` test mocks — added `workspace` mock to prevent `window is not defined` errors
+  - Added `prismjs` dependency for code block syntax highlighting
+  - Fixed TypeScript build errors (`.replace()` callback signature, missing dependency)
+  - **MCP Security Mitigations**:
+    - Added `mcpServersEnabled` toggle (default `false`) to `PluginSettings.ts`
+    - Added scary MCP settings UI with explicit warnings in `PluginSettingsTab.ts`
+    - Added conditional MCP server path passing in `AcpClient.ts` (only passes servers when enabled)
+    - Added audit logging of MCP activation/blocked states in `AuditLog.ts`
+  - **Critical Security Fixes** (adversarial review):
+    - Fixed `writeTextFile` bypassing `checkToolAllowed()` — session tool restrictions now enforced BEFORE queuing
+    - Fixed `resolveAllPermissions()` blind trust escalation — now only auto-approves single-option permissions
+    - Fixed `sanitizeShellCommand()` path-based command injection — removed all shells/interpreters from allowlist
+    - Strengthened `isPathSafe()` across all modules — rejects absolute paths, null bytes, Windows drive letters
+    - Fixed `AuditLog` silent entry loss — added retry with exponential backoff and user-visible alerts
+    - Fixed stale diff snapshots after approval — re-computes diffs against newly-written content
+    - Added tool restrictions to `HermesApiClient` — API mode now injects same system instructions as ACP
+    - Enhanced permission UI transparency — displays tool name and permission type in approval panel
+    - Fixed tool name extraction from ACP notifications — checks `name`, `title`, `toolCall.name`, `tool.name`, `toolName`
 
 ## Implementation Notes
 

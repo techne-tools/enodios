@@ -81,6 +81,20 @@
   50% { opacity: 1; }
 }
 
+@keyframes hermes-spin {
+  100% { transform: rotate(360deg); }
+}
+
+.hermes-tool-running {
+  display: inline-block;
+  animation: hermes-spin 2s linear infinite;
+  transform-origin: center;
+}
+
+.hermes-status-pulsing {
+  animation: hermes-pulse 1.5s ease-in-out infinite;
+}
+
 .hermes-conversation-list {
   position: absolute;
   top: 40px;
@@ -672,6 +686,19 @@
     border-radius: 4px;
     font-family: var(--font-monospace);
     font-size: 12px;
+
+    &.hermes-clickable-path {
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-decoration-color: var(--text-muted);
+      transition: all 0.2s ease;
+
+      &:hover {
+        color: var(--interactive-accent);
+        text-decoration-color: var(--interactive-accent);
+      }
+    }
   }
 
   // Blockquotes
@@ -1460,6 +1487,19 @@
   font-family: var(--font-monospace);
   font-size: 11px;
   line-height: 1.5;
+
+  /* Prismjs Token Styles for Diff Viewer */
+  .token.keyword { color: var(--syntax-color-keyword, #c678dd); }
+  .token.number { color: var(--syntax-color-number, #d19a66); }
+  .token.string { color: var(--syntax-color-string, #98c379); }
+  .token.comment { color: var(--syntax-color-comment, #5c6370); font-style: italic; }
+  .token.variable { color: var(--syntax-color-variable, #e06c75); }
+  .token.operator { color: var(--syntax-color-operator, #56b6c2); }
+  .token.builtin { color: var(--syntax-color-builtin, #e5c07b); }
+  .token.punctuation { color: var(--text-muted, #abb2bf); }
+  .token.property, .token.selector, .token.tag { color: var(--syntax-color-tag, #e06c75); }
+  .token.function { color: var(--syntax-color-function, #61afef); }
+  .token.class-name { color: var(--syntax-color-class-name, #e5c07b); }
 }
 
 .hermes-diff-line {

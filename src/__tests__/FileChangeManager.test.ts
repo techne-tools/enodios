@@ -4,6 +4,10 @@ import type { Plugin } from '../Plugin.ts';
 
 // Mock obsidian
 vi.mock('obsidian', () => ({
+  MarkdownView: class MarkdownView {
+    file = null;
+    editor = { cm: null };
+  },
   Notice: class Notice {
     constructor(public message: string) {}
   },
@@ -26,6 +30,9 @@ function createMockPlugin(): Plugin {
         create: vi.fn().mockResolvedValue(undefined),
         modify: vi.fn().mockResolvedValue(undefined),
         trash: vi.fn().mockResolvedValue(undefined),
+      },
+      workspace: {
+        getActiveViewOfType: vi.fn().mockReturnValue(null),
       },
     },
     auditLog: {

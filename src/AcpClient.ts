@@ -49,8 +49,14 @@ import { generateMessageId } from './utils/uuid.ts';
 const MAX_TERMINAL_OUTPUT = 1024 * 1024; // 1MB cap on terminal output to prevent memory exhaustion
 
 const ALLOWED_SHELL_COMMANDS = new Set([
-  'bash', 'cat', 'cmd.exe', 'cp', 'curl', 'echo', 'find', 'fish', 'git', 'grep', 'ls', 'mkdir', 'mv', 'node', 'npm', 'pnpm', 'powershell.exe', 'pwsh', 'python', 'python3', 'rm', 'sh', 'touch', 'wget', 'yarn', 'zsh'
+  'cat', 'cp', 'curl', 'echo', 'find', 'git', 'grep', 'ls', 'mkdir', 'mv', 'rm', 'touch', 'wget'
 ]);
+
+// Argument patterns that enable arbitrary code execution even in "safe" commands
+const DANGEROUS_ARG_PATTERNS = [
+  '-c', '--command', '-e', '--eval', '-exec',
+  '|', ';', '&&', '||', '$(', '`', '${', '>>', '<('
+];
 
 export interface AcpMessage {
   content: string;
@@ -106,7 +112,7 @@ export class AcpClient implements ChatClient {
   private connectPromise: null | Promise<void> = null;
   private currentAllowedTools: null | string[] = null;
   private currentSessionId: null | string = null;
-  private disconnectKillTimeout: null | number = null;
+  private disconnectKillTimeout: null | ReturnType<typeof setTimeout> = null;
   private errorCallbacks: ((error: string) => void)[] = [];
   private isReconnecting = false;
   private lastAvailableCommands: { description: string; name: string }[] = [];
@@ -119,7 +125,7 @@ export class AcpClient implements ChatClient {
   private readonly plugin: Plugin;
   // Auto-reconnection state
   private reconnectAttempts = 0;
-  private reconnectTimeout: null | number = null;
+  private reconnectTimeout: null | ReturnType<typeof setTimeout> = null;
   private stderrHandler: ((chunk: Buffer) => void) | null = null;
   private webReadable: null | ReadableStream<Uint8Array> = null;
   private webWritable: null | WritableStream<Uint8Array> = null;
@@ -190,7 +196,7 @@ export class AcpClient implements ChatClient {
    */
   public cancelReconnect(): void {
     if (this.reconnectTimeout !== null) {
-      window.clearTimeout(this.reconnectTimeout);
+      clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
     this.isReconnecting = false;
@@ -265,14 +271,14 @@ export class AcpClient implements ChatClient {
     this.clientConnection = null;
 
     if (this.disconnectKillTimeout) {
-      window.clearTimeout(this.disconnectKillTimeout);
+      clearTimeout(this.disconnectKillTimeout);
       this.disconnectKillTimeout = null;
     }
 
     if (this.childProcess && !this.childProcess.killed) {
       this.childProcess.kill('SIGTERM');
       // Force kill after 2 seconds if still running
-      this.disconnectKillTimeout = window.setTimeout(() => {
+      this.disconnectKillTimeout = setTimeout(() => {
         if (this.childProcess && !this.childProcess.killed) {
           this.childProcess.kill('SIGKILL');
         }
@@ -387,13 +393,19 @@ export class AcpClient implements ChatClient {
     const pending = [...this.pendingPermissions];
     this.pendingPermissions = [];
     for (const p of pending) {
-      const allowOption = p.params.options?.find((o: Record<string, unknown>) => String(o['kind']).startsWith('allow_'));
+      const options = p.params.options ?? [];
+      const allowOptions = options.filter((o: Record<string, unknown>) => String(o['kind']).startsWith('allow_'));
       const permType = String((p.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
-      if (allowOption) {
-        const outcome = String(allowOption.kind || allowOption.optionId);
+
+      // SECURITY: Only auto-approve permissions that have exactly one option
+      // and that option is an allow. Permissions with multiple options (or a mix
+      // of allow/deny) require explicit per-permission review to prevent
+      // accidental approval of dangerous actions.
+      if (allowOptions.length === 1 && options.length === 1) {
+        const outcome = String(allowOptions[0]!.kind || allowOptions[0]!.optionId);
         this.plugin.auditLog.recordPermission(permType, outcome, 'success');
         p.resolve({
-          optionId: String(allowOption.optionId),
+          optionId: String(allowOptions[0]!.optionId),
           outcome: 'selected'
         } as unknown as RequestPermissionResponse);
       } else {
@@ -614,7 +626,7 @@ export class AcpClient implements ChatClient {
           this.plugin.auditLog.recordTerminal(`${command} ${args.join(' ')}`, code === 0 ? 'success' : 'failure', code);
 
           // Self-cleanup after 60 seconds to prevent memory leaks if agent forgets to release
-          window.setTimeout(() => {
+          setTimeout(() => {
             this.activeTerminals.delete(terminalId);
           }, 60000);
         });
@@ -715,9 +727,11 @@ export class AcpClient implements ChatClient {
       },
 
       writeTextFile: async (params: WriteTextFileRequest): Promise<WriteTextFileResponse> => {
-        // Note: we intentionally do NOT call checkToolAllowed here.
-        // writeTextFile is gated by FileChangeManager which queues changes
-        // for explicit user approval, so session-level tool blocking is redundant.
+        // SECURITY: Session-level tool restrictions apply BEFORE queuing.
+        // FileChangeManager provides a second gate (user approval) but does not
+        // replace session-level blocking. A tool disabled in session settings
+        // must be rejected immediately, not merely queued for approval.
+        this.checkToolAllowed('writeTextFile');
         try {
           // Queue the change for user approval instead of writing immediately
           await this.plugin.fileChangeManager.registerChange(params.path, params.content);
@@ -836,10 +850,19 @@ export class AcpClient implements ChatClient {
       // Create a new session
       const vaultPath = this.plugin.app.vault.getRoot().path;
 
-      const mcpServers = this.plugin.settings.mcpServersList
-        .split('\n')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
+      let mcpServers: string[] = [];
+      if (this.plugin.settings.mcpServersEnabled) {
+        mcpServers = this.plugin.settings.mcpServersList
+          .split('\n')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+
+        if (mcpServers.length > 0) {
+          this.plugin.auditLog.recordConnection('mcp_servers', 'acp', 'success', `enabled with ${mcpServers.length} server(s)`);
+        }
+      } else {
+        this.plugin.auditLog.recordConnection('mcp_servers', 'acp', 'blocked', 'disabled by user setting');
+      }
 
       // Security Note: MCP servers are external executables spawned by the Hermes agent.
       // Configuring untrusted MCP servers poses a significant security risk, as they can
@@ -940,10 +963,14 @@ export class AcpClient implements ChatClient {
       // Tool call updates
       if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') {
         const toolUpdate = update as {
+          name?: string;
           result?: unknown;
           status?: string;
           title?: string;
+          tool?: { name?: string };
+          toolCall?: { name?: string };
           toolCallId?: string;
+          toolName?: string;
         };
         const statusMap: Record<string, 'complete' | 'error' | 'running'> = {
           completed: 'complete',
@@ -957,9 +984,18 @@ export class AcpClient implements ChatClient {
           ? (typeof toolUpdate.result === 'string' ? toolUpdate.result : JSON.stringify(toolUpdate.result, null, 2))
           : undefined;
 
+        // The ACP protocol may send the tool name in various locations depending on version.
+        // Check all known locations: name, title, toolCall.name, tool.name, toolName.
+        const toolName = toolUpdate.name
+          ?? toolUpdate.title
+          ?? toolUpdate.toolCall?.name
+          ?? toolUpdate.tool?.name
+          ?? toolUpdate.toolName
+          ?? 'unknown-tool';
+
         const toolCall: AcpToolCall = {
           callId: String(toolUpdate.toolCallId ?? ''),
-          name: String(toolUpdate.title ?? ''),
+          name: String(toolName),
           status
         };
         if (resultStr !== undefined) {
@@ -1051,7 +1087,7 @@ export class AcpClient implements ChatClient {
     });
     this.plugin.auditLog.recordConnection('reconnect', 'acp', 'pending', `attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS}`);
 
-    this.reconnectTimeout = window.setTimeout(() => {
+    this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
       this.connect()
         .then(() => {
@@ -1069,6 +1105,8 @@ export class AcpClient implements ChatClient {
 
 /**
  * Strengthened path traversal check.
+ * Rejects absolute paths, parent-directory traversal, null bytes, control
+ * characters, and Windows drive-letter paths.
  */
 function isPathSafe(filePath: string): boolean {
   const normalized = normalizePath(filePath);
@@ -1088,22 +1126,32 @@ function isPathSafe(filePath: string): boolean {
 
 /**
  * Sanitize a shell command to prevent command injection.
- * Only allows known safe commands; rejects metacharacters.
+ * Only allows known safe commands; rejects metacharacters and dangerous arguments.
+ *
+ * SECURITY NOTE: This is a speed bump, not a guarantee. The allowlist excludes
+ * all shells and script interpreters (bash, python, node, etc.) because they
+ * execute arbitrary code by design. Remaining utilities are checked for
+ * dangerous argument patterns that could enable injection (pipes, redirects,
+ * command substitution, etc.).
  */
 function sanitizeShellCommand(command: string): string {
   const trimmed = command.trim();
-  // Extract the base command (first token before any whitespace or shell metacharacters)
+  // Extract the base command (first token before any whitespace)
   const baseMatch = /^([a-zA-Z0-9_\-\.]+)/.exec(trimmed);
   const base = baseMatch?.[1] ?? '';
 
   if (!ALLOWED_SHELL_COMMANDS.has(base.toLowerCase())) {
-    throw new Error(`Disallowed shell command: ${base}. Only standard shell interpreters and common utilities are permitted.`);
+    throw new Error(`Disallowed shell command: ${base}. Terminal access is restricted to standard file and network utilities. Shells and script interpreters are not permitted.`);
   }
 
-  // Reject shell metacharacters that enable injection
-  const dangerous = /[;&|`$(){}\[\]<>\n\r]/;
-  if (dangerous.test(trimmed)) {
-    throw new Error('Shell command contains disallowed metacharacters.');
+  // Validate arguments for dangerous patterns that enable arbitrary code execution
+  const argsString = trimmed.slice(base.length).trim();
+  if (argsString) {
+    for (const pattern of DANGEROUS_ARG_PATTERNS) {
+      if (argsString.includes(pattern)) {
+        throw new Error(`Shell argument contains disallowed pattern: ${pattern}`);
+      }
+    }
   }
 
   return trimmed;

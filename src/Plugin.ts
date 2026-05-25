@@ -4,7 +4,10 @@ import type { ReadonlyDeep } from 'type-fest';
 import { Notice } from 'obsidian';
 import { PluginBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginBase';
 
-import type { ChatClient } from './ChatClient.ts';
+import type {
+ ChatClient,
+ ChatSessionUpdate
+} from './ChatClient.ts';
 import type { PluginTypes } from './PluginTypes.ts';
 
 import { AcpClient } from './AcpClient.ts';
@@ -39,6 +42,8 @@ export class Plugin extends PluginBase<PluginTypes> {
   public vaultManager!: VaultManager;
   public activeEditorView?: any;
   private ribbonBadgeEl?: HTMLElement;
+  private activeTools = new Map<string, string>();
+  private statusBarItemEl?: HTMLElement;
 
   /**
    * Get the active chat client based on connection mode.
@@ -78,6 +83,26 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.debug = new DebugLogger(this);
     this.acpClient = new AcpClient(this);
     this.apiClient = new HermesApiClient(this, this.secrets);
+
+    this.statusBarItemEl = this.addStatusBarItem();
+    this.statusBarItemEl.style.display = 'none';
+
+    const handleSessionUpdate = (update: ChatSessionUpdate) => {
+      if (update.type === 'stop') {
+        this.activeTools.clear();
+        this.updateStatusBar();
+      } else if (update.toolCall) {
+        if (update.toolCall.status === 'running') {
+          this.activeTools.set(update.toolCall.callId, update.toolCall.name);
+        } else {
+          this.activeTools.delete(update.toolCall.callId);
+        }
+        this.updateStatusBar();
+      }
+    };
+
+    this.acpClient.onUpdate(handleSessionUpdate);
+    this.apiClient.onUpdate(handleSessionUpdate);
 
     // Connect on load using the configured mode
     const client = this.getChatClient();
@@ -324,6 +349,8 @@ export class Plugin extends PluginBase<PluginTypes> {
   protected override async onunloadImpl(): Promise<void> {
     this.acpClient?.disconnect();
     this.apiClient?.disconnect();
+    this.activeTools.clear();
+    this.fileChangeManager?.destroy();
     clearAllCommands();
     await super.onunloadImpl();
   }
@@ -337,7 +364,7 @@ export class Plugin extends PluginBase<PluginTypes> {
 
     await this.app.workspace.revealLeaf(leaves[0]!);
     // Focus the textarea after a short delay to allow the view to render
-    window.setTimeout(() => {
+    setTimeout(() => {
       const container = leaves[0]!.view.containerEl;
       const textarea = container.querySelector('.hermes-input') as HTMLElement | null;
       if (textarea) {
@@ -375,5 +402,19 @@ export class Plugin extends PluginBase<PluginTypes> {
 
     // Open if not exists
     await this.openView(viewType);
+  }
+
+  private updateStatusBar(): void {
+    if (!this.statusBarItemEl) return;
+    if (this.activeTools.size > 0) {
+      const toolNames = Array.from(this.activeTools.values()).join(', ');
+      this.statusBarItemEl.textContent = `↻ Hermes: ${toolNames}...`;
+      this.statusBarItemEl.style.display = 'inline-block';
+      this.statusBarItemEl.classList.add('hermes-status-pulsing');
+    } else {
+      this.statusBarItemEl.textContent = '';
+      this.statusBarItemEl.style.display = 'none';
+      this.statusBarItemEl.classList.remove('hermes-status-pulsing');
+    }
   }
 }

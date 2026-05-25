@@ -31,6 +31,7 @@ export class PluginSettings {
 
   // ACP Configuration
   public hermesBinaryPath = '';
+  public mcpServersEnabled = false;
   public mcpServersList = '';
 
   // Persona Templates

@@ -115,15 +115,29 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         });
 
       new SettingEx(this.containerEl)
-        .setName('Extra Tools (MCP Servers)')
-        .setDesc('Add paths to extra tool servers, one per line. These let Hermes do things like search the web or query databases. You must restart the connection after changing this.')
-        .addTextArea((text) => {
-          text.setPlaceholder('/path/to/web-search-server\n/path/to/database-server')
-            .setValue(this.plugin.settings.mcpServersList);
-          text.inputEl.rows = 3;
-          text.inputEl.style.width = '100%';
-          this.bind(text, 'mcpServersList');
+        .setName('⚠️ Enable External Tool Servers (MCP)')
+        .setDesc('MCP servers are external programs that Hermes can call. They bypass file-approval and permission checks, and can execute arbitrary code with your user privileges. Only enable if you fully trust every server you add below.')
+        .addToggle((toggle) => {
+          toggle.setValue(this.plugin.settings.mcpServersEnabled);
+          this.bind(toggle, 'mcpServersEnabled', {
+            onChanged: () => {
+              this.display();
+            }
+          });
         });
+
+      if (this.plugin.settings.mcpServersEnabled) {
+        new SettingEx(this.containerEl)
+          .setName('External Tool Server Paths')
+          .setDesc('One absolute path per line. These executables run with your user privileges and are not sandboxed. Restart the connection after changing.')
+          .addTextArea((text) => {
+            text.setPlaceholder('/Users/you/.local/bin/mcp-web-search\n/opt/mcp-database')
+              .setValue(this.plugin.settings.mcpServersList);
+            text.inputEl.rows = 3;
+            text.inputEl.style.width = '100%';
+            this.bind(text, 'mcpServersList');
+          });
+      }
     }
 
     // Remote mode settings

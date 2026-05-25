@@ -6,8 +6,8 @@ import {
   ItemView,
   MarkdownRenderer,
   MarkdownView,
-  Notice
-
+  Notice,
+  TFile
 } from 'obsidian';
 import {
   memo,
@@ -16,6 +16,14 @@ import {
   useRef,
   useState
 } from 'react';
+import * as Prism from 'prismjs';
+import 'prismjs/components/prism-python';
+import 'prismjs/components/prism-rust';
+import 'prismjs/components/prism-go';
+import 'prismjs/components/prism-c';
+import 'prismjs/components/prism-cpp';
+import 'prismjs/components/prism-csharp';
+import 'prismjs/components/prism-bash';
 import { createRoot } from 'react-dom/client';
 
 import type {
@@ -40,6 +48,44 @@ resolveBlockReference
 } from '../utils/blockReferences.ts';
 import { generateMessageId } from '../utils/uuid.ts';
 import { useStreamBuffer } from './useStreamBuffer.ts';
+
+/**
+ * Helper to safely escape HTML for the diff viewer fallback.
+ */
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>'"]/g, tag => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[tag] || tag));
+}
+
+/**
+ * Map file extensions to Prism languages.
+ */
+function getLanguageForPath(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    js: 'javascript', ts: 'typescript', jsx: 'jsx', tsx: 'tsx',
+    json: 'json', css: 'css', html: 'html', md: 'markdown',
+    py: 'python', rs: 'rust', go: 'go', sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'bash', yaml: 'yaml', yml: 'yaml',
+    cpp: 'cpp', h: 'cpp', hpp: 'cpp', c: 'c', cs: 'csharp'
+  };
+  return map[ext] || 'markdown';
+}
+
+/**
+ * Syntax highlight a single line of a diff.
+ */
+function highlightLine(line: string, path: string): string {
+  const lang = getLanguageForPath(path);
+  if (Prism.languages[lang]) {
+    try { return Prism.highlight(line, Prism.languages[lang]!, lang); } catch { /* ignore */ }
+  }
+  return escapeHtml(line);
+}
 
 /**
  * Strip ANSI escape codes from a string.
@@ -188,6 +234,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   const [slashSuggestions, setSlashSuggestions] = useState<{ description: string; name: string }[]>([]);
   const [isSlashOpen, setIsSlashOpen] = useState(false);
   const [slashSelectionIndex, setSlashSelectionIndex] = useState(0);
+  const [activeCommand, setActiveCommand] = useState<string | null>(null);
 
   const [allowedTools, setAllowedTools] = useState<null | string[]>(null);
   const [isSessionSettingsOpen, setIsSessionSettingsOpen] = useState(false);
@@ -227,14 +274,14 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   const plugin = view.getPlugin();
   const settings = view.getSettings();
   const lastChunkTimeRef = useRef<number>(0);
-  const typingTimeoutRef = useRef<null | number>(null);
+  const typingTimeoutRef = useRef<null | ReturnType<typeof setTimeout>>(null);
 
   // Ref to track the latest volatile state for stable callbacks.
   // This prevents memoized child components (like ChatMessageItem) from unnecessarily re-rendering.
-  const stateRef = useRef({ allowedTools, contextItems, isTyping });
+  const stateRef = useRef({ activeCommand, allowedTools, contextItems, isTyping });
   useEffect(() => {
-    stateRef.current = { allowedTools, contextItems, isTyping };
-  }, [isTyping, contextItems, allowedTools]);
+    stateRef.current = { activeCommand, allowedTools, contextItems, isTyping };
+  }, [isTyping, contextItems, allowedTools, activeCommand]);
 
   const {
     appendContent,
@@ -271,13 +318,13 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
 
   const clearTypingTimeout = useCallback((): void => {
     if (typingTimeoutRef.current !== null) {
-      window.clearTimeout(typingTimeoutRef.current);
+      clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
     }
   }, []);
 
   // Debounced save to prevent duplicate writes when multiple events fire rapidly
-  const debouncedSaveRef = useRef<{ timeoutId: number | null; lastSaveTime: number }>({
+  const debouncedSaveRef = useRef<{ timeoutId: null | ReturnType<typeof setTimeout>; lastSaveTime: number }>({
     timeoutId: null,
     lastSaveTime: 0
   });
@@ -292,11 +339,11 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     }
 
     // Schedule a new save with debounce
-    debouncedSaveRef.current.timeoutId = window.setTimeout(() => {
+    debouncedSaveRef.current.timeoutId = setTimeout(() => {
       // Skip if too soon after last save
       if (now - debouncedSaveRef.current.lastSaveTime < MIN_SAVE_INTERVAL) {
         // Schedule for later
-        debouncedSaveRef.current.timeoutId = window.setTimeout(() => {
+        debouncedSaveRef.current.timeoutId = setTimeout(() => {
           debouncedSaveRef.current.lastSaveTime = Date.now();
           void saveConversation(currentMessages, currentTitle, currentAllowedTools);
         }, MIN_SAVE_INTERVAL);
@@ -310,7 +357,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
 
   const resetTypingTimeout = useCallback((): void => {
     clearTypingTimeout();
-    typingTimeoutRef.current = window.setTimeout(() => {
+    typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
 
@@ -347,7 +394,9 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       } else if (update.type === 'tool_start' || update.type === 'tool_progress' || update.type === 'tool_complete') {
         flushNow();
         if (settings.showToolUse && update.toolCall) {
-          let toolMsg = `🔧 **${update.toolCall.name}** (${update.toolCall.status})`;
+          const isRunning = update.toolCall.status === 'running';
+          const statusIcon = isRunning ? '<span class="hermes-tool-running">↻</span>' : (update.toolCall.status === 'error' ? '❌' : '✅');
+          let toolMsg = `${statusIcon} **${update.toolCall.name}** ${isRunning ? '*(running...)*' : ''}`;
           if (update.toolCall.result) {
             toolMsg += `\n\n**Result:**\n\`\`\`text\n${update.toolCall.result}\n\`\`\``;
           }
@@ -541,6 +590,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     setConversationFilePath(null);
     setConversationTitle('');
     setContextItems([]);
+    setActiveCommand(null);
     setAllowedTools(null);
     view.clearConversation();
   }, [view, conversationFilePath, plugin]);
@@ -621,7 +671,8 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   const handleSend = useCallback(async (): Promise<void> => {
     const current = stateRef.current;
     const trimmed = inputRef.current.trim();
-    if (!trimmed || current.isTyping) { return; }
+    const fullText = current.activeCommand ? `/${current.activeCommand} ${trimmed}`.trim() : trimmed;
+    if (!fullText || current.isTyping) { return; }
 
     // Rate limiting
     const now = Date.now();
@@ -629,20 +680,21 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     if (elapsed < RATE_LIMIT_MS) {
       const remaining = Math.ceil((RATE_LIMIT_MS - elapsed) / 1000);
       setRateLimitSeconds(remaining);
-      window.setTimeout(() => { setRateLimitSeconds(0); }, RATE_LIMIT_MS - elapsed);
+      setTimeout(() => { setRateLimitSeconds(0); }, RATE_LIMIT_MS - elapsed);
       return;
     }
     lastSendTimeRef.current = now;
     setRateLimitSeconds(0);
 
     // Check for slash commands
-    const slashCmd = parseSlashCommand(trimmed);
+    const slashCmd = parseSlashCommand(fullText);
     if (slashCmd) {
       setInput('');
+      setActiveCommand(null);
       setIsSlashOpen(false);
 
       const userMessage: ChatMessage = {
-        content: trimmed,
+        content: fullText,
         id: generateMessageId(),
         role: 'user',
         timestamp: Date.now()
@@ -667,7 +719,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           setMessages((prev) => [...prev, systemMessage]);
         } else {
           // Tool commands return null — forward to agent as a prompt
-          lastPromptRef.current = trimmed;
+          lastPromptRef.current = fullText;
           lastContextItemsRef.current = [...current.contextItems];
 
           const streamingMessageId = generateMessageId();
@@ -682,7 +734,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           setMessages((prev) => [...prev, assistantPlaceholder]);
 
           try {
-            await view.sendPrompt(trimmed, current.contextItems, { allowedTools: current.allowedTools });
+            await view.sendPrompt(fullText, current.contextItems, { allowedTools: current.allowedTools });
           } catch (err) {
             setError(`Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`);
           }
@@ -703,7 +755,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     }
 
     const userMessage: ChatMessage = {
-      content: trimmed,
+      content: fullText,
       id: generateMessageId(),
       role: 'user',
       timestamp: Date.now()
@@ -711,9 +763,10 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    setActiveCommand(null);
     setError(null);
     setIsTyping(true);
-    lastPromptRef.current = trimmed;
+    lastPromptRef.current = fullText;
     lastContextItemsRef.current = [...current.contextItems];
 
     // Create a placeholder assistant message for streaming
@@ -729,7 +782,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
     try {
-      await view.sendPrompt(trimmed, current.contextItems, { allowedTools: current.allowedTools });
+      await view.sendPrompt(fullText, current.contextItems, { allowedTools: current.allowedTools });
     } catch (err) {
       setError(`Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`);
     } finally {
@@ -739,6 +792,11 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   }, [view, plugin, handleNewChat]);
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (e.key === 'Backspace' && inputRef.current === '' && stateRef.current.activeCommand) {
+      setActiveCommand(null);
+      return;
+    }
+
     if (isSlashOpen && slashSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -790,7 +848,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         e.preventDefault();
         const selected = autocompleteSuggestions[autocompleteSelectionIndex];
         if (selected) {
-          insertAutocomplete(selected.text);
+          insertAutocomplete(selected);
         }
         return;
       }
@@ -806,32 +864,41 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     }
   }, [isSlashOpen, slashSuggestions, slashSelectionIndex, isAutocompleteOpen, autocompleteSuggestions, autocompleteSelectionIndex, handleSend]);
 
-  const insertAutocomplete = useCallback((text: string): void => {
+  const insertAutocomplete = useCallback((suggestion: AutocompleteSuggestion): void => {
+    // Instead of inserting text, add the selected item to context.
+    if (suggestion.type === 'note' || suggestion.type === 'folder') {
+      const contextType = suggestion.type;
+      const contextId = `${contextType}-${suggestion.text}`;
+      const isDuplicate = contextItems.some((item) => item.id === contextId);
+
+      if (!isDuplicate) {
+        setContextItems((prev) => [...prev, {
+          id: contextId,
+          text: suggestion.text.split('/').pop() || suggestion.text, // show basename
+          type: contextType
+        }]);
+      }
+    }
+
+    // Clear the autocomplete part from the input
     const value = input;
     const lastOpen = Math.max(value.lastIndexOf('[['), value.lastIndexOf('{'));
-    if (lastOpen < 0) { return; }
+    if (lastOpen !== -1) {
+      setInput(value.substring(0, lastOpen));
+    } else {
+      // This case shouldn't happen if autocomplete is open, but as a fallback...
+      setInput('');
+    }
 
-    const isWikiLink = value[lastOpen] === '[';
-    const queryStart = lastOpen + (isWikiLink ? 2 : 1);
-    const prefix = value.substring(0, queryStart);
-    const suffix = value.substring(textareaRef.current?.selectionStart ?? value.length);
-    const closingBracket = isWikiLink ? ']]' : '}';
-    const newText = prefix + text + closingBracket + suffix;
-
-    setInput(newText);
     setIsAutocompleteOpen(false);
     setAutocompleteQuery('');
     setAutocompleteSuggestions([]);
     setAutocompleteSelectionIndex(0);
 
-    const cursorPos = prefix.length + text.length + closingBracket.length;
     setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(cursorPos, cursorPos);
-      }
+      textareaRef.current?.focus();
     }, 0);
-  }, [input]);
+  }, [input, contextItems]);
 
   const handleContextClick = useCallback(async (): Promise<void> => {
     const activeFile = plugin.app.workspace.getActiveFile();
@@ -1192,7 +1259,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.classList.add('hermes-search-highlight');
-        window.setTimeout(() => { el.classList.remove('hermes-search-highlight'); }, 2000);
+        setTimeout(() => { el.classList.remove('hermes-search-highlight'); }, 2000);
       }
     }
   }, [searchMatches, currentMatchIndex, messages]);
@@ -1468,6 +1535,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       )}
 
       <ChatInput
+        activeCommand={activeCommand}
         autocompleteQuery={autocompleteQuery}
         autocompleteSelectionIndex={autocompleteSelectionIndex}
         autocompleteSuggestions={autocompleteSuggestions}
@@ -1480,10 +1548,12 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         onContextClick={handleContextClick}
         onInputChange={handleTextareaChange}
         onInputKeyDown={handleInputKeyDown}
+        onRemoveCommand={() => { setActiveCommand(null); setTimeout(() => textareaRef.current?.focus(), 0); }}
         onRemoveContextItem={removeContextItem}
         onSelectAutocomplete={insertAutocomplete}
         onSelectSlash={(name) => {
-          setInput(`/${name} `);
+          setActiveCommand(name);
+          setInput('');
           setIsSlashOpen(false);
           setSlashSuggestions([]);
           setTimeout(() => textareaRef.current?.focus(), 0);
@@ -1652,7 +1722,14 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
         <div className="hermes-message-header">
           <span className="hermes-role">{roleLabel}</span>
           <span className="hermes-message-meta">
-            <button className="hermes-icon-btn hermes-msg-action-btn" onClick={handleCopy} title={isCopied ? 'Copied!' : 'Copy Output'} type="button">
+            <button
+              className="hermes-icon-btn hermes-msg-action-btn"
+              draggable
+              onClick={handleCopy}
+              onDragStart={(e) => { e.dataTransfer.setData('text/plain', message.content); }}
+              title={isCopied ? 'Copied!' : 'Copy or Drag Output'}
+              type="button"
+            >
               {isCopied
 ? (
                 <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
@@ -1720,7 +1797,14 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
       <div className="hermes-message-header">
         <span className="hermes-role">{roleLabel}</span>
         <span className="hermes-message-meta">
-          <button className="hermes-icon-btn hermes-msg-action-btn" onClick={handleCopy} title={isCopied ? 'Copied!' : 'Copy Message'} type="button">
+          <button
+            className="hermes-icon-btn hermes-msg-action-btn"
+            draggable
+            onClick={handleCopy}
+            onDragStart={(e) => { e.dataTransfer.setData('text/plain', message.content); }}
+            title={isCopied ? 'Copied!' : 'Copy or Drag Message'}
+            type="button"
+          >
             {isCopied
 ? (
               <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
@@ -1764,10 +1848,10 @@ const TypingIndicator = memo(({ agentName }: TypingIndicatorProps): ReactElement
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
+    const interval = setInterval(() => {
       setFrame((prev) => (prev + 1) % BRAILLE_SPINNER.length);
     }, 80);
-    return () => { window.clearInterval(interval); };
+    return () => { clearInterval(interval); };
   }, []);
 
   return (
@@ -1784,6 +1868,7 @@ const TypingIndicator = memo(({ agentName }: TypingIndicatorProps): ReactElement
 });
 
 interface ChatInputProps {
+  activeCommand: string | null;
   autocompleteQuery: string;
   autocompleteSelectionIndex: number;
   autocompleteSuggestions: AutocompleteSuggestion[];
@@ -1796,8 +1881,9 @@ interface ChatInputProps {
   onContextClick: () => void;
   onInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onInputKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onRemoveCommand: () => void;
   onRemoveContextItem: (id: string) => void;
-  onSelectAutocomplete: (text: string) => void;
+  onSelectAutocomplete: (suggestion: AutocompleteSuggestion) => void;
   onSelectSlash: (name: string) => void;
   onSend: () => void;
   onStop: () => void;
@@ -1808,6 +1894,7 @@ interface ChatInputProps {
 }
 
 const ChatInput = memo(({
+  activeCommand,
   autocompleteSelectionIndex,
   autocompleteSuggestions,
   contextItems,
@@ -1819,6 +1906,7 @@ const ChatInput = memo(({
   onContextClick,
   onInputChange,
   onInputKeyDown,
+  onRemoveCommand,
   onRemoveContextItem,
   onSelectAutocomplete,
   onSelectSlash,
@@ -1876,6 +1964,22 @@ const ChatInput = memo(({
       <div className="hermes-input-container">
         <div className="hermes-input-top">
           <div className="hermes-context-list">
+            {activeCommand && (
+              <div className="hermes-context-chip">
+                <button
+                  className="hermes-context-remove"
+                  onClick={onRemoveCommand}
+                  title="Remove command"
+                  type="button"
+                >
+                  <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="18" x2="6" y1="6" y2="18" />
+                    <line x1="6" x2="18" y1="6" y2="18" />
+                  </svg>
+                </button>
+                <span className="hermes-context-text">⚡ /{activeCommand}</span>
+              </div>
+            )}
             {contextItems.map((item) => (
               <div className="hermes-context-chip" key={item.id}>
                 <button
@@ -1977,7 +2081,7 @@ const ChatInput = memo(({
               aria-selected={index === autocompleteSelectionIndex}
               className={`hermes-autocomplete-item ${index === autocompleteSelectionIndex ? 'selected' : ''}`}
               key={suggestion.id}
-              onClick={() => { onSelectAutocomplete(suggestion.text); }}
+              onClick={() => { onSelectAutocomplete(suggestion); }}
               role="option"
             >
               <span className="hermes-autocomplete-icon">
@@ -2004,6 +2108,48 @@ const MarkdownContent = memo(({ content, view }: MarkdownContentProps): ReactEle
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handlePathClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Handle native Obsidian links
+      const internalLink = target.closest('a.internal-link');
+      if (internalLink) {
+        const href = internalLink.getAttribute('data-href');
+        if (href) {
+          const file = view.app.metadataCache.getFirstLinkpathDest(href, '');
+          if (file instanceof TFile) {
+            e.preventDefault();
+            e.stopPropagation();
+            view.app.workspace.getLeaf(e.ctrlKey || e.metaKey ? 'tab' : false).openFile(file);
+            return;
+          }
+        }
+      }
+
+      // Handle our custom clickable paths in inline code
+      const code = target.closest('code.hermes-clickable-path');
+      if (code) {
+        const text = code.textContent?.trim();
+        if (text) {
+          const file = view.app.metadataCache.getFirstLinkpathDest(text, '') || view.app.vault.getAbstractFileByPath(text);
+          if (file instanceof TFile) {
+            e.preventDefault();
+            e.stopPropagation();
+            view.app.workspace.getLeaf(e.ctrlKey || e.metaKey ? 'tab' : false).openFile(file);
+            return;
+          }
+        }
+      }
+    };
+
+    container.addEventListener('click', handlePathClick);
+    return () => container.removeEventListener('click', handlePathClick);
+  }, [view]);
+
+  useEffect(() => {
     if (!containerRef.current) {
       return;
     }
@@ -2013,8 +2159,31 @@ const MarkdownContent = memo(({ content, view }: MarkdownContentProps): ReactEle
     const renderChild = new Component();
     renderChild.load();
 
+    let processedContent = content;
+
+    // Fix fenced code blocks incorrectly placed inside table cells.
+    // LLMs often output: | ```lang\ncode\n``` |
+    // This breaks standard Markdown table parsing which expects single-line rows.
+    processedContent = processedContent.replace(
+      /(\|[^|\n]*?)```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)\n\s*```([^|\n]*)/g,
+      (_substring: string, ...args: (string | number)[]) => {
+        const before = args[0] as string;
+        const lang = args[1] as string;
+        const code = args[2] as string;
+        const after = args[3] as string;
+        const fixedCode = code
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br>')
+          .replace(/\|/g, '&#124;');
+        const langClass = lang ? ` class="language-${lang}"` : '';
+        return `${before}<pre><code${langClass}>${fixedCode}</code></pre>${after}`;
+      }
+    );
+
     try {
-      MarkdownRenderer.render(view.app, content, containerRef.current, view.app.vault.getRoot().path, renderChild).then(() => {
+      MarkdownRenderer.render(view.app, processedContent, containerRef.current, view.app.vault.getRoot().path, renderChild).then(() => {
         if (!containerRef.current) { return; }
         const preElements = containerRef.current.querySelectorAll('pre');
         preElements.forEach((pre) => {
@@ -2027,7 +2196,14 @@ const MarkdownContent = memo(({ content, view }: MarkdownContentProps): ReactEle
 
           const copyBtn = document.createElement('button');
           copyBtn.className = 'hermes-icon-btn hermes-code-copy-btn';
-          copyBtn.title = 'Copy code';
+          copyBtn.title = 'Copy or Drag code';
+          copyBtn.draggable = true;
+          copyBtn.addEventListener('dragstart', (e: DragEvent) => {
+            const codeEl = pre.querySelector('code');
+            if (codeEl && e.dataTransfer) {
+              e.dataTransfer.setData('text/plain', codeEl.innerText);
+            }
+          });
           copyBtn.innerHTML = '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><rect height="13" rx="2" ry="2" width="13" x="9" y="9" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>';
 
           copyBtn.addEventListener('click', async () => {
@@ -2047,6 +2223,30 @@ const MarkdownContent = memo(({ content, view }: MarkdownContentProps): ReactEle
             }
           });
           wrapper.appendChild(copyBtn);
+        });
+
+        // Highlight clickable file paths in inline code blocks
+        const inlineCodeElements = containerRef.current.querySelectorAll('code');
+        inlineCodeElements.forEach((code) => {
+          if (code.closest('pre')) { return; }
+          const text = code.textContent?.trim();
+          if (text) {
+            const file = view.app.metadataCache.getFirstLinkpathDest(text, '') || view.app.vault.getAbstractFileByPath(text);
+            if (file instanceof TFile) {
+              code.classList.add('hermes-clickable-path');
+              code.title = `Click to open ${file.path}\nDrag to insert link`;
+              code.draggable = true;
+              code.addEventListener('dragstart', (e: DragEvent) => {
+                // @ts-expect-error - Accessing internal Obsidian dragManager API
+                const dragManager = view.app.dragManager;
+                if (dragManager && typeof dragManager.dragFile === 'function') {
+                  dragManager.dragFile(e, file);
+                } else if (e.dataTransfer) {
+                  e.dataTransfer.setData('text/plain', `[[${file.path}]]`);
+                }
+              });
+            }
+          }
         });
       }).catch(() => {
         // Ignore render errors
@@ -2080,8 +2280,8 @@ interface PendingChangesPanelProps {
 }
 
 function computeDiffLines(original: string, updated: string): DiffLine[] {
-  const origLines = original.split('\n');
-  const newLines = updated.split('\n');
+  const origLines = original.split(/\r?\n/);
+  const newLines = updated.split(/\r?\n/);
   const result: DiffLine[] = [];
   let oi = 0;
   let ni = 0;
@@ -2189,6 +2389,27 @@ const PendingChangesPanel = memo(({ changes, onApprove, onApproveAll, onClearRes
                   <span className={`hermes-pending-change-badge hermes-badge-${change.status}`}>{change.status}</span>
                 )}
                 <span className={`hermes-pending-change-badge hermes-badge-${change.action}`}>{change.action}</span>
+                <button
+                  className="hermes-icon-btn"
+                  draggable
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const text = `--- a/${change.path}\n+++ b/${change.path}\n` + diffLines.map((dl) => `${dl.type === 'added' ? '+' : dl.type === 'removed' ? '-' : ' '}${dl.line}`).join('\n');
+                    navigator.clipboard.writeText(text).then(() => { new Notice('Copied diff to clipboard'); }).catch(() => {});
+                  }}
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    const text = `--- a/${change.path}\n+++ b/${change.path}\n` + diffLines.map((dl) => `${dl.type === 'added' ? '+' : dl.type === 'removed' ? '-' : ' '}${dl.line}`).join('\n');
+                    e.dataTransfer.setData('text/plain', text);
+                  }}
+                  title="Copy or Drag Diff"
+                  type="button"
+                >
+                  <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                    <rect height="13" rx="2" ry="2" width="13" x="9" y="9" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </button>
               </div>
             </div>
             {isExpanded && (
@@ -2208,8 +2429,8 @@ const PendingChangesPanel = memo(({ changes, onApprove, onApproveAll, onClearRes
                             type="checkbox"
                           />
                         )}
-                        <span className="hermes-diff-marker">{dl.type === 'added' ? '+' : dl.type === 'removed' ? '-' : ' '}</span>
-                        <span className="hermes-diff-text">{dl.line}</span>
+                          <span className="hermes-diff-marker">{dl.type === 'added' ? '+' : dl.type === 'removed' ? '-' : ' '}</span>
+                          <span className="hermes-diff-text" dangerouslySetInnerHTML={{ __html: highlightLine(dl.line, change.path) }} />
                       </div>
                     );
                   })}
@@ -2266,34 +2487,40 @@ const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRej
           </div>
         )}
       </div>
-      {permissions.map((permission) => (
-        <div className="hermes-pending-permission" key={permission.id}>
-          <div className="hermes-pending-permission-summary">
-            <span className="hermes-pending-permission-desc">
-              A tool is requesting permission to run
-            </span>
-          </div>
-          <div className="hermes-pending-permission-options">
-            {permission.params.options.map((option) => (
+      {permissions.map((permission) => {
+        const permType = String((permission.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+        const toolName = String((permission.params as unknown as Record<string, unknown>)['toolName'] || 'Unknown tool');
+        const description = String((permission.params as unknown as Record<string, unknown>)['description'] || '');
+        return (
+          <div className="hermes-pending-permission" key={permission.id}>
+            <div className="hermes-pending-permission-summary">
+              <span className="hermes-pending-permission-desc">
+                <strong>{toolName}</strong> is requesting permission to <strong>{permType}</strong>
+                {description ? `: ${description}` : ''}
+              </span>
+            </div>
+            <div className="hermes-pending-permission-options">
+              {permission.params.options.map((option) => (
+                <button
+                  className={`hermes-permission-option hermes-permission-option--${option.kind}`}
+                  key={option.optionId}
+                  onClick={() => { onApprove(permission.id, option.optionId); }}
+                  type="button"
+                >
+                  {option.name}
+                </button>
+              ))}
               <button
-                className={`hermes-permission-option hermes-permission-option--${option.kind}`}
-                key={option.optionId}
-                onClick={() => { onApprove(permission.id, option.optionId); }}
+                className="hermes-permission-option hermes-permission-option--reject"
+                onClick={() => { onReject(permission.id); }}
                 type="button"
               >
-                {option.name}
+                Reject
               </button>
-            ))}
-            <button
-              className="hermes-permission-option hermes-permission-option--reject"
-              onClick={() => { onReject(permission.id); }}
-              type="button"
-            >
-              Reject
-            </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 });
