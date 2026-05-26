@@ -104,6 +104,7 @@ export const HERMES_CHAT_VIEW_TYPE = 'hermes-chat-view';
 export interface ChatMessage {
   content: string;
   id: string;
+  isCollapsed?: boolean;
   isExited?: boolean;
   role: 'assistant' | 'reasoning' | 'system' | 'terminal' | 'tool' | 'user';
   terminalId?: string;
@@ -395,7 +396,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         flushNow();
         if (settings.showToolUse && update.toolCall) {
           const isRunning = update.toolCall.status === 'running';
-          const statusIcon = isRunning ? '<span class="hermes-tool-running">↻</span>' : (update.toolCall.status === 'error' ? '❌' : '✅');
+          const statusIcon = isRunning ? '<span class="hermes-tool-spinner"></span>' : (update.toolCall.status === 'error' ? '❌' : '✅');
           let toolMsg = `${statusIcon} **${update.toolCall.name}** ${isRunning ? '*(running...)*' : ''}`;
           if (update.toolCall.result) {
             toolMsg += `\n\n**Result:**\n\`\`\`text\n${update.toolCall.result}\n\`\`\``;
@@ -1715,6 +1716,44 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
     tool: 'Tool',
     user: 'You'
   }[message.role];
+
+  // Collapsible reasoning messages
+  if (message.role === 'reasoning') {
+    const [isExpanded, setIsExpanded] = useState(!message.isCollapsed);
+    const toggleExpand = useCallback(() => { setIsExpanded((prev) => !prev); }, []);
+
+    return (
+      <div className={`hermes-message hermes-${message.role} ${isExpanded ? 'hermes-reasoning-expanded' : 'hermes-reasoning-collapsed'}`}>
+        <div className="hermes-message-header">
+          <span className="hermes-role">{roleLabel}</span>
+          <span className="hermes-message-meta">
+            <button
+              className="hermes-icon-btn hermes-msg-action-btn"
+              onClick={toggleExpand}
+              title={isExpanded ? 'Collapse reasoning' : 'Expand reasoning'}
+              type="button"
+            >
+              {isExpanded ? (
+                <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              ) : (
+                <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              )}
+            </button>
+            <span className="hermes-timestamp">{new Date(message.timestamp).toLocaleTimeString()}</span>
+          </span>
+        </div>
+        {isExpanded && (
+          <div className="hermes-message-content">
+            <MarkdownContent content={message.content} view={view} />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (message.role === 'terminal') {
     return (

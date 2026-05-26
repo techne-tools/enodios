@@ -986,11 +986,19 @@ export class AcpClient implements ChatClient {
 
         // The ACP protocol may send the tool name in various locations depending on version.
         // Check all known locations: name, title, toolCall.name, tool.name, toolName.
+        // Also check nested content fields used by some ACP server implementations.
+        const rawUpdate = update as unknown as Record<string, unknown>;
+        const contentObj = rawUpdate['content'] as Record<string, unknown> | undefined;
+        const contentTool = contentObj?.['tool'] as Record<string, string> | undefined;
+        const contentToolCall = contentObj?.['toolCall'] as Record<string, string> | undefined;
         const toolName = toolUpdate.name
           ?? toolUpdate.title
           ?? toolUpdate.toolCall?.name
           ?? toolUpdate.tool?.name
           ?? toolUpdate.toolName
+          ?? contentTool?.['name']
+          ?? contentObj?.['name'] as string | undefined
+          ?? contentToolCall?.['name']
           ?? 'unknown-tool';
 
         const toolCall: AcpToolCall = {

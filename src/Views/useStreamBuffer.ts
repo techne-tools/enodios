@@ -89,12 +89,26 @@ export function useStreamBuffer(
         } else {
           const newId = generateMessageId();
           reasoningMessageIdRef.current = newId;
-          updated = [...updated, {
+          const reasoningMsg: ChatMessage = {
             content: latestReasoning,
             id: newId,
+            isCollapsed: true, // Reasoning starts collapsed by default
             role: 'reasoning',
             timestamp: Date.now()
-          }];
+          };
+          // Insert reasoning BEFORE the assistant placeholder so it appears above the response
+          const assistantIndex = updated.findIndex(
+            (m) => m.role === 'assistant' && m.id === streamingMessageIdRef.current
+          );
+          if (assistantIndex >= 0) {
+            updated = [
+              ...updated.slice(0, assistantIndex),
+              reasoningMsg,
+              ...updated.slice(assistantIndex)
+            ];
+          } else {
+            updated = [...updated, reasoningMsg];
+          }
         }
       }
 

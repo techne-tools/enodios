@@ -2,6 +2,20 @@
 
 All notable changes to the Obsidian Hermes plugin.
 
+## [0.3.0] - 2026-05-26
+
+### Bug Fixes
+- **Fixed `unknown-tool` display** — Enhanced ACP tool name extraction in `parseUpdate()` to check nested `content.tool.name`, `content.name`, and `content.toolCall.name` fields used by some ACP server implementations.
+
+### UX Improvements
+- **Collapsible reasoning messages** — Reasoning output now starts collapsed by default. Each reasoning message has an expand/collapse toggle button in the header. Reduces visual clutter while preserving access to the agent's thought process.
+- **Fixed reasoning message ordering** — Reasoning messages are now inserted BEFORE the assistant response placeholder, so they appear above the final answer rather than below it.
+- **Added proper tool progress spinner** — Replaced the text `↻` character with a CSS-animated `hermes-tool-spinner` element (rotating border animation) for running tools. More visually distinct and professional.
+
+### Infrastructure
+- All 79 tests passing (5 test suites, ~440ms).
+- Build produces `main.js` (1.1M), `styles.css` (30k), `manifest.json`.
+
 ## [0.3.0] - 2026-05-25
 
 ### Security (Critical)

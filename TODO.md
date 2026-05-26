@@ -100,6 +100,13 @@
     - Enhanced permission UI transparency — displays tool name and permission type in approval panel
     - Fixed tool name extraction from ACP notifications — checks `name`, `title`, `toolCall.name`, `tool.name`, `toolName`
 
+- [x] **UI/UX Improvements (26 May 2026)**:
+  - Fixed `unknown-tool` display — enhanced ACP tool name extraction to check nested `content.tool`, `content.name`, and `content.toolCall.name` fields
+  - Added collapsible reasoning messages — reasoning starts collapsed by default, can be expanded/collapsed via header button
+  - Fixed reasoning message ordering — reasoning now appears BEFORE the assistant response (inserted above the streaming placeholder)
+  - Added proper CSS spinner animation for running tools — replaced text `↻` with animated `hermes-tool-spinner` element
+  - Added `isCollapsed` field to `ChatMessage` interface for reasoning state persistence
+
 ## Implementation Notes
 
 ### Markdown Rendering
