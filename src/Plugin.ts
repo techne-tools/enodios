@@ -42,7 +42,6 @@ export class Plugin extends PluginBase<PluginTypes> {
   public vaultManager!: VaultManager;
   public activeEditorView?: any;
   private ribbonBadgeEl?: HTMLElement;
-  private activeTools = new Map<string, string>();
   private statusBarItemEl?: HTMLElement;
 
   /**
@@ -89,15 +88,10 @@ export class Plugin extends PluginBase<PluginTypes> {
 
     const handleSessionUpdate = (update: ChatSessionUpdate) => {
       if (update.type === 'stop') {
-        this.activeTools.clear();
-        this.updateStatusBar();
-      } else if (update.toolCall) {
-        if (update.toolCall.status === 'running') {
-          this.activeTools.set(update.toolCall.callId, update.toolCall.name);
-        } else {
-          this.activeTools.delete(update.toolCall.callId);
-        }
-        this.updateStatusBar();
+        this.updateStatusBar(false);
+      } else if (update.type === 'message') {
+        // Show subtle indicator that Hermes is processing
+        this.updateStatusBar(true);
       }
     };
 
@@ -349,7 +343,6 @@ export class Plugin extends PluginBase<PluginTypes> {
   protected override async onunloadImpl(): Promise<void> {
     this.acpClient?.disconnect();
     this.apiClient?.disconnect();
-    this.activeTools.clear();
     this.fileChangeManager?.destroy();
     clearAllCommands();
     await super.onunloadImpl();
@@ -404,11 +397,10 @@ export class Plugin extends PluginBase<PluginTypes> {
     await this.openView(viewType);
   }
 
-  private updateStatusBar(): void {
+  private updateStatusBar(isActive: boolean): void {
     if (!this.statusBarItemEl) return;
-    if (this.activeTools.size > 0) {
-      const toolNames = Array.from(this.activeTools.values()).join(', ');
-      this.statusBarItemEl.textContent = `↻ Hermes: ${toolNames}...`;
+    if (isActive) {
+      this.statusBarItemEl.textContent = '● Hermes';
       this.statusBarItemEl.style.display = 'inline-block';
       this.statusBarItemEl.classList.add('hermes-status-pulsing');
     } else {

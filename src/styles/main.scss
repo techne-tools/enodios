@@ -98,6 +98,23 @@
   margin-right: 4px;
 }
 
+/* Running tool message pulse effect */
+.hermes-tool-running {
+  animation: hermes-tool-pulse 2s ease-in-out infinite;
+  border-left: 3px solid var(--text-accent) !important;
+}
+
+@keyframes hermes-tool-pulse {
+  0%, 100% {
+    border-left-color: var(--text-accent);
+    box-shadow: 0 0 0 0 rgba(var(--text-accent-rgb, 100, 100, 255), 0.2);
+  }
+  50% {
+    border-left-color: var(--interactive-accent);
+    box-shadow: 0 0 8px 2px rgba(var(--text-accent-rgb, 100, 100, 255), 0.15);
+  }
+}
+
 /* Collapsible reasoning */
 .hermes-reasoning-collapsed {
   opacity: 0.7;

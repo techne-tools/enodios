@@ -106,6 +106,7 @@ export interface ChatMessage {
   id: string;
   isCollapsed?: boolean;
   isExited?: boolean;
+  isRunning?: boolean;
   role: 'assistant' | 'reasoning' | 'system' | 'terminal' | 'tool' | 'user';
   terminalId?: string;
   timestamp: number;
@@ -411,13 +412,15 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
               const updated = [...prev];
               updated[toolIndex] = {
                 ...prev[toolIndex]!,
-                content: toolMsg
+                content: toolMsg,
+                isRunning
               };
               return updated;
             }
             return [...prev, {
               content: toolMsg,
               id: generateMessageId(),
+              isRunning,
               role: 'tool',
               timestamp: Date.now(),
               toolCallId: currentCallId
@@ -1832,7 +1835,7 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
   }
 
   return (
-    <div className={`hermes-message hermes-${message.role}`}>
+    <div className={`hermes-message hermes-${message.role} ${message.isRunning ? 'hermes-tool-running' : ''}`}>
       <div className="hermes-message-header">
         <span className="hermes-role">{roleLabel}</span>
         <span className="hermes-message-meta">
