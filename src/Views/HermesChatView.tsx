@@ -16,7 +16,8 @@ import {
   useRef,
   useState
 } from 'react';
-import * as Prism from 'prismjs';
+import { languages, highlight } from 'prismjs';
+/* eslint-disable import-x/no-unassigned-import */
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-rust';
 import 'prismjs/components/prism-go';
@@ -24,6 +25,7 @@ import 'prismjs/components/prism-c';
 import 'prismjs/components/prism-cpp';
 import 'prismjs/components/prism-csharp';
 import 'prismjs/components/prism-bash';
+/* eslint-enable import-x/no-unassigned-import */
 import { createRoot } from 'react-dom/client';
 
 import type {
@@ -53,7 +55,7 @@ import { useStreamBuffer } from './useStreamBuffer.ts';
  * Helper to safely escape HTML for the diff viewer fallback.
  */
 function escapeHtml(str: string): string {
-  return str.replace(/[&<>'"]/g, tag => ({
+  return str.replace(/[&<>'"]/g, (tag) => ({
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
@@ -81,8 +83,8 @@ function getLanguageForPath(path: string): string {
  */
 function highlightLine(line: string, path: string): string {
   const lang = getLanguageForPath(path);
-  if (Prism.languages[lang]) {
-    try { return Prism.highlight(line, Prism.languages[lang]!, lang); } catch { /* ignore */ }
+  if (languages[lang]) {
+    try { return highlight(line, languages[lang]!, lang); } catch { /* ignore */ }
   }
   return escapeHtml(line);
 }
@@ -666,7 +668,6 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       await view.sendPrompt(lastPromptRef.current, lastContextItemsRef.current, { allowedTools: current.allowedTools });
     } catch (err) {
       setError(`Retry failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
     }
@@ -751,7 +752,6 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           timestamp: Date.now()
         };
         setMessages((prev) => [...prev, errorMessage]);
-      } finally {
         setIsTyping(false);
         streamingMessageIdRef.current = null;
       }
@@ -789,7 +789,6 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       await view.sendPrompt(fullText, current.contextItems, { allowedTools: current.allowedTools });
     } catch (err) {
       setError(`Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`);
-    } finally {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
     }
@@ -1736,11 +1735,13 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
               title={isExpanded ? 'Collapse reasoning' : 'Expand reasoning'}
               type="button"
             >
-              {isExpanded ? (
+              {isExpanded
+? (
                 <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
                   <polyline points="18 15 12 9 6 15" />
                 </svg>
-              ) : (
+              )
+: (
                 <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
@@ -2181,7 +2182,6 @@ const MarkdownContent = memo(({ content, view }: MarkdownContentProps): ReactEle
             e.preventDefault();
             e.stopPropagation();
             view.app.workspace.getLeaf(e.ctrlKey || e.metaKey ? 'tab' : false).openFile(file);
-            return;
           }
         }
       }
@@ -2593,13 +2593,13 @@ const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRej
             } else {
               // Fallback: show all keys
               const keys = Object.keys(rawInput).slice(0, 3);
-              actionDesc = keys.map(k => `${k}: ${JSON.stringify(rawInput[k]).slice(0, 50)}`).join(', ');
+              actionDesc = keys.map((k) => `${k}: ${JSON.stringify(rawInput[k]).slice(0, 50)}`).join(', ');
             }
           }
         }
 
         // Show affected locations if available
-        const locationPaths = locations?.map(l => String(l['path'] || l['uri'] || '')).filter(Boolean) || [];
+        const locationPaths = locations?.map((l) => String(l['path'] || l['uri'] || '')).filter(Boolean) || [];
 
         return (
           <div className="hermes-pending-permission" key={permission.id}>
@@ -2623,7 +2623,7 @@ const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRej
                   <span className="hermes-pending-permission-label">Affects:</span>
                   <span className="hermes-pending-permission-value">
                     {locationPaths.map((p, i) => (
-                      <span key={i} className="hermes-pending-permission-path">{p}</span>
+                      <span className="hermes-pending-permission-path" key={i}>{p}</span>
                     ))}
                   </span>
                 </div>

@@ -2,6 +2,7 @@ import type { ExtractPluginSettingsWrapper } from 'obsidian-dev-utils/obsidian/P
 import type { ReadonlyDeep } from 'type-fest';
 
 import { Notice } from 'obsidian';
+import { EditorView } from '@codemirror/view';
 import { PluginBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginBase';
 
 import type {
@@ -40,7 +41,7 @@ export class Plugin extends PluginBase<PluginTypes> {
   public fileChangeManager!: FileChangeManager;
   public secrets!: SecretsManager;
   public vaultManager!: VaultManager;
-  public activeEditorView?: any;
+  public activeEditorView?: EditorView;
   private ribbonBadgeEl?: HTMLElement;
   private statusBarItemEl?: HTMLElement;
 

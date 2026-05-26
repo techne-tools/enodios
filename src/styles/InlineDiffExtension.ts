@@ -1,6 +1,7 @@
 import type { DecorationSet } from '@codemirror/view';
 
 import {
+ Range,
  StateEffect,
 StateField
 } from '@codemirror/state';
@@ -56,17 +57,17 @@ class InlineDiffWidget extends WidgetType {
   toDOM(): HTMLElement {
     const span = document.createElement('span');
     span.className = 'hermes-diff-line hermes-diff-' + this.line.type;
-    
+
     const marker = document.createElement('span');
     marker.className = 'hermes-diff-marker';
     marker.textContent = this.line.type === 'added' ? '+' : this.line.type === 'removed' ? '-' : ' ';
     span.appendChild(marker);
-    
+
     const text = document.createElement('span');
     text.className = 'hermes-diff-text';
     text.textContent = this.line.line;
     span.appendChild(text);
-    
+
     return span;
   }
 
@@ -97,8 +98,8 @@ export const inlineDiffStateField = StateField.define<DecorationSet>({
           return Decoration.none; // Clear diff
         }
         const { lines, startPos } = effect.value;
-        const ranges: any[] = [];
-        
+        const ranges: Range<Decoration>[] = [];
+
         let currentPos = startPos;
         for (const line of lines) {
           const widget = Decoration.widget({
@@ -109,7 +110,7 @@ export const inlineDiffStateField = StateField.define<DecorationSet>({
           // Each diff line takes up one "virtual" position
           currentPos += 1;
         }
-        
+
         return Decoration.set(ranges);
       }
     }

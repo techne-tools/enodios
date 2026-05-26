@@ -1,12 +1,15 @@
 import {
- MarkdownView,
- normalizePath,
-Notice,
-TFile
+  MarkdownView,
+  normalizePath,
+  Notice,
+  TFile
 } from 'obsidian';
+
+import { EditorView } from '@codemirror/view';
 
 import type { Plugin } from './Plugin.ts';
 
+import { setInlineDiffEffect } from './styles/InlineDiffExtension.ts';
 import { generateMessageId } from './utils/uuid.ts';
 
 export interface DiffLineState {
@@ -300,9 +303,7 @@ export class FileChangeManager {
   /**
    * Trigger inline diff rendering in the provided editor view.
    */
-  private triggerInlineDiff(change: PendingFileChange, view: any): void {
-    const { setInlineDiffEffect } = require('./styles/InlineDiffExtension.ts');
-
+  private triggerInlineDiff(change: PendingFileChange, view: EditorView): void {
     // Find the position to insert the diff (at the start of the file content)
     const startPos = 0;
 
@@ -321,9 +322,8 @@ export class FileChangeManager {
     const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
     if (activeView && activeView.file?.path === path) {
       // @ts-expect-error - Accessing internal CodeMirror 6 view from Obsidian's Editor wrapper
-      const cmView = activeView.editor.cm;
+      const cmView = activeView.editor.cm as EditorView;
       if (cmView) {
-        const { setInlineDiffEffect } = require('./styles/InlineDiffExtension.ts');
         cmView.dispatch({ effects: setInlineDiffEffect.of(null) });
       }
     }
@@ -477,7 +477,7 @@ function myersDiff(a: string[], b: string[]): DiffLineState[] {
   const MAX_D = 3000;
 
   // Forward pass
-  for (d = 0; d <= max; d++) {
+  for (; d <= max; d++) {
     if (d > MAX_D) {
       // Fallback to naive replacement to prevent hanging the UI on massive rewrites
       return [
@@ -491,7 +491,7 @@ function myersDiff(a: string[], b: string[]): DiffLineState[] {
 
     for (let k = -d; k <= d; k += 2) {
       const kOffset = max + k;
-      let x = 0;
+      let x: number;
 
       if (k === -d || (k !== d && v[kOffset - 1]! < v[kOffset + 1]!)) {
         x = v[kOffset + 1]!; // Move down (insertion)
@@ -529,7 +529,7 @@ function myersDiff(a: string[], b: string[]): DiffLineState[] {
     const k = x - y;
     const vStep = trace[step - 1]!;
 
-    let prevK = 0;
+    let prevK: number;
     if (k === -step || (k !== step && vStep[k + step - 2]! < vStep[k + step]!)) {
       prevK = k + 1;
     } else {

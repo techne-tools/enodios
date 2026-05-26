@@ -84,7 +84,10 @@ export class AuditLog {
           console.error('[Hermes] AuditLog flush failed permanently:', message);
         } else {
           // Exponential backoff: 500ms, 1000ms, 2000ms
-          await new Promise((resolve) => setTimeout(resolve, 500 * Math.pow(2, attempts - 1)));
+          const delay = 500 * (2 ** (attempts - 1));
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, delay);
+          });
         }
       }
     }
