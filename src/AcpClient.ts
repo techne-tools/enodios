@@ -69,10 +69,10 @@ export interface AcpSessionUpdate extends ChatSessionUpdate {
 }
 
 export interface AcpToolCall {
-  args?: string;
+  args?: string | undefined;
   callId: string;
   name: string;
-  result?: string;
+  result?: string | undefined;
   status: 'complete' | 'error' | 'running';
 }
 
@@ -962,15 +962,16 @@ export class AcpClient implements ChatClient {
 
       // Tool call updates
       if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') {
+        // The ACP protocol uses `title` (not `name`) for the human-readable tool name,
+        // and `toolCallId` (not `callId`) for the unique identifier.
         const toolUpdate = update as {
-          name?: string;
-          result?: unknown;
+          kind?: string;
+          locations?: Array<{ path: string }>;
+          rawInput?: unknown;
+          rawOutput?: unknown;
           status?: string;
           title?: string;
-          tool?: { name?: string };
-          toolCall?: { name?: string };
           toolCallId?: string;
-          toolName?: string;
         };
         const statusMap: Record<string, 'complete' | 'error' | 'running'> = {
           completed: 'complete',
@@ -980,30 +981,23 @@ export class AcpClient implements ChatClient {
         };
 
         const status = statusMap[toolUpdate.status ?? ''] ?? 'running';
-        const resultStr = toolUpdate.result !== undefined
-          ? (typeof toolUpdate.result === 'string' ? toolUpdate.result : JSON.stringify(toolUpdate.result, null, 2))
+        const resultStr = toolUpdate.rawOutput !== undefined
+          ? (typeof toolUpdate.rawOutput === 'string' ? toolUpdate.rawOutput : JSON.stringify(toolUpdate.rawOutput, null, 2))
           : undefined;
 
-        // The ACP protocol may send the tool name in various locations depending on version.
-        // Check all known locations: name, title, toolCall.name, tool.name, toolName.
-        // Also check nested content fields used by some ACP server implementations.
-        const rawUpdate = update as unknown as Record<string, unknown>;
-        const contentObj = rawUpdate['content'] as Record<string, unknown> | undefined;
-        const contentTool = contentObj?.['tool'] as Record<string, string> | undefined;
-        const contentToolCall = contentObj?.['toolCall'] as Record<string, string> | undefined;
-        const toolName = toolUpdate.name
-          ?? toolUpdate.title
-          ?? toolUpdate.toolCall?.name
-          ?? toolUpdate.tool?.name
-          ?? toolUpdate.toolName
-          ?? contentTool?.['name']
-          ?? contentObj?.['name'] as string | undefined
-          ?? contentToolCall?.['name']
+        // The tool name is in `title` per the ACP spec. `kind` gives the category.
+        const toolName = toolUpdate.title
+          ?? toolUpdate.kind
           ?? 'unknown-tool';
 
+        const toolCallId = toolUpdate.toolCallId ?? '';
+
         const toolCall: AcpToolCall = {
-          callId: String(toolUpdate.toolCallId ?? ''),
-          name: String(toolName),
+          args: toolUpdate.rawInput !== undefined
+            ? (typeof toolUpdate.rawInput === 'string' ? toolUpdate.rawInput : JSON.stringify(toolUpdate.rawInput))
+            : undefined,
+          callId: toolCallId,
+          name: toolName,
           status
         };
         if (resultStr !== undefined) {

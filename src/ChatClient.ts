@@ -26,7 +26,7 @@ export interface ChatSessionUpdate {
   toolCall?: {
     callId: string;
     name: string;
-    result?: string;
+    result?: string | undefined;
     status: 'complete' | 'error' | 'running';
   };
   type: 'available_commands' | 'message' | 'reasoning' | 'stop' | 'terminal_output' | 'tool_complete' | 'tool_progress' | 'tool_start' | 'usage';
