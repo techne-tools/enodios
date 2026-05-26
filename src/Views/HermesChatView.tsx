@@ -2514,11 +2514,40 @@ interface PendingPermissionsPanelProps {
   permissions: PendingPermission[];
 }
 
+const TOOL_KIND_ICONS: Record<string, string> = {
+  delete: '🗑️',
+  edit: '✏️',
+  execute: '▶️',
+  fetch: '🌐',
+  move: '📦',
+  other: '🔧',
+  read: '📖',
+  search: '🔍',
+  switch_mode: '🔄',
+  think: '💭'
+};
+
+const TOOL_KIND_LABELS: Record<string, string> = {
+  delete: 'Delete',
+  edit: 'Edit',
+  execute: 'Execute',
+  fetch: 'Fetch',
+  move: 'Move',
+  other: 'Other',
+  read: 'Read',
+  search: 'Search',
+  switch_mode: 'Switch Mode',
+  think: 'Think'
+};
+
 const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRejectAll, permissions }: PendingPermissionsPanelProps): ReactElement => {
   return (
     <div className="hermes-pending-permissions">
       <div className="hermes-pending-permissions-header">
-        <span>Permission Requests ({permissions.length})</span>
+        <span className="hermes-pending-permissions-title">
+          <span className="hermes-pending-permissions-icon">🔒</span>
+          Permission Requests ({permissions.length})
+        </span>
         {permissions.length > 1 && (
           <div className="hermes-pending-permissions-actions">
             <button className="hermes-btn-approve" onClick={onApproveAll} type="button">Approve All</button>
@@ -2527,34 +2556,96 @@ const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRej
         )}
       </div>
       {permissions.map((permission) => {
-        const permType = String((permission.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
-        const toolName = String((permission.params as unknown as Record<string, unknown>)['toolName'] || 'Unknown tool');
-        const description = String((permission.params as unknown as Record<string, unknown>)['description'] || '');
+        // Extract tool info from the ACP permission request
+        const toolCall = (permission.params as unknown as Record<string, unknown>)['toolCall'] as Record<string, unknown> | undefined;
+        const toolTitle = String(toolCall?.['title'] || '');
+        const toolKind = String(toolCall?.['kind'] || 'other');
+        const rawInput = toolCall?.['rawInput'] as Record<string, unknown> | undefined;
+        const locations = toolCall?.['locations'] as Array<Record<string, unknown>> | undefined;
+
+        // Build a human-readable description of what the tool wants to do
+        const toolName = toolTitle || TOOL_KIND_LABELS[toolKind] || 'Unknown tool';
+        const toolIcon = TOOL_KIND_ICONS[toolKind] || '🔧';
+
+        // Extract the action description from rawInput
+        let actionDesc = '';
+        if (rawInput) {
+          if (typeof rawInput === 'string') {
+            actionDesc = rawInput;
+          } else {
+            // Try to build a description from common tool parameters
+            const path = rawInput['path'] || rawInput['file'] || rawInput['filename'];
+            const command = rawInput['command'] || rawInput['cmd'];
+            const query = rawInput['query'] || rawInput['search'];
+            const url = rawInput['url'] || rawInput['uri'];
+
+            if (path) {
+              actionDesc = `Target: \`${String(path)}\``;
+            } else if (command) {
+              actionDesc = `Command: \`${String(command)}\``;
+            } else if (query) {
+              actionDesc = `Query: "${String(query)}"`;
+            } else if (url) {
+              actionDesc = `URL: ${String(url)}`;
+            } else {
+              // Fallback: show all keys
+              const keys = Object.keys(rawInput).slice(0, 3);
+              actionDesc = keys.map(k => `${k}: ${JSON.stringify(rawInput[k]).slice(0, 50)}`).join(', ');
+            }
+          }
+        }
+
+        // Show affected locations if available
+        const locationPaths = locations?.map(l => String(l['path'] || l['uri'] || '')).filter(Boolean) || [];
+
         return (
           <div className="hermes-pending-permission" key={permission.id}>
-            <div className="hermes-pending-permission-summary">
-              <span className="hermes-pending-permission-desc">
-                <strong>{toolName}</strong> is requesting permission to <strong>{permType}</strong>
-                {description ? `: ${description}` : ''}
+            <div className="hermes-pending-permission-header">
+              <span className="hermes-pending-permission-tool">
+                <span className="hermes-pending-permission-tool-icon">{toolIcon}</span>
+                <strong>{toolName}</strong>
+                <span className="hermes-pending-permission-kind">({toolKind})</span>
               </span>
             </div>
+
+            <div className="hermes-pending-permission-details">
+              {actionDesc && (
+                <div className="hermes-pending-permission-action">
+                  <span className="hermes-pending-permission-label">Action:</span>
+                  <code className="hermes-pending-permission-value">{actionDesc}</code>
+                </div>
+              )}
+              {locationPaths.length > 0 && (
+                <div className="hermes-pending-permission-locations">
+                  <span className="hermes-pending-permission-label">Affects:</span>
+                  <span className="hermes-pending-permission-value">
+                    {locationPaths.map((p, i) => (
+                      <span key={i} className="hermes-pending-permission-path">{p}</span>
+                    ))}
+                  </span>
+                </div>
+              )}
+            </div>
+
             <div className="hermes-pending-permission-options">
               {permission.params.options.map((option) => (
                 <button
                   className={`hermes-permission-option hermes-permission-option--${option.kind}`}
                   key={option.optionId}
                   onClick={() => { onApprove(permission.id, option.optionId); }}
+                  title={option.kind === 'allow_always' ? 'Allow this tool for the rest of the session' : option.kind === 'allow_once' ? 'Allow just this one call' : option.name}
                   type="button"
                 >
-                  {option.name}
+                  {option.kind === 'allow_always' ? '✅ Allow Always' : option.kind === 'allow_once' ? '👍 Allow Once' : option.name}
                 </button>
               ))}
               <button
                 className="hermes-permission-option hermes-permission-option--reject"
                 onClick={() => { onReject(permission.id); }}
+                title="Deny this request"
                 type="button"
               >
-                Reject
+                ❌ Deny
               </button>
             </div>
           </div>

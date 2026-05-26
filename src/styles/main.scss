@@ -1635,6 +1635,16 @@
     color: var(--text-normal);
   }
 
+  &-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &-icon {
+    font-size: 14px;
+  }
+
   &-actions {
     display: flex;
     gap: 8px;
@@ -1648,16 +1658,74 @@
   overflow: hidden;
   background-color: var(--background-primary);
 
-  &-summary {
+  &-header {
     display: flex;
     align-items: center;
     padding: 8px 12px;
     gap: 6px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary-alt);
   }
 
-  &-desc {
-    font-size: 12px;
+  &-tool {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
     color: var(--text-normal);
+
+    strong {
+      font-weight: 600;
+    }
+  }
+
+  &-tool-icon {
+    font-size: 14px;
+  }
+
+  &-kind {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &-details {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  &-action,
+  &-locations {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  &-label {
+    color: var(--text-muted);
+    font-weight: 500;
+    flex-shrink: 0;
+    min-width: 50px;
+  }
+
+  &-value {
+    color: var(--text-normal);
+    word-break: break-word;
+  }
+
+  &-path {
+    display: inline-block;
+    padding: 1px 4px;
+    background-color: var(--background-secondary);
+    border-radius: 3px;
+    font-family: var(--font-monospace);
+    font-size: 11px;
+    margin-right: 4px;
+    margin-bottom: 2px;
   }
 
   &-options {
@@ -1665,6 +1733,7 @@
     gap: 6px;
     padding: 8px 12px;
     flex-wrap: wrap;
+    border-top: 1px solid var(--background-modifier-border);
   }
 }
 

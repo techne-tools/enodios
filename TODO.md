@@ -106,6 +106,13 @@
   - Fixed reasoning message ordering — reasoning now appears BEFORE the assistant response (inserted above the streaming placeholder)
   - Added proper CSS spinner animation for running tools — replaced text `↻` with animated `hermes-tool-spinner` element
   - Added `isCollapsed` field to `ChatMessage` interface for reasoning state persistence
+  - **Overhauled permission request UI** — now shows:
+    - Tool icon based on `toolCall.kind` (📖 read, ✏️ edit, 🗑️ delete, ▶️ execute, etc.)
+    - Tool name from `toolCall.title` with kind label
+    - Action description extracted from `rawInput` (shows target path, command, query, or URL)
+    - Affected file locations from `toolCall.locations`
+    - Clear button labels: "✅ Allow Always", "👍 Allow Once", "❌ Deny"
+    - Tooltips explaining each option's behavior
 
 ## Implementation Notes
 
