@@ -55,7 +55,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
         let summary = `Attached current Canvas mind-map (**${activeFile.basename}.canvas**).\n\n`;
         summary += `Raw JSON structure:\n\`\`\`json\n${JSON.stringify(canvasData, null, 2)}\n\`\`\`\n\n`;
-        summary += '**Instructions for Hermes:**\nTo create or modify a Canvas, use the `writeTextFile` tool to write valid JSON to a `.canvas` file path. Ensure you include a `nodes` array (id, type: "text"|"file"|"group", x, y, width, height) and an `edges` array (id, fromNode, fromSide, toNode, toSide).';
+        summary += '**Instructions for Hermes:**\nTo create or modify a Canvas, use the `write_file` tool to write valid JSON to a `.canvas` file path. Ensure you include a `nodes` array (id, type: "text"|"file"|"group", x, y, width, height) and an `edges` array (id, fromNode, fromSide, toNode, toSide).';
 
         return summary;
       } catch (err) {
@@ -142,7 +142,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       const topMatches = matches.slice(0, 5);
 
       let result = `### 🔍 Vault Search Results for "${args}"\n\n`;
-      result += '*System note: The following excerpts were retrieved from the user\'s vault. Use them to answer the prompt. To read a full file, use the `readTextFile` tool on its path.*\n\n';
+      result += '*System note: The following excerpts were retrieved from the user\'s vault. Use them to answer the prompt. To read a full file, use the `read_file` tool on its path.*\n\n';
 
       for (const match of topMatches) {
         result += `**Path:** \`${match.file.path}\`\n> ${match.excerpt}\n\n`;

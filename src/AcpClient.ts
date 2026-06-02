@@ -439,7 +439,10 @@ export class AcpClient implements ChatClient {
    * Send a prompt to the ACP session.
    */
   public async sendPrompt(text: string, contextItems: PromptContextItem[] = [], options?: { allowedTools?: null | string[] }): Promise<void> {
-    this.currentAllowedTools = options?.allowedTools ?? null;
+    // Normalize empty array to null: [] means "no restrictions" (same as null),
+    // not "no tools allowed". An empty array causes checkToolAllowed to reject
+    // everything while the system prompt tells the agent nothing useful.
+    this.currentAllowedTools = options?.allowedTools?.length ? options.allowedTools : null;
     if (!this.isReady() || !this.clientConnection || !this.currentSessionId) {
       throw new Error('ACP client not connected');
     }
@@ -541,12 +544,46 @@ export class AcpClient implements ChatClient {
       type: 'text'
     });
 
-    if (this.currentAllowedTools) {
-      promptBlocks.push({
-        text: `System Instruction: For this session, you are ONLY permitted to use the following tools: ${this.currentAllowedTools.join(', ')}. Do not attempt to use any other tools.`,
-        type: 'text'
-      });
+    // ACP workspace integration note.
+    // The Hermes ACP toolset uses native tools (write_file, patch, read_file,
+    // search_files) which run on the agent's machine with CWD set to the vault.
+    // The agent also may use fs/write_text_file / fs/read_text_file client
+    // methods, which go through Obsidian's file approval flow with inline diffs.
+    //
+    // We DON'T block either path — both are valid. We just explain the trade-off:
+    // native tools: faster, no inline diff
+    // client methods: shows inline diff, user approves via FileChangeManager
+    const toolNote: string[] = [
+      '## Workspace & Tool Note',
+      '',
+      'Your working directory (CWD) is set to the Obsidian vault root.',
+      'All file operations via write_file, patch, read_file, and search_files run here.',
+      '',
+      '### Client methods (optional, for inline diffs)',
+      '- fs/write_text_file — writes through Obsidian file approval with inline diff',
+      '- fs/read_text_file — reads through the Obsidian vault API'
+    ];
+
+    // Add terminal condition
+    if (!this.plugin.settings.allowTerminal) {
+      toolNote.push('', '### Terminal restriction',
+        'Terminal access is DISABLED in settings. Do not use terminal, bash, or process tools.');
     }
+
+    // Add session-level tool restrictions on top, if any
+    if (this.currentAllowedTools) {
+      toolNote.push(
+        '',
+        '### Session Tool Restrictions',
+        `For this session you are RESTRICTED to ONLY: ${this.currentAllowedTools.join(', ')}.`,
+        'Do not attempt to use any other tools or client methods.'
+      );
+    }
+
+    promptBlocks.push({
+      text: toolNote.join('\n'),
+      type: 'text'
+    });
 
     const promptRequest: PromptRequest = {
       prompt: promptBlocks,
@@ -564,7 +601,7 @@ export class AcpClient implements ChatClient {
   private createClientHandler(): Client {
     return {
       createTerminal: async (params: { arguments?: string[]; command?: string } & CreateTerminalRequest): Promise<CreateTerminalResponse> => {
-        this.checkToolAllowed('createTerminal');
+        this.checkToolAllowed('terminal');
         if (!this.plugin.settings.allowTerminal) {
           this.plugin.auditLog.recordTerminal(params.command || 'bash', 'blocked');
           throw new Error('Terminal access is disabled in Hermes settings. Enable "Allow Terminal Access" to use terminal tools.');
@@ -648,10 +685,10 @@ export class AcpClient implements ChatClient {
       },
 
       readTextFile: async (params: ReadTextFileRequest): Promise<ReadTextFileResponse> => {
-        this.checkToolAllowed('readTextFile');
+        this.checkToolAllowed('read_file');
 
         if (!isPathSafe(params.path)) {
-          this.plugin.auditLog.recordToolCall('readTextFile', { path: params.path }, 'blocked', 'Path traversal denied');
+          this.plugin.auditLog.recordToolCall('read_file', { path: params.path }, 'blocked', 'Path traversal denied');
           throw new Error(`Path traversal denied: ${params.path}`);
         }
         const normalized = normalizePath(params.path);
@@ -659,15 +696,15 @@ export class AcpClient implements ChatClient {
         try {
           const file = this.plugin.app.vault.getAbstractFileByPath(normalized);
           if (!(file instanceof TFile)) {
-            this.plugin.auditLog.recordToolCall('readTextFile', { path: params.path }, 'failure', 'File not found');
+            this.plugin.auditLog.recordToolCall('read_file', { path: params.path }, 'failure', 'File not found');
             throw new Error(`File not found: ${params.path}`);
           }
           const content = await this.plugin.app.vault.read(file);
-          this.plugin.auditLog.recordToolCall('readTextFile', { path: params.path }, 'success');
+          this.plugin.auditLog.recordToolCall('read_file', { path: params.path }, 'success');
           return { content };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          this.plugin.auditLog.recordToolCall('readTextFile', { path: params.path }, 'failure', message);
+          this.plugin.auditLog.recordToolCall('read_file', { path: params.path }, 'failure', message);
           throw new Error(`Failed to read file: ${message}`);
         }
       },
@@ -684,6 +721,11 @@ export class AcpClient implements ChatClient {
       },
 
       requestPermission: async (params: RequestPermissionRequest): Promise<RequestPermissionResponse> => {
+        // Pass all permission requests through to the UI for user approval.
+        // The agent's native tools (write_file, patch, read_file, search_files)
+        // run on the agent's machine with CWD set to the vault root, so
+        // approved writes go directly to the vault filesystem.
+        // For diff-based file approval, the agent should use fs/write_text_file.
         return new Promise((resolve, reject) => {
           const pending: PendingPermission = {
             id: generateMessageId(),
@@ -728,10 +770,7 @@ export class AcpClient implements ChatClient {
 
       writeTextFile: async (params: WriteTextFileRequest): Promise<WriteTextFileResponse> => {
         // SECURITY: Session-level tool restrictions apply BEFORE queuing.
-        // FileChangeManager provides a second gate (user approval) but does not
-        // replace session-level blocking. A tool disabled in session settings
-        // must be rejected immediately, not merely queued for approval.
-        this.checkToolAllowed('writeTextFile');
+        this.checkToolAllowed('write_file');
         try {
           // Queue the change for user approval instead of writing immediately
           await this.plugin.fileChangeManager.registerChange(params.path, params.content);
@@ -739,7 +778,7 @@ export class AcpClient implements ChatClient {
           return {};
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          this.plugin.auditLog.recordToolCall('writeTextFile', { path: params.path }, 'failure', message);
+          this.plugin.auditLog.recordToolCall('write_file', { path: params.path }, 'failure', message);
           throw new Error(`Failed to queue file change: ${message}`);
         }
       }

@@ -213,6 +213,13 @@ export class HermesApiClient implements ChatClient {
    * Send a prompt to the Hermes API and stream the response via SSE.
    */
   public async sendPrompt(text: string, contextItems: PromptContextItem[] = [], options?: { allowedTools?: null | string[] }): Promise<void> {
+    // Normalize empty array to null: [] means "no restrictions" (same as null),
+    // not "no tools allowed". Prevents inconsistent behavior where the agent
+    // gets no system instruction but the tool restriction logic rejects everything.
+    const normalizedOptions = options?.allowedTools?.length
+      ? { allowedTools: options.allowedTools }
+      : { allowedTools: undefined as undefined | null };
+
     // Abort any in-flight request before starting a new one to prevent connection leaks
     if (this.activeAbortController) {
       this.activeAbortController.abort();
@@ -232,15 +239,45 @@ export class HermesApiClient implements ChatClient {
       messages.push({ content: activePersona.systemPrompt, role: 'system' });
     }
 
-    if (options?.allowedTools) {
-      messages.push({ content: `System Instruction: You are restricted to ONLY using the following tools in this session: ${options.allowedTools.join(', ')}. Do not attempt to use any other tools.`, role: 'system' });
-    } else if (options?.allowedTools !== null && this.plugin.settings.personaTemplates.find((p) => p.id === this.plugin.settings.activePersonaId)?.defaultTools) {
+    if (normalizedOptions.allowedTools?.length) {
+      messages.push({ content: `System Instruction: You are restricted to ONLY using the following tools in this session: ${normalizedOptions.allowedTools.join(', ')}. Do not attempt to use any other tools.`, role: 'system' });
+    } else if (normalizedOptions.allowedTools !== null && this.plugin.settings.personaTemplates.find((p) => p.id === this.plugin.settings.activePersonaId)?.defaultTools) {
       // Apply persona default tool restrictions when no explicit session override is set
       const defaultTools = this.plugin.settings.personaTemplates.find((p) => p.id === this.plugin.settings.activePersonaId)?.defaultTools;
       if (defaultTools && defaultTools.length > 0) {
         messages.push({ content: `System Instruction: You are restricted to ONLY using the following tools in this session: ${defaultTools.join(', ')}. Do not attempt to use any other tools.`, role: 'system' });
       }
     }
+
+    // Workspace context note for the Hermes API mode.
+    // In ACP mode the agent's native tools (write_file, patch, read_file)
+    // can write directly to the vault filesystem with user approval.
+    // In API mode, no ACP permission flow exists, so the agent uses its
+    // standard toolset against the provided workspace path.
+    const workspaceNote: string[] = [
+      '## Workspace Note',
+      '',
+      `Your working directory is: ${this.plugin.app.vault.getRoot().path}`,
+      'All file operations (write_file, patch, read_file, search_files) run here.',
+      '',
+      '### Terminal access',
+    ];
+
+    if (this.plugin.settings.allowTerminal) {
+      workspaceNote.push('Terminal commands (terminal, bash) are enabled via settings.');
+    } else {
+      workspaceNote.push('Terminal commands are DISABLED via settings.');
+    }
+
+    // Add session-level tool restrictions
+    if (normalizedOptions.allowedTools?.length) {
+      workspaceNote.push(
+        '',
+        `For this session you are RESTRICTED to ONLY: ${normalizedOptions.allowedTools.join(', ')}.`
+      );
+    }
+
+    messages.push({ content: workspaceNote.join('\n'), role: 'system' });
 
     const userContentParts: Record<string, unknown>[] = [];
     for (const item of contextItems) {

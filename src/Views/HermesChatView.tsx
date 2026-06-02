@@ -243,9 +243,9 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   const [allowedTools, setAllowedTools] = useState<null | string[]>(null);
   const [isSessionSettingsOpen, setIsSessionSettingsOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState<{ id: string; name: string }[]>([
-    { id: 'readTextFile', name: 'Read Files' },
-    { id: 'writeTextFile', name: 'Write Files' },
-    { id: 'createTerminal', name: 'Terminal Commands' }
+    { id: 'read_file', name: 'Read Files' },
+    { id: 'write_file', name: 'Write Files' },
+    { id: 'terminal', name: 'Terminal Commands' }
   ]);
   const isSlashOpenRef = useRef(false);
   const inputRef = useRef('');
@@ -386,6 +386,8 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         setIsTyping(false);
         streamingMessageIdRef.current = null;
         reasoningMessageIdRef.current = null;
+        // Clear isRunning from all tool messages so spinners/pulse stop
+        setMessages((prev) => prev.map((m) => m.role === 'tool' && m.isRunning ? { ...m, isRunning: false } : m));
         // Save conversation after response completes (debounced)
         setMessages((currentMessages) => {
           scheduleSave(currentMessages);
@@ -398,8 +400,9 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       } else if (update.type === 'tool_start' || update.type === 'tool_progress' || update.type === 'tool_complete') {
         flushNow();
         if (settings.showToolUse && update.toolCall) {
-          const isRunning = update.toolCall.status === 'running';
-          const statusIcon = isRunning ? '<span class="hermes-tool-spinner"></span>' : (update.toolCall.status === 'error' ? '❌' : '✅');
+          // Force isRunning false on tool_complete regardless of backend status
+          const isRunning = update.type !== 'tool_complete' && update.toolCall.status === 'running';
+          const statusIcon = isRunning ? '<span class="hermes-tool-helix"></span>' : (update.toolCall.status === 'error' ? '❌' : '✅');
           let toolMsg = `${statusIcon} **${update.toolCall.name}** ${isRunning ? '*(running...)*' : ''}`;
           if (update.toolCall.result) {
             toolMsg += `\n\n**Result:**\n\`\`\`text\n${update.toolCall.result}\n\`\`\``;
@@ -473,6 +476,9 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       setError(cleaned);
       setIsTyping(false);
       streamingMessageIdRef.current = null;
+      reasoningMessageIdRef.current = null;
+      // Clear isRunning from all tool messages so spinners/pulse stop on error
+      setMessages((prev) => prev.map((m) => m.role === 'tool' && m.isRunning ? { ...m, isRunning: false } : m));
     });
 
     const unsubCommands = view.subscribeToAvailableCommands((commands) => {
@@ -487,9 +493,9 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       setCachedToolCommands(toolCmds);
       setAvailableTools((_prev) => {
         const baseTools = [
-          { id: 'readTextFile', name: 'Read Files' },
-          { id: 'writeTextFile', name: 'Write Files' },
-          { id: 'createTerminal', name: 'Terminal Commands' }
+          { id: 'read_file', name: 'Read Files' },
+          { id: 'write_file', name: 'Write Files' },
+          { id: 'terminal', name: 'Terminal Commands' }
         ];
         const dynamicTools = commands.map((c) => ({ id: c.name, name: c.name }));
         const all = [...baseTools, ...dynamicTools];
@@ -568,7 +574,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         setMessages(loaded.messages);
         setConversationFilePath(filePath);
         setConversationTitle(loaded.title);
-        setAllowedTools(loaded.allowedTools ?? null);
+        setAllowedTools(loaded.allowedTools?.length ? loaded.allowedTools : null);
         view.clearConversation();
       }
     } catch {
@@ -1731,21 +1737,42 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
           <span className="hermes-message-meta">
             <button
               className="hermes-icon-btn hermes-msg-action-btn"
+              draggable
+              onClick={handleCopy}
+              onDragStart={(e) => { e.dataTransfer.setData('text/plain', message.content); }}
+              title={isCopied ? 'Copied!' : 'Copy or Drag Reasoning'}
+              type="button"
+            >
+              {isCopied
+                ? (
+                  <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )
+                : (
+                  <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                    <rect height="13" rx="2" ry="2" width="13" x="9" y="9" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                )}
+            </button>
+            <button
+              className="hermes-icon-btn hermes-msg-action-btn"
               onClick={toggleExpand}
               title={isExpanded ? 'Collapse reasoning' : 'Expand reasoning'}
               type="button"
             >
               {isExpanded
-? (
-                <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
-                  <polyline points="18 15 12 9 6 15" />
-                </svg>
-              )
-: (
-                <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              )}
+                ? (
+                  <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                    <polyline points="18 15 12 9 6 15" />
+                  </svg>
+                )
+                : (
+                  <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                )}
             </button>
             <span className="hermes-timestamp">{new Date(message.timestamp).toLocaleTimeString()}</span>
           </span>
@@ -2593,7 +2620,7 @@ const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRej
             } else {
               // Fallback: show all keys
               const keys = Object.keys(rawInput).slice(0, 3);
-              actionDesc = keys.map((k) => `${k}: ${JSON.stringify(rawInput[k]).slice(0, 50)}`).join(', ');
+              actionDesc = keys.map((k) => `${k}: ${(JSON.stringify(rawInput[k]) ?? '').slice(0, 50)}`).join(', ');
             }
           }
         }

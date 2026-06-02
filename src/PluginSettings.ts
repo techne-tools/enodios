@@ -43,19 +43,19 @@ export class PluginSettings {
       systemPrompt: ''
     },
     {
-      defaultTools: ['readTextFile', 'writeTextFile', 'createTerminal'],
+      defaultTools: ['read_file', 'write_file', 'terminal'],
       id: 'coding',
       name: 'Coding Assistant',
       systemPrompt: 'You are a senior software engineer. Provide concise, correct code. Prefer TypeScript. Explain trade-offs briefly.'
     },
     {
-      defaultTools: ['readTextFile', 'writeTextFile'],
+      defaultTools: ['read_file', 'write_file'],
       id: 'writing',
       name: 'Writing Coach',
       systemPrompt: 'You are an experienced editor and writing coach. Help refine prose, fix grammar, and suggest structural improvements.'
     },
     {
-      defaultTools: ['readTextFile', 'writeTextFile'],
+      defaultTools: ['read_file', 'write_file'],
       id: 'research',
       name: 'Research Assistant',
       systemPrompt: 'You are a research assistant. Synthesize information, cite sources when possible, and ask clarifying questions.'
