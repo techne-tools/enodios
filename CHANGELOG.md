@@ -2,6 +2,24 @@
 
 All notable changes to the Obsidian Hermes plugin.
 
+## [0.3.5-beta1] - 2026-06-02
+
+### Bug Fixes
+- **Fixed tool name confusion in ACP protocol** — Renamed all tool IDs to native names (`read_file`, `write_file`, `terminal`) across `PluginSettings.ts`, `SlashCommands.ts`, and `HermesChatView.tsx`. Updated system instructions in `AcpClient.ts` and `HermesApiClient.ts` to reference only native tool names, eliminating agent confusion about `fs/write_text_file` vs `write_file`.
+- **Fixed empty `allowedTools: []` treated as "allow all"** — Empty arrays now normalize to `null` (deny all) in both `AcpClient.ts` and `HermesApiClient.ts`, preventing unintended tool access when no tools are explicitly enabled.
+- **Fixed `checkToolAllowed('write_file')` blocking client methods** — Session tool restrictions now only apply to agent tools, not ACP client methods (`fs/write_text_file`, `fs/read_text_file`). Previously, disabling "Write Files" in session settings incorrectly blocked the client method entirely.
+- **Fixed spinners not stopping on tool completion** — Forces `isRunning=false` on `tool_complete` updates regardless of what the backend reports in `toolCall.status`. Also clears `isRunning` on all tool messages in the error handler.
+- **Fixed `resolveAllPermissions()` auto-reject** — Removed blanket auto-reject logic so permissions pass through cleanly to the UI for proper user approval.
+
+### UX Improvements
+- **Added copy/drag button to reasoning messages** — Reasoning message headers now include the same copy-to-clipboard and drag-to-note buttons as regular chat messages.
+- **Replaced tool spinner with braille helix animation** — Running tools now show a 10-step braille helix (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`) instead of the previous 4-step geometric spinner.
+- **Added `reasoningMessageIdRef` clear in error handler** — Prevents stale reasoning message references when ACP errors occur.
+
+### Infrastructure
+- All 79 tests passing (5 test suites, ~388ms).
+- Build produces `main.js` (1.1M), `styles.css` (30k), `manifest.json`.
+
 ## [0.3.0] - 2026-05-26
 
 ### Bug Fixes

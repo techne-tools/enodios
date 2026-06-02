@@ -2,7 +2,7 @@
 
 **Created:** 14 May 2026
 **Phase:** Phase 4 - Polish & Release Prep
-**Current Version:** 0.3.0
+**Current Version:** 0.3.5-beta1
 
 ## Core Features (High Priority)
 
@@ -113,6 +113,17 @@
     - Affected file locations from `toolCall.locations`
     - Clear button labels: "✅ Allow Always", "👍 Allow Once", "❌ Deny"
     - Tooltips explaining each option's behavior
+
+- [x] **ACP Protocol Fixes & UI Polish (2 June 2026)**:
+  - Fixed tool name confusion — renamed all tool IDs to native names (`read_file`, `write_file`, `terminal`) and updated system instructions to match
+  - Fixed empty `allowedTools: []` being treated as "allow all" — now normalizes empty arrays to `null` (deny all) in both `AcpClient.ts` and `HermesApiClient.ts`
+  - Removed `resolveAllPermissions()` auto-reject logic — permissions now pass through cleanly to the UI for user approval
+  - Fixed `checkToolAllowed('write_file')` incorrectly blocking `fs/write_text_file` client method — session tool restrictions now only apply to agent tools, not ACP client methods
+  - Added copy/drag button to reasoning message headers
+  - Replaced tool spinner with braille helix animation (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`)
+  - Fixed spinners not stopping — forces `isRunning=false` on `tool_complete` regardless of backend status
+  - Added `isRunning` clear on error handler to stop spinners/pulse when ACP errors occur
+  - Added `reasoningMessageIdRef` clear in error handler
 
 ## Implementation Notes
 
