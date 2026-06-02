@@ -170,7 +170,7 @@ export class AcpClient implements ChatClient {
     for (const p of pending) {
       const permType = String((p.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
       this.plugin.auditLog.recordPermission(permType, 'cancelled', 'failure');
-      p.resolve({ outcome: 'cancelled' } as unknown as RequestPermissionResponse);
+      p.resolve({ outcome: { outcome: 'cancelled' } } as RequestPermissionResponse);
     }
     this.notifyPermissions();
   }
@@ -184,8 +184,8 @@ export class AcpClient implements ChatClient {
       const permType = String((pending.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
       this.plugin.auditLog.recordPermission(permType, 'cancelled', 'failure');
       pending.resolve({
-        outcome: 'cancelled'
-      } as unknown as RequestPermissionResponse);
+        outcome: { outcome: 'cancelled' }
+      } as RequestPermissionResponse);
       this.pendingPermissions = this.pendingPermissions.filter((p) => p.id !== permissionId);
       this.notifyPermissions();
     }
@@ -405,12 +405,14 @@ export class AcpClient implements ChatClient {
         const outcome = String(allowOptions[0]!.kind || allowOptions[0]!.optionId);
         this.plugin.auditLog.recordPermission(permType, outcome, 'success');
         p.resolve({
-          optionId: String(allowOptions[0]!.optionId),
-          outcome: 'selected'
-        } as unknown as RequestPermissionResponse);
+          outcome: {
+            optionId: String(allowOptions[0]!.optionId),
+            outcome: 'selected'
+          }
+        } as RequestPermissionResponse);
       } else {
         this.plugin.auditLog.recordPermission(permType, 'cancelled', 'failure');
-        p.resolve({ outcome: 'cancelled' } as unknown as RequestPermissionResponse);
+        p.resolve({ outcome: { outcome: 'cancelled' } } as RequestPermissionResponse);
       }
     }
     this.notifyPermissions();
@@ -427,9 +429,11 @@ export class AcpClient implements ChatClient {
       const permType = String((pending.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
       this.plugin.auditLog.recordPermission(permType, outcome, 'success');
       pending.resolve({
-        optionId,
-        outcome: 'selected'
-      } as unknown as RequestPermissionResponse);
+        outcome: {
+          optionId,
+          outcome: 'selected'
+        }
+      } as RequestPermissionResponse);
       this.pendingPermissions = this.pendingPermissions.filter((p) => p.id !== permissionId);
       this.notifyPermissions();
     }

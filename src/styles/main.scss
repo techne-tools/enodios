@@ -88,31 +88,15 @@
 /* Tool progress braille helix spinner */
 .hermes-tool-helix {
   display: inline-block;
-  width: 12px;
-  height: 12px;
-  vertical-align: middle;
+  vertical-align: baseline;
   margin-right: 4px;
   position: relative;
+  font-family: var(--font-monospace);
+  line-height: 1;
 }
 
-.hermes-tool-helix::before {
-  content: '⠋';
-  animation: hermes-braille-helix 0.8s steps(1) infinite;
-  display: inline-block;
-}
-
-@keyframes hermes-braille-helix {
-  0%   { content: '⠋'; }
-  10%  { content: '⠙'; }
-  20%  { content: '⠹'; }
-  30%  { content: '⠸'; }
-  40%  { content: '⠼'; }
-  50%  { content: '⠴'; }
-  60%  { content: '⠦'; }
-  70%  { content: '⠧'; }
-  80%  { content: '⠇'; }
-  90%  { content: '⠏'; }
-  100% { content: '⠋'; }
+.hermes-tool-helix.stopped {
+  color: var(--text-muted);
 }
 
 /* Running tool message pulse effect */
@@ -132,15 +116,17 @@
   }
 }
 
-/* Collapsible reasoning */
-.hermes-reasoning-collapsed {
+/* Collapsible reasoning and tools */
+.hermes-reasoning-collapsed,
+.hermes-tool-collapsed {
   opacity: 0.7;
   .hermes-message-header {
     cursor: pointer;
   }
 }
 
-.hermes-reasoning-expanded {
+.hermes-reasoning-expanded,
+.hermes-tool-expanded {
   opacity: 1;
   .hermes-message-header {
     cursor: pointer;
@@ -596,8 +582,11 @@
   .hermes-role {
     font-weight: 600;
     font-size: 10px;
-    white-space: nowrap;
-    flex-shrink: 0;
+    word-break: break-all;
+    white-space: normal;
+    min-width: 0;
+    flex: 1;
+    padding-right: 8px;
   }
 
   .hermes-message-meta {

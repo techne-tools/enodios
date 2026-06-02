@@ -3659,6 +3659,7 @@ packages:
   obsidian-dev-skills@1.2.4:
     resolution: {integrity: sha512-0Bw9NoAJVOWIpdaoPtQyZW7T0WjPzduXxxwZBAV+bRdd8Mzhf9/KG4tR1Rbu18cq9X3T8G0w9QxoJkyvSKjENg==}
     engines: {node: '>=18.0.0'}
+    deprecated: Renamed to @davidvkimball/obsidian-dev-skills — please install that instead.
     hasBin: true
 
   obsidian-dev-utils@30.7.0:

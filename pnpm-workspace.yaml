@@ -19,4 +19,5 @@ allowBuilds:
   obsidian-dev-skills: true
   obsidian-typings: true
   svelte-preprocess: true
+  unicode-animations: set this to true or false
   unrs-resolver: true

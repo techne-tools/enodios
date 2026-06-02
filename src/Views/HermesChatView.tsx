@@ -101,6 +101,22 @@ function stripAnsi(text: string): string {
     .replace(/\x1b\x1b/g, ''); // Double escapes
 }
 
+const HELIX_FRAMES = ['⢌⣉⢎⣉', '⣉⡱⣉⡱', '⣉⢎⣉⢎', '⡱⣉⡱⣉'];
+
+function HelixSpinner({ isRunning }: { isRunning: boolean }): React.ReactElement {
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    if (!isRunning) return;
+    const interval = setInterval(() => {
+      setFrame((f) => (f + 1) % HELIX_FRAMES.length);
+    }, 80);
+    return () => clearInterval(interval);
+  }, [isRunning]);
+
+  return <span className={`hermes-tool-helix ${isRunning ? '' : 'stopped'}`}>{HELIX_FRAMES[frame]}</span>;
+}
+
 export const HERMES_CHAT_VIEW_TYPE = 'hermes-chat-view';
 
 export interface ChatMessage {
@@ -113,6 +129,8 @@ export interface ChatMessage {
   terminalId?: string;
   timestamp: number;
   toolCallId?: string;
+  toolName?: string;
+  toolStatus?: 'complete' | 'error' | 'running';
 }
 
 interface AutocompleteSuggestion {
@@ -387,7 +405,16 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         streamingMessageIdRef.current = null;
         reasoningMessageIdRef.current = null;
         // Clear isRunning from all tool messages so spinners/pulse stop
-        setMessages((prev) => prev.map((m) => m.role === 'tool' && m.isRunning ? { ...m, isRunning: false } : m));
+        setMessages((prev) => prev.map((m) => {
+          if (m.role === 'tool' && m.isRunning) {
+            return {
+              ...m,
+              isRunning: false,
+              toolStatus: m.toolStatus === 'error' ? 'error' : 'complete'
+            };
+          }
+          return m;
+        }));
         // Save conversation after response completes (debounced)
         setMessages((currentMessages) => {
           scheduleSave(currentMessages);
@@ -402,34 +429,56 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         if (settings.showToolUse && update.toolCall) {
           // Force isRunning false on tool_complete regardless of backend status
           const isRunning = update.type !== 'tool_complete' && update.toolCall.status === 'running';
-          const statusIcon = isRunning ? '<span class="hermes-tool-helix"></span>' : (update.toolCall.status === 'error' ? '❌' : '✅');
-          let toolMsg = `${statusIcon} **${update.toolCall.name}** ${isRunning ? '*(running...)*' : ''}`;
-          if (update.toolCall.result) {
-            toolMsg += `\n\n**Result:**\n\`\`\`text\n${update.toolCall.result}\n\`\`\``;
-          }
-
           const currentCallId = update.toolCall.callId;
+          const currentToolStatus = update.toolCall.status === 'error' ? 'error' : (isRunning ? 'running' : 'complete');
+
           setMessages((prev) => {
             const toolIndex = prev.findIndex(
               (m) => m.role === 'tool' && m.toolCallId === currentCallId
             );
+
+            // Reconcile tool name to avoid overwriting with "other" on partial updates
+            let resolvedToolName = update.toolCall!.name;
+            if (toolIndex >= 0 && (resolvedToolName === 'other' || resolvedToolName === 'unknown-tool')) {
+              resolvedToolName = prev[toolIndex]?.toolName || resolvedToolName;
+            }
+
+            let toolMsg = '';
+            if (update.toolCall!.result) {
+              toolMsg = `**Result:**\n\`\`\`text\n${update.toolCall!.result}\n\`\`\``;
+            }
+
             if (toolIndex >= 0) {
               const updated = [...prev];
               updated[toolIndex] = {
                 ...prev[toolIndex]!,
                 content: toolMsg,
-                isRunning
+                isRunning,
+                toolName: resolvedToolName,
+                toolStatus: currentToolStatus
               };
               return updated;
             }
-            return [...prev, {
+            
+            const newToolMsg: ChatMessage = {
               content: toolMsg,
               id: generateMessageId(),
               isRunning,
+              isCollapsed: true,
               role: 'tool',
               timestamp: Date.now(),
-              toolCallId: currentCallId
-            }];
+              toolCallId: currentCallId,
+              toolName: resolvedToolName,
+              toolStatus: currentToolStatus
+            };
+            
+            const assistantIndex = prev.findIndex((m) => m.id === streamingMessageIdRef.current);
+            if (assistantIndex >= 0) {
+              const updated = [...prev];
+              updated.splice(assistantIndex, 0, newToolMsg);
+              return updated;
+            }
+            return [...prev, newToolMsg];
           });
         }
       } else if (update.type === 'terminal_output' && update.terminal) {
@@ -478,7 +527,16 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       streamingMessageIdRef.current = null;
       reasoningMessageIdRef.current = null;
       // Clear isRunning from all tool messages so spinners/pulse stop on error
-      setMessages((prev) => prev.map((m) => m.role === 'tool' && m.isRunning ? { ...m, isRunning: false } : m));
+      setMessages((prev) => prev.map((m) => {
+        if (m.role === 'tool' && m.isRunning) {
+          return {
+            ...m,
+            isRunning: false,
+            content: m.content.replace('<span class="hermes-tool-helix"></span>', '❌').replace(' *(running...)*', '')
+          };
+        }
+        return m;
+      }));
     });
 
     const unsubCommands = view.subscribeToAvailableCommands((commands) => {
@@ -1716,7 +1774,7 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
     });
   }, [message.content]);
 
-  const roleLabel = {
+  let roleLabel: React.ReactNode = {
     assistant: 'Hermes',
     reasoning: 'Reasoning',
     system: 'System',
@@ -1725,13 +1783,20 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
     user: 'You'
   }[message.role];
 
-  // Collapsible reasoning messages
-  if (message.role === 'reasoning') {
+  if (message.role === 'tool') {
+    const isError = message.toolStatus === 'error';
+    const isRunning = message.isRunning || message.toolStatus === 'running';
+    const statusIcon = isError ? '❌ ' : <HelixSpinner isRunning={isRunning} />;
+    roleLabel = <>{statusIcon}Tool: {message.toolName}</>;
+  }
+
+  // Collapsible reasoning and tool messages
+  if (message.role === 'reasoning' || message.role === 'tool') {
     const [isExpanded, setIsExpanded] = useState(!message.isCollapsed);
     const toggleExpand = useCallback(() => { setIsExpanded((prev) => !prev); }, []);
 
     return (
-      <div className={`hermes-message hermes-${message.role} ${isExpanded ? 'hermes-reasoning-expanded' : 'hermes-reasoning-collapsed'}`}>
+      <div className={`hermes-message hermes-${message.role} ${isExpanded ? `hermes-${message.role}-expanded` : `hermes-${message.role}-collapsed`}`}>
         <div className="hermes-message-header">
           <span className="hermes-role">{roleLabel}</span>
           <span className="hermes-message-meta">
