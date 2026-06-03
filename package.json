@@ -56,12 +56,6 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.7"
   },
-  "overrides": {
-    "@antfu/utils": "9.2.0",
-    "boolean": "npm:dry-uninstall",
-    "dompurify": "3.0.1",
-    "type-fest": "latest"
-  },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.21.1",
     "markdownlint-cli2": "^0.22.1",
