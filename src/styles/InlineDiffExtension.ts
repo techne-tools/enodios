@@ -21,9 +21,9 @@ interface InlineDiffState {
 
 class FileHeaderWidget extends WidgetType {
   constructor(private changeId: string, private manager: FileChangeManager) { super(); }
-  
+
   override eq(other: FileHeaderWidget) { return this.changeId === other.changeId; }
-  
+
   toDOM() {
     const div = document.createElement('div');
     div.className = 'hermes-diff-file-header';
@@ -50,11 +50,11 @@ class FileHeaderWidget extends WidgetType {
 
 class HunkHeaderWidget extends WidgetType {
   constructor(private changeId: string, private indices: number[], private manager: FileChangeManager) { super(); }
-  
-  override eq(other: HunkHeaderWidget) { 
-    return this.changeId === other.changeId && this.indices.join(',') === other.indices.join(','); 
+
+  override eq(other: HunkHeaderWidget) {
+    return this.changeId === other.changeId && this.indices.join(',') === other.indices.join(',');
   }
-  
+
   toDOM() {
     const div = document.createElement('div');
     div.className = 'hermes-diff-hunk-header';
@@ -117,25 +117,25 @@ export const inlineDiffStateField = StateField.define<DecorationSet>({
         const { lines, changeId, manager } = effect.value;
         const ranges: Range<Decoration>[] = [];
         const doc = tr.state.doc;
-        
+
         let docLine = 1;
         let currentHunkIndices: number[] = [];
-        
+
         const flushHunk = () => {
           if (currentHunkIndices.length > 0) {
             // Find the position. We insert the hunk header above the FIRST changed line.
             // Wait, we can just insert it at the current docLine's start position.
             // Since we increment docLine for unchanged and removed lines, we need to subtract the number of removed lines in this hunk to get to the START of the hunk in the document.
-            const removedLines = currentHunkIndices.filter(i => lines[i]?.type === 'removed').length;
+            const removedLines = currentHunkIndices.filter((i) => lines[i]?.type === 'removed').length;
             const targetLine = Math.max(1, docLine - removedLines);
             const pos = targetLine <= doc.lines ? doc.line(targetLine).from : doc.length;
-            
+
             ranges.push(Decoration.widget({
               widget: new HunkHeaderWidget(changeId, [...currentHunkIndices], manager),
               block: true,
               side: -2 // Above added lines and removed lines
             }).range(pos));
-            
+
             currentHunkIndices = [];
           }
         };
@@ -159,17 +159,17 @@ export const inlineDiffStateField = StateField.define<DecorationSet>({
                if (docLine <= doc.lines) {
                  const lineStart = doc.line(docLine).from;
                  const lineEnd = doc.line(docLine).to;
-                 
+
                  // Replace the original line text so it's hidden
                  ranges.push(Decoration.replace({}).range(lineStart, lineEnd));
-                 
+
                  // Insert our custom diff block widget
                  ranges.push(Decoration.widget({
                    widget: new InlineDiffWidget(line),
                    block: true,
                    side: -1
                  }).range(lineStart));
-                 
+
                  docLine++;
                }
             } else if (line.type === 'added') {
@@ -189,7 +189,7 @@ export const inlineDiffStateField = StateField.define<DecorationSet>({
           if (a.from !== b.from) return a.from - b.from;
           // Sort by side if positions match
           // Note: Decoration.widget internal side is not exposed on `Range` object easily.
-          return 0; 
+          return 0;
         });
 
         return Decoration.set(ranges, true);

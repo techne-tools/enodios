@@ -2734,7 +2734,7 @@ const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRej
             actionDesc = `URL: ${String(url)}`;
           } else {
             // Fallback: show all keys except patch/content if we are rendering it
-            const keys = Object.keys(parsedInput).filter(k => k !== 'patch' && k !== 'diff' && k !== 'content').slice(0, 3);
+            const keys = Object.keys(parsedInput).filter((k) => k !== 'patch' && k !== 'diff' && k !== 'content').slice(0, 3);
             if (keys.length > 0) {
               actionDesc = keys.map((k) => `${k}: ${(JSON.stringify(parsedInput![k]) ?? '').slice(0, 50)}`).join(', ');
             }

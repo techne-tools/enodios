@@ -332,7 +332,7 @@ export class FileChangeManager {
 
     if (fileToOpen instanceof TFile) {
       // Find an existing leaf with this file, or open it in the active leaf
-      let leaf = this.plugin.app.workspace.getLeavesOfType('markdown').find(l => {
+      let leaf = this.plugin.app.workspace.getLeavesOfType('markdown').find((l) => {
         return (l.view as MarkdownView).file?.path === path;
       });
       if (!leaf) {
@@ -437,7 +437,7 @@ export class FileChangeManager {
   }
 
   public async applyPartialHunk(changeId: string, hunkIndices: number[]): Promise<void> {
-    const change = this.changes.find(c => c.id === changeId);
+    const change = this.changes.find((c) => c.id === changeId);
     if (!change || !change.diffSnapshot || change.status !== 'pending') return;
 
     if (this.processingPaths.has(change.path)) return;
@@ -458,17 +458,17 @@ export class FileChangeManager {
         }
       }
       const contentToWrite = newContentLines.join('\n');
-      
+
       const existingFile = this.plugin.app.vault.getAbstractFileByPath(change.path);
       if (existingFile instanceof TFile) {
         await this.plugin.app.vault.modify(existingFile, contentToWrite);
       } else {
         await this.plugin.app.vault.create(change.path, contentToWrite);
       }
-      
+
       await this.refreshPendingDiffsForPath(change.path);
-      
-      if (!change.diffSnapshot || !change.diffSnapshot.some(l => l.type !== 'unchanged')) {
+
+      if (!change.diffSnapshot || !change.diffSnapshot.some((l) => l.type !== 'unchanged')) {
         change.status = 'approved';
         this.clearInlineDiffForPath(change.path);
       } else {
@@ -486,12 +486,12 @@ export class FileChangeManager {
   }
 
   public async rejectPartialHunk(changeId: string, hunkIndices: number[]): Promise<void> {
-    const change = this.changes.find(c => c.id === changeId);
+    const change = this.changes.find((c) => c.id === changeId);
     if (!change || !change.diffSnapshot || change.status !== 'pending') return;
 
     const newTargetLines: string[] = [];
     const rejectedIndices = new Set(hunkIndices);
-    
+
     for (let i = 0; i < change.diffSnapshot.length; i++) {
       const line = change.diffSnapshot[i];
       if (!line) continue;
@@ -503,11 +503,11 @@ export class FileChangeManager {
         newTargetLines.push(line.line);
       }
     }
-    
+
     change.newContent = newTargetLines.join('\n');
     change.diffSnapshot = computeDiffLines(change.originalContent, change.newContent);
-    
-    if (!change.diffSnapshot.some(l => l.type !== 'unchanged')) {
+
+    if (!change.diffSnapshot.some((l) => l.type !== 'unchanged')) {
       await this.rejectChange(changeId);
     } else {
       const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
