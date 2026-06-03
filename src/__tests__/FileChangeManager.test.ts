@@ -33,6 +33,11 @@ function createMockPlugin(): Plugin {
       },
       workspace: {
         getActiveViewOfType: vi.fn().mockReturnValue(null),
+        getLeavesOfType: vi.fn().mockReturnValue([]),
+        getLeaf: vi.fn().mockReturnValue({
+          openFile: vi.fn().mockResolvedValue(undefined),
+          view: { file: null }
+        }),
       },
     },
     auditLog: {
@@ -94,11 +99,20 @@ describe('FileChangeManager', () => {
 
   describe('approveChange', () => {
     it('should create new files and ensure parent folders exist', async () => {
+      const { TFile } = await import('obsidian');
+      // When registerChange calls create, mock getAbstractFileByPath to return the file
+      plugin.app.vault.create = vi.fn().mockImplementation(async (path) => {
+        const file = new TFile(path);
+        plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(file);
+        return file;
+      });
+      
       const change = await manager.registerChange('folder/new.md', 'content');
       await manager.approveChange(change.id);
 
       expect(plugin.vaultManager.ensureFolderExists).toHaveBeenCalledWith('folder');
-      expect(plugin.app.vault.create).toHaveBeenCalledWith('folder/new.md', 'content');
+      expect(plugin.app.vault.create).toHaveBeenCalledWith('folder/new.md', '');
+      expect(plugin.app.vault.modify).toHaveBeenCalledWith(expect.any(Object), 'content');
       expect(manager.getPendingChanges()).toHaveLength(0);
     });
 
@@ -128,11 +142,21 @@ describe('FileChangeManager', () => {
   });
 
   describe('reject actions and clear', () => {
-    it('should reject a single change without writing', async () => {
-      const change = await manager.registerChange('test.md', 'content');
-      manager.rejectChange(change.id);
+    it('should reject a single change without writing (cleans up empty file)', async () => {
+      const { TFile } = await import('obsidian');
+      const file = new TFile('test.md');
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(null);
+      plugin.app.vault.create = vi.fn().mockImplementation(async () => {
+        plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(file);
+        return file;
+      });
+      plugin.app.vault.read = vi.fn().mockResolvedValue('');
 
-      expect(plugin.app.vault.create).not.toHaveBeenCalled();
+      const change = await manager.registerChange('test.md', 'content');
+      await manager.rejectChange(change.id);
+
+      expect(plugin.app.vault.create).toHaveBeenCalledWith('test.md', ''); // Created empty
+      expect(plugin.app.vault.trash).toHaveBeenCalledWith(file, true); // Then trashed
       expect(manager.getPendingChanges()).toHaveLength(0);
       expect(manager.getAllChanges()[0]?.status).toBe('rejected');
     });
@@ -141,7 +165,7 @@ describe('FileChangeManager', () => {
       await manager.registerChange('test1.md', 'content');
       await manager.registerChange('test2.md', 'content');
 
-      manager.rejectAll();
+      await manager.rejectAll();
 
       expect(manager.getPendingChanges()).toHaveLength(0);
       expect(manager.getAllChanges().every(c => c.status === 'rejected')).toBe(true);
@@ -151,7 +175,7 @@ describe('FileChangeManager', () => {
       const change1 = await manager.registerChange('test1.md', 'content');
       await manager.registerChange('test2.md', 'content');
 
-      manager.rejectChange(change1.id); // Resolve one
+      await manager.rejectChange(change1.id); // Resolve one
       expect(manager.getAllChanges()).toHaveLength(2);
 
       manager.clearResolved();
@@ -162,9 +186,13 @@ describe('FileChangeManager', () => {
 
   describe('concurrency locks', () => {
     it('should prevent concurrent approveChange calls for the same path', async () => {
-      let createCalls = 0;
-      plugin.app.vault.create = vi.fn().mockImplementation(async () => {
-        createCalls++;
+      const { TFile } = await import('obsidian');
+      const file = new TFile('test.md');
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(file);
+      
+      let modifyCalls = 0;
+      plugin.app.vault.modify = vi.fn().mockImplementation(async () => {
+        modifyCalls++;
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
 
@@ -176,14 +204,20 @@ describe('FileChangeManager', () => {
         manager.approveChange(change.id),
       ]);
 
-      // The vault.create should only be triggered once due to processingPaths lock
-      expect(createCalls).toBe(1);
+      // The vault.modify should only be triggered once due to processingPaths lock
+      expect(modifyCalls).toBe(1);
     });
 
     it('should prevent concurrent approveAll calls', async () => {
-      let createCalls = 0;
-      plugin.app.vault.create = vi.fn().mockImplementation(async () => {
-        createCalls++;
+      const { TFile } = await import('obsidian');
+      plugin.app.vault.getAbstractFileByPath = vi.fn()
+        .mockReturnValueOnce(new TFile('test1.md'))
+        .mockReturnValueOnce(new TFile('test2.md'))
+        .mockReturnValue(new TFile('test.md')); // For subsequent calls
+        
+      let modifyCalls = 0;
+      plugin.app.vault.modify = vi.fn().mockImplementation(async () => {
+        modifyCalls++;
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
 
@@ -196,9 +230,9 @@ describe('FileChangeManager', () => {
         manager.approveAll(),
       ]);
 
-      // Should only process the queue once, resulting in exactly 2 create calls
+      // Should only process the queue once, resulting in exactly 2 modify calls
       // instead of potentially triggering 4 or causing overlapping errors.
-      expect(createCalls).toBe(2);
+      expect(modifyCalls).toBe(2);
     });
   });
 });

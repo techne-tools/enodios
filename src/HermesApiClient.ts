@@ -9,26 +9,31 @@ ChatSessionUpdate
 } from './ChatClient.ts';
 import type { Plugin } from './Plugin.ts';
 import type { SecretsManager } from './SecretsManager.ts';
+import type { PromptContextItem } from './AcpClient.ts';
 
 export interface HermesApiMessage {
   content: string;
   role: 'assistant' | 'system' | 'user';
 }
 
-export interface PromptContextItem {
-  data?: string;
-  id: string;
-  mimeType?: string;
-  text: string;
-  type: 'folder' | 'image' | 'note' | 'pdf' | 'selection';
-}
-
 /**
  * Client for the Hermes Agent REST API with Server-Sent Events streaming.
  *
- * Provides the same interface shape as AcpClient so the UI can use either
- * backend without changes.
+ * ARCHITECTURAL ROLE:
+ * This is the "remote" backend counterpart to AcpClient (the "local" backend).
+ * Both implement the ChatClient interface, allowing the Plugin and UI layers
+ * to treat them interchangeably. Switching between ACP and API mode is just
+ * swapping which client instance `getChatClient()` returns.
+ *
+ * KEY DIFFERENCES FROM AcpClient:
+ * - Stateless: no persistent subprocess or session ID
+ * - SSE streaming instead of JSON-RPC over stdio
+ * - No terminal emulation (abortTerminal is a no-op)
+ * - File changes go through the standard REST toolset, not the ACP
+ *   fs/write_text_file client method, so there is NO inline diff approval
+ *   flow in API mode — the agent writes directly via its native tools.
  */
+
 export class HermesApiClient implements ChatClient {
   private activeAbortController: AbortController | null = null;
   private readonly BASE_RECONNECT_DELAY_MS = 1000;
@@ -46,6 +51,9 @@ export class HermesApiClient implements ChatClient {
   private reconnectAttempts = 0;
   private reconnectTimeout: null | ReturnType<typeof setTimeout> = null;
   private readonly secrets: SecretsManager;
+  // Rate limiting: prevent accidental or malicious prompt flooding
+  private lastPromptTime = 0;
+  private readonly PROMPT_RATE_LIMIT_MS = 1000;
 
   constructor(plugin: Plugin, secrets: SecretsManager) {
     this.plugin = plugin;
@@ -151,7 +159,10 @@ export class HermesApiClient implements ChatClient {
 
       const content = data.choices?.[0]?.message?.content;
       return content ? content.trim() : null;
-    } catch {
+    } catch (error) {
+      // Log at debug level so users aren't spammed, but developers can trace
+      // why inline completion stopped working (network, JSON parse, etc.)
+      this.plugin.debug.error('Inline completion request failed', error);
       return null;
     }
   }
@@ -226,7 +237,22 @@ export class HermesApiClient implements ChatClient {
       this.activeAbortController = null;
     }
 
+    // Rate limiting: prevent accidental or malicious prompt flooding
+    const now = Date.now();
+    if (now - this.lastPromptTime < this.PROMPT_RATE_LIMIT_MS) {
+      throw new Error('Please wait a moment before sending another prompt.');
+    }
+    this.lastPromptTime = now;
+
     const apiKey = await this.getApiKey();
+
+    // SECURITY: Fail fast if API key is required but missing.
+    // Sending unauthenticated requests may leak information through
+    // server error responses and wastes network resources.
+    if (!apiKey) {
+      throw new Error('API key is not configured. Please set your API key in Hermes settings.');
+    }
+
     const url = `${this.getBaseUrl()}/v1/chat/completions`;
 
     const messages: Record<string, unknown>[] = [];
@@ -260,7 +286,7 @@ export class HermesApiClient implements ChatClient {
       `Your working directory is: ${this.plugin.app.vault.getRoot().path}`,
       'All file operations (write_file, patch, read_file, search_files) run here.',
       '',
-      '### Terminal access',
+      '### Terminal access'
     ];
 
     if (this.plugin.settings.allowTerminal) {

@@ -12,6 +12,22 @@ import { generateMessageId } from '../utils/uuid.ts';
  * Custom hook to buffer rapid Server-Sent Events or ACP stream chunks
  * and flush them into React state via requestAnimationFrame to avoid UI stutter.
  *
+ * ARCHITECTURAL ROLE:
+ * Streaming LLM responses can emit 10–50 chunks per second. Updating React
+ * state that frequently causes re-renders and dropped frames. This hook
+ * decouples the high-frequency stream from the lower-frequency UI by:
+ *   1. Accumulating chunks in refs (no re-renders)
+ *   2. Flushing to state inside a requestAnimationFrame callback (60fps cap)
+ *   3. Throttling sound/haptic feedback to ~20/sec
+ *
+ * DESIGN DECISIONS:
+ * - Uses refs for pending content, not state, to avoid React re-render churn.
+ * - The `setMessages` updater function captures the latest ref values
+ *   atomically, preventing race conditions where a chunk arrives between
+ *   read and write.
+ * - Two separate message IDs are tracked: one for the assistant response
+ *   and one for reasoning steps, so they can be updated independently.
+ *
  * PERFORMANCE NOTES:
  * - Buffers content in refs (not state) to avoid re-renders on every chunk.
  * - Flushes via requestAnimationFrame for smooth 60fps updates.

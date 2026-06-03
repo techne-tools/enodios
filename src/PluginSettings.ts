@@ -1,6 +1,12 @@
 export class PluginSettings {
   public activePersonaId = 'default';
 
+  // SECURITY: Auto-approve single-option permissions (default: disabled)
+  // When enabled, permissions with exactly one "allow" option are approved
+  // automatically without user review. This is a convenience feature that
+  // reduces security — only enable if you completely trust the agent.
+  public autoApproveSingleOptionPermissions = false;
+
   // Security
   public allowTerminal = false;
 

@@ -13,6 +13,14 @@ export interface AuditEntry {
 /**
  * Persistent audit log for all agent actions.
  *
+ * ARCHITECTURAL ROLE:
+ * Every significant agent action (file writes, terminal commands, permission
+ * requests, connection events) is recorded here. This provides:
+ *   1. Accountability — users can review what the agent did
+ *   2. Debugging — developers can trace the sequence of events leading to errors
+ *   3. Security forensics — if something goes wrong, the audit trail shows exactly
+ *      which commands were run and which files were touched
+ *
  * DESIGN DECISIONS:
  * - Entries are queued in memory and flushed in batches (500ms delay) to avoid
  *   excessive I/O on every tool call during streaming responses.
@@ -20,10 +28,18 @@ export interface AuditEntry {
  * - Entries are trimmed to max 1000 to prevent unbounded file growth.
  * - Failed flushes are logged to console but do not throw — audit logging
  *   should never break the user experience.
+ * - Retries use exponential backoff (500ms, 1000ms, 2000ms) to handle transient
+ *   vault locks or disk pressure.
  *
- * SECURITY NOTE: This log contains potentially sensitive information
- * (file paths, command arguments, API errors). It is stored in the vault
- * and subject to the user's vault encryption/backup policies.
+ * SECURITY WARNING: This log contains potentially SENSITIVE INFORMATION
+ * (file paths, command arguments, API errors, permission types). It is
+ * stored as PLAINTEXT in the vault. Users should:
+ *   1. Not share the audit log file publicly
+ *   2. Be cautious when syncing the vault to cloud services or public repos
+ *   3. Consider disabling audit logging in highly sensitive environments
+ *      (future versions may add a setting for this)
+ *
+ * The log is subject to the user's vault encryption/backup policies.
  */
 export class AuditLog {
   private readonly FLUSH_DELAY_MS = 500;

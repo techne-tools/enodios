@@ -36,6 +36,34 @@ type ChangeCallback = (changes: PendingFileChange[]) => void;
 /**
  * Manages pending file changes from the Hermes agent.
  * Instead of writing files directly, changes are held for user approval.
+ *
+ * ARCHITECTURAL ROLE:
+ * This is the "gatekeeper" for all file modifications initiated by the agent.
+ * When the agent calls `fs/write_text_file` (via ACP) or uses its native
+ * `write_file` tool (via API), the change lands here first. The user sees
+ * an inline diff in the editor and must explicitly approve before the file
+ * is actually written to the vault.
+ *
+ * WHY THIS MATTERS:
+ * Without this layer, the agent could silently overwrite user notes. The
+ * approval flow gives users visibility into every modification and the
+ * chance to reject changes they disagree with.
+ *
+ * DESIGN DECISIONS:
+ * - Changes are coalesced by file path: rapid successive edits to the same
+ *   file overwrite the previous pending change rather than stacking up.
+ * - `processingPaths` (a Set) prevents concurrent approve/reject operations
+ *   on the same file, avoiding race conditions.
+ * - `diffSnapshot` stores the computed diff at registration time so the UI
+ *   can render it even if the file changes on disk later.
+ * - MAX_HISTORY caps the changes array at 100 entries to prevent unbounded
+ *   memory growth during long sessions.
+ *
+ * LIFECYCLE OF A CHANGE:
+ * 1. Agent proposes change → `registerChange()` creates PendingFileChange
+ * 2. File opens in editor → inline diff renders via CodeMirror extension
+ * 3. User approves → `approveChange()` writes to vault, clears diff
+ * 4. User rejects → `rejectChange()` discards change, cleans up empty files
  */
 export class FileChangeManager {
   private callbacks: ChangeCallback[] = [];
@@ -287,13 +315,39 @@ export class FileChangeManager {
     }
     this.notify();
 
-    // Trigger inline diff in the active editor if the file is currently open
-    const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
-    if (activeView && activeView.file?.path === path) {
-      // @ts-expect-error - Accessing internal CodeMirror 6 view from Obsidian's Editor wrapper
-      const cmView = activeView.editor.cm;
-      if (cmView) {
-        this.triggerInlineDiff(change, cmView);
+    // Open the file in the active editor to show the inline diff
+    let fileToOpen = this.plugin.app.vault.getAbstractFileByPath(path);
+    if (!fileToOpen && action === 'create') {
+      try {
+        const parts = path.split('/');
+        if (parts.length > 1) {
+          const parentPath = parts.slice(0, -1).join('/');
+          await this.plugin.vaultManager.ensureFolderExists(parentPath);
+        }
+        fileToOpen = await this.plugin.app.vault.create(path, '');
+      } catch (e) {
+        this.plugin.debug.error('Failed to create empty file for diff', e);
+      }
+    }
+
+    if (fileToOpen instanceof TFile) {
+      // Find an existing leaf with this file, or open it in the active leaf
+      let leaf = this.plugin.app.workspace.getLeavesOfType('markdown').find(l => {
+        return (l.view as MarkdownView).file?.path === path;
+      });
+      if (!leaf) {
+        leaf = this.plugin.app.workspace.getLeaf(false);
+      }
+      if (leaf) {
+        await leaf.openFile(fileToOpen);
+        const activeView = leaf.view;
+        if (activeView instanceof MarkdownView) {
+          // @ts-expect-error - Accessing internal CodeMirror 6 view
+          const cmView = activeView.editor.cm;
+          if (cmView) {
+            setTimeout(() => this.triggerInlineDiff(change, cmView), 100);
+          }
+        }
       }
     }
 
@@ -304,13 +358,11 @@ export class FileChangeManager {
    * Trigger inline diff rendering in the provided editor view.
    */
   private triggerInlineDiff(change: PendingFileChange, view: EditorView): void {
-    // Find the position to insert the diff (at the start of the file content)
-    const startPos = 0;
-
     view.dispatch({
       effects: setInlineDiffEffect.of({
+        changeId: change.id,
         lines: change.diffSnapshot ?? [],
-        startPos
+        manager: this
       })
     });
   }
@@ -357,13 +409,14 @@ export class FileChangeManager {
 
   /**   * Reject all pending changes.
    */
-  public rejectAll(): void {
+  public async rejectAll(): Promise<void> {
     const pending = this.getPendingChanges();
     if (pending.length === 0) { return; }
 
     for (const change of pending) {
       change.status = 'rejected';
       this.clearInlineDiffForPath(change.path);
+      await this.cleanupEmptyCreatedFile(change);
     }
     new Notice(`Rejected ${pending.length} pending change(s)`);
     this.notify();
@@ -372,14 +425,115 @@ export class FileChangeManager {
   /**
    * Reject a pending change.
    */
-  public rejectChange(changeId: string): void {
+  public async rejectChange(changeId: string): Promise<void> {
     const change = this.changes.find((c) => c.id === changeId);
     if (change) {
       change.status = 'rejected';
       new Notice(`Rejected changes to ${change.path}`);
       this.clearInlineDiffForPath(change.path);
+      await this.cleanupEmptyCreatedFile(change);
     }
     this.notify();
+  }
+
+  public async applyPartialHunk(changeId: string, hunkIndices: number[]): Promise<void> {
+    const change = this.changes.find(c => c.id === changeId);
+    if (!change || !change.diffSnapshot || change.status !== 'pending') return;
+
+    if (this.processingPaths.has(change.path)) return;
+    this.processingPaths.add(change.path);
+
+    try {
+      const newContentLines: string[] = [];
+      const approvedIndices = new Set(hunkIndices);
+      for (let i = 0; i < change.diffSnapshot.length; i++) {
+        const line = change.diffSnapshot[i];
+        if (!line) continue;
+        if (line.type === 'unchanged') {
+          newContentLines.push(line.line);
+        } else if (line.type === 'added' && approvedIndices.has(i)) {
+          newContentLines.push(line.line);
+        } else if (line.type === 'removed' && !approvedIndices.has(i)) {
+          newContentLines.push(line.line);
+        }
+      }
+      const contentToWrite = newContentLines.join('\n');
+      
+      const existingFile = this.plugin.app.vault.getAbstractFileByPath(change.path);
+      if (existingFile instanceof TFile) {
+        await this.plugin.app.vault.modify(existingFile, contentToWrite);
+      } else {
+        await this.plugin.app.vault.create(change.path, contentToWrite);
+      }
+      
+      await this.refreshPendingDiffsForPath(change.path);
+      
+      if (!change.diffSnapshot || !change.diffSnapshot.some(l => l.type !== 'unchanged')) {
+        change.status = 'approved';
+        this.clearInlineDiffForPath(change.path);
+      } else {
+        const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+        if (activeView && activeView.file?.path === change.path) {
+          // @ts-expect-error - Internal CM view
+          const cmView = activeView.editor.cm;
+          if (cmView) this.triggerInlineDiff(change, cmView);
+        }
+      }
+    } finally {
+      this.processingPaths.delete(change.path);
+      this.notify();
+    }
+  }
+
+  public async rejectPartialHunk(changeId: string, hunkIndices: number[]): Promise<void> {
+    const change = this.changes.find(c => c.id === changeId);
+    if (!change || !change.diffSnapshot || change.status !== 'pending') return;
+
+    const newTargetLines: string[] = [];
+    const rejectedIndices = new Set(hunkIndices);
+    
+    for (let i = 0; i < change.diffSnapshot.length; i++) {
+      const line = change.diffSnapshot[i];
+      if (!line) continue;
+      if (line.type === 'unchanged') {
+        newTargetLines.push(line.line);
+      } else if (line.type === 'added' && !rejectedIndices.has(i)) {
+        newTargetLines.push(line.line);
+      } else if (line.type === 'removed' && rejectedIndices.has(i)) {
+        newTargetLines.push(line.line);
+      }
+    }
+    
+    change.newContent = newTargetLines.join('\n');
+    change.diffSnapshot = computeDiffLines(change.originalContent, change.newContent);
+    
+    if (!change.diffSnapshot.some(l => l.type !== 'unchanged')) {
+      await this.rejectChange(changeId);
+    } else {
+      const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+      if (activeView && activeView.file?.path === change.path) {
+        // @ts-expect-error - Internal CM view
+        const cmView = activeView.editor.cm;
+        if (cmView) this.triggerInlineDiff(change, cmView);
+      }
+      this.notify();
+    }
+  }
+
+  private async cleanupEmptyCreatedFile(change: PendingFileChange): Promise<void> {
+    if (change.action === 'create') {
+      try {
+        const file = this.plugin.app.vault.getAbstractFileByPath(change.path);
+        if (file instanceof TFile) {
+          const content = await this.plugin.app.vault.read(file);
+          if (content === '') {
+            await this.plugin.app.vault.trash(file, true);
+          }
+        }
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+    }
   }
 
   /**
@@ -419,7 +573,7 @@ export class FileChangeManager {
   }
 }
 
-function computeDiffLines(original: string, updated: string): DiffLineState[] {
+export function computeDiffLines(original: string, updated: string): DiffLineState[] {
   const a = original.split(/\r?\n/);
   const b = updated.split(/\r?\n/);
   const n = a.length;

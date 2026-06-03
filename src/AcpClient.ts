@@ -31,7 +31,7 @@ import {
   ndJsonStream
 } from '@agentclientprotocol/sdk';
 import { spawn } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import {
  normalizePath,
 Notice,
@@ -102,6 +102,33 @@ export interface PromptContextItem {
 /**
  * Manages the ACP (Agent Client Protocol) connection to Hermes.
  * Spawns hermes acp as a subprocess and communicates via JSON-RPC over stdio.
+ *
+ * ARCHITECTURAL ROLE:
+ * This is the "local" backend for chat. It spawns the Hermes CLI as a child
+ * process and speaks the Agent Client Protocol (ACP) over stdin/stdout.
+ * The ACP protocol is a JSON-RPC-like bidirectional stream that supports:
+ *   - Prompt/response messaging
+ *   - Tool calls (file read/write, terminal, permissions)
+ *   - Streaming updates (message chunks, reasoning, tool progress)
+ *   - Session management (create, close, reconnect)
+ *
+ * COMPARISON TO HermesApiClient:
+ * | Feature          | AcpClient (local)          | HermesApiClient (remote)   |
+ * |------------------|----------------------------|----------------------------|
+ * | Connection       | Persistent subprocess      | Stateless HTTP + SSE       |
+ * | Terminal         | Full PTY emulation         | Not available              |
+ * | File approval    | Inline diff via FileChange | Direct write (no approval) |
+ * | Reconnection     | Auto-reconnect with backoff| Auto-reconnect with backoff|
+ * | Permissions      | ACP permission flow        | N/A                        |
+ *
+ * SECURITY HIGHLIGHTS:
+ * - Shell commands are sanitized via `sanitizeShellCommand()` — only a
+ *   whitelist of safe utilities is permitted, and dangerous argument patterns
+ *   (pipes, redirects, command substitution) are rejected.
+ * - Path traversal is blocked by `isPathSafe()` — absolute paths, parent
+ *   directory references (`../`), and null bytes are all rejected.
+ * - Terminal access is gated by the `allowTerminal` setting (off by default).
+ * - MCP servers are explicitly opt-in and logged as a security event.
  */
 export class AcpClient implements ChatClient {
   private activeTerminals = new Map<string, ActiveTerminal>();
@@ -112,6 +139,9 @@ export class AcpClient implements ChatClient {
   private connectPromise: null | Promise<void> = null;
   private currentAllowedTools: null | string[] = null;
   private currentSessionId: null | string = null;
+  // Rate limiting: prevent accidental or malicious prompt flooding
+  private lastPromptTime = 0;
+  private readonly PROMPT_RATE_LIMIT_MS = 1000;
   private disconnectKillTimeout: null | ReturnType<typeof setTimeout> = null;
   private errorCallbacks: ((error: string) => void)[] = [];
   private isReconnecting = false;
@@ -390,6 +420,12 @@ export class AcpClient implements ChatClient {
   public resolveAllPermissions(): void {
     if (this.pendingPermissions.length === 0) { return; }
 
+    // SECURITY: Auto-approval is gated by user setting (default: disabled).
+    // Even when enabled, only single-option allow permissions are auto-approved.
+    // This prevents malicious agents from crafting single-option permissions
+    // to bypass user review.
+    const autoApproveEnabled = this.plugin.settings.autoApproveSingleOptionPermissions;
+
     const pending = [...this.pendingPermissions];
     this.pendingPermissions = [];
     for (const p of pending) {
@@ -398,10 +434,10 @@ export class AcpClient implements ChatClient {
       const permType = String((p.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
 
       // SECURITY: Only auto-approve permissions that have exactly one option
-      // and that option is an allow. Permissions with multiple options (or a mix
-      // of allow/deny) require explicit per-permission review to prevent
-      // accidental approval of dangerous actions.
-      if (allowOptions.length === 1 && options.length === 1) {
+      // and that option is an allow, AND only when the user has explicitly
+      // enabled auto-approval in settings. Permissions with multiple options
+      // (or a mix of allow/deny) always require explicit per-permission review.
+      if (autoApproveEnabled && allowOptions.length === 1 && options.length === 1) {
         const outcome = String(allowOptions[0]!.kind || allowOptions[0]!.optionId);
         this.plugin.auditLog.recordPermission(permType, outcome, 'success');
         p.resolve({
@@ -447,6 +483,14 @@ export class AcpClient implements ChatClient {
     // not "no tools allowed". An empty array causes checkToolAllowed to reject
     // everything while the system prompt tells the agent nothing useful.
     this.currentAllowedTools = options?.allowedTools?.length ? options.allowedTools : null;
+
+    // Rate limiting: prevent accidental or malicious prompt flooding
+    const now = Date.now();
+    if (now - this.lastPromptTime < this.PROMPT_RATE_LIMIT_MS) {
+      throw new Error('Please wait a moment before sending another prompt.');
+    }
+    this.lastPromptTime = now;
+
     if (!this.isReady() || !this.clientConnection || !this.currentSessionId) {
       throw new Error('ACP client not connected');
     }
@@ -463,6 +507,12 @@ export class AcpClient implements ChatClient {
         type: 'text'
       });
     }
+
+    // Inject system override instructions for tool behavior
+    promptBlocks.push({
+      text: "CRITICAL INSTRUCTION: If a tool call (especially file edits like patch or write_file) fails with a 'Permission Denied' or 'cancelled' error, this means the user explicitly reviewed your proposed change and REJECTED it. You MUST NOT retry the tool call. Acknowledge the rejection and ask the user how they would like to proceed instead.",
+      type: 'text'
+    });
 
     // Add context items as embedded resources before the user message
     for (const item of contextItems) {
@@ -618,6 +668,11 @@ export class AcpClient implements ChatClient {
         // SECURITY: Sanitize the command to prevent injection.
         // We only allow known-safe base commands and reject shell metacharacters.
         const command = sanitizeShellCommand(rawCommand);
+
+        // SECURITY: Validate all arguments for dangerous patterns before spawning.
+        // Some "safe" commands have configuration options that enable arbitrary
+        // code execution (e.g., git --config core.sshCommand=...).
+        sanitizeShellArguments(args);
 
         const child = spawn(command, args, {
           cwd: this.plugin.app.vault.getRoot().path,
@@ -907,9 +962,24 @@ export class AcpClient implements ChatClient {
         this.plugin.auditLog.recordConnection('mcp_servers', 'acp', 'blocked', 'disabled by user setting');
       }
 
+      // SECURITY: Validate MCP server paths before passing to the agent.
+      // Reject world-writable files, temporary directories, and non-absolute paths.
+      const validatedMcpServers: string[] = [];
+      for (const serverPath of mcpServers) {
+        try {
+          validateMcpServerPath(serverPath);
+          validatedMcpServers.push(serverPath);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.plugin.auditLog.recordConnection('mcp_servers', 'acp', 'blocked', `rejected ${serverPath}: ${message}`);
+          this.plugin.debug.warn(`MCP server rejected: ${message}`);
+        }
+      }
+      mcpServers = validatedMcpServers;
+
       // Security Note: MCP servers are external executables spawned by the Hermes agent.
       // Configuring untrusted MCP servers poses a significant security risk, as they can
-      // Execute arbitrary code on the user's system with the privileges of the Obsidian process.
+      // execute arbitrary code on the user's system with the privileges of the Obsidian process.
       // Users must be warned about this risk in the plugin documentation.
 
       const sessionRequest: NewSessionRequest = {
@@ -1067,6 +1137,11 @@ export class AcpClient implements ChatClient {
       // Usage updates
       if (update.sessionUpdate === 'usage_update') {
         const usageUpdate = update as { size?: number; used?: number };
+        // NOTE: The ACP protocol's usage_update only provides `size` (total)
+        // and `used` (input/consumed). There is no separate output token count
+        // in this message type, so we report outputTokens as 0. The UI's
+        // TokenUsageFooter will show total = input + 0, which is slightly
+        // misleading but the best we can do with the current protocol version.
         return {
           type: 'usage',
           usage: {
@@ -1166,6 +1241,14 @@ function isPathSafe(filePath: string): boolean {
   if (/^[a-zA-Z]:[\\\/]/.test(normalized)) {
     return false;
   }
+  // Reject UNC paths (Windows network shares)
+  if (normalized.startsWith('\\\\')) {
+    return false;
+  }
+  // SECURITY NOTE: Symlink traversal is NOT checked here. If the vault
+  // contains a symlink to a sensitive directory, the agent can traverse it.
+  // This is a known limitation; future versions should resolve symlinks
+  // via fs.realpath() and verify the resolved path is within the vault.
   return true;
 }
 
@@ -1200,6 +1283,59 @@ function sanitizeShellCommand(command: string): string {
   }
 
   return trimmed;
+}
+
+/**
+ * Validate an MCP server executable path for security concerns.
+ * Rejects temporary directories, world-writable files, and relative paths.
+ *
+ * SECURITY NOTE: This is a best-effort check. A determined attacker with
+ * control of the filesystem can bypass these checks (e.g., by changing
+ * permissions after validation). The primary defense is user vigilance
+ * when configuring MCP servers.
+ */
+function validateMcpServerPath(serverPath: string): void {
+  if (!serverPath.startsWith('/')) {
+    throw new Error('MCP server path must be absolute');
+  }
+  const tmpDirs = ['/tmp', '/var/tmp', '/dev/shm', '/run'];
+  for (const tmp of tmpDirs) {
+    if (serverPath.startsWith(tmp)) {
+      throw new Error(`MCP server cannot be in a temporary directory: ${tmp}`);
+    }
+  }
+  try {
+    const stats = statSync(serverPath);
+    // Check if world-writable (last octal digit includes 2)
+    if ((stats.mode & 0o002) !== 0) {
+      throw new Error('MCP server file is world-writable');
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('world-writable')) {
+      throw error;
+    }
+    throw new Error(`Cannot stat MCP server file: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Validate shell arguments for dangerous patterns.
+ * Each argument is checked individually against DANGEROUS_ARG_PATTERNS.
+ * This prevents option injection attacks where a "safe" command like `git`
+ * is passed a dangerous argument like `--config core.sshCommand=rm -rf /`.
+ *
+ * SECURITY NOTE: This is a defense-in-depth measure. With `shell: false`,
+ * arguments are passed directly to the executable, but some commands have
+ * configuration options that enable arbitrary code execution.
+ */
+function sanitizeShellArguments(args: string[]): void {
+  for (const arg of args) {
+    for (const pattern of DANGEROUS_ARG_PATTERNS) {
+      if (arg.includes(pattern)) {
+        throw new Error(`Shell argument contains disallowed pattern: ${pattern}`);
+      }
+    }
+  }
 }
 
 /**

@@ -54,11 +54,17 @@ export class Plugin extends PluginBase<PluginTypes> {
 
   /**
    * Open the plugin settings tab.
+   *
+   * NOTE: Obsidian's public TypeScript API does not expose the `setting`
+   * property on `App`. We cast through `unknown` to access the internal
+   * `open()` and `openTabById()` methods. This is a common pattern in
+   * Obsidian plugin development when you need functionality not yet in
+   * the public API surface.
    */
   public openSettings(): void {
-    // Access internal Obsidian API not exposed in public types
-    (this.app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting.open();
-    (this.app as unknown as { setting: { open(): void; openTabById(id: string): void } }).setting.openTabById(this.manifest.id);
+    const appWithSettings = this.app as unknown as { setting: { open(): void; openTabById(id: string): void } };
+    appWithSettings.setting.open();
+    appWithSettings.setting.openTabById(this.manifest.id);
   }
 
   protected override createSettingsManager(): PluginSettingsManager {

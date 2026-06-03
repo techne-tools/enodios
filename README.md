@@ -5,12 +5,12 @@
 
 Bring the power of the **Hermes autonomous AI agent** directly into your Obsidian vault.
 
-Obsidian Hermes deeply integrates the agent into your workflow, allowing it to seamlessly read your notes, write files, manage your canvas mind-maps, and even auto-complete your thoughts directly in the markdown editor—all while keeping you firmly in control with a robust security and approval system.
+Obsidian Hermes deeply integrates the agent into your workflow, allowing it to seamlessly read your notes, write files, and manage your thoughts directly in the markdown editor — all while keeping you firmly in control with a robust security and approval system.
 
 ## ✨ Core Features
 
-### 🧠 Semantic Vault RAG (Retrieval-Augmented Generation)
-No more copy-pasting your notes. Simply type `/search [query]` in the chat to instantly retrieve and attach contextually relevant excerpts from across your entire vault directly into the agent's context.
+### 🧠 Vault Search (Local RAG)
+No more copy-pasting your notes. Simply type `/search [query]` in the chat to search across your entire vault and attach relevant note excerpts directly into the agent's context. Uses keyword-based matching with relevance scoring.
 
 ### 📝 Deep Editor Integration (Ghost Text)
 Use the **"Hermes: Trigger Inline Suggestion"** command while typing in any markdown file to generate Copilot-style "ghost text" auto-completions. Press `Tab` to accept the agent's suggestion and seamlessly integrate it into your writing.
@@ -22,6 +22,13 @@ Hermes understands Obsidian Canvas! Open a mind-map and type `/canvas` to inject
 Hermes can create and modify files, but it **cannot overwrite your work without permission**. All file modifications are caught by the `FileChangeManager` and presented in the chat UI as an interactive Diff viewer. You can approve or reject changes individually or in bulk.
 
 **Partial Approval**: Select specific lines in the diff via checkboxes to approve only the changes you want. The diff is snapshotted at creation time to prevent race conditions.
+
+**Security Architecture**:
+- **Path Traversal Protection**: All file paths are validated to prevent access outside the vault (rejects `../`, absolute paths, null bytes, and Windows drive letters).
+- **Shell Command Allowlisting**: Terminal commands are restricted to a curated list of safe utilities (`cat`, `cp`, `curl`, `echo`, `find`, `git`, `grep`, `ls`, `mkdir`, `mv`, `rm`, `touch`, `wget`). Dangerous patterns (pipes, redirects, command substitution, option injection) are rejected.
+- **Rate Limiting**: Prompts are rate-limited to 1 per second to prevent accidental or malicious flooding.
+- **Audit Logging**: Every action (file changes, terminal commands, permissions, connections) is logged to `hermes/audit-log.md` for accountability and forensics.
+- **Secret Redaction**: Debug logs automatically redact Bearer tokens, API keys, and passwords to prevent credential leakage.
 
 ### 📊 Token Usage Dashboard
 Keep track of your API usage with the real-time token counter in the chat footer. See input/output tokens and estimated cost per conversation. Parsed from the agent's `usage_update` events.
@@ -36,7 +43,9 @@ Switch between pre-configured personas (Coding Assistant, Writing Coach, Researc
 Export your conversations in multiple formats:
 - **HTML**: Self-contained file with all messages, perfect for sharing or archiving.
 - **JSON**: Structured data with metadata for programmatic access.
-- **PDF**: Print-friendly format via your browser's print-to-PDF (blob URL — remember to close the tab to free memory).
+- **Markdown**: Clean markdown export with message history.
+
+*Note: PDF export is planned but not yet available in the UI.*
 
 ### 🔌 Dual-Mode Connection
 Connect to your Hermes agent exactly how you prefer:
@@ -49,6 +58,12 @@ Easily extend Hermes' capabilities by attaching local MCP servers in the plugin 
 **⚠️ Security Warning on MCP Servers ⚠️**
 
 Configuring local MCP servers allows the Hermes agent to execute external programs on your computer. **You must only configure MCP servers from sources you fully trust.** An untrusted MCP server could execute arbitrary code, read or delete any files on your system, or exfiltrate sensitive data, potentially bypassing the plugin's file change approval system if it makes direct system calls. Exercise extreme caution.
+
+**MCP Server Validation** (enabled automatically):
+- Paths must be absolute (no relative paths)
+- Paths in temporary directories (`/tmp`, `/var/tmp`, `/dev/shm`, `/run`) are rejected
+- World-writable executable files are rejected
+- Invalid servers are logged to the audit log and skipped
 
 ---
 
@@ -68,7 +83,7 @@ Configuring local MCP servers allows the Hermes agent to execute external progra
 - Hover over any of your previous messages to reveal the **Edit** button. Editing a message truncates the chat history and branches the conversation.
 - If you enable **Terminal Access** in settings, Hermes can run shell commands. You can view the live stdout stream directly in the chat and use the 🛑 **Abort** button to kill runaway processes.
 - **Command Palette**: Use "Ask Hermes about selection", "Summarize current note", or "Generate tags" for quick actions without opening the chat.
-- **Export**: Click the download icon in the chat header to export as HTML, JSON, or PDF.
+- **Export**: Click the download icon in the chat header to export as HTML, JSON, or Markdown.
 - **Search**: Press `Cmd+F` in the chat to search through all messages.
 - **Personas**: Type `/persona` to switch between coding, writing, and research assistants.
 
@@ -77,12 +92,17 @@ Configuring local MCP servers allows the Hermes agent to execute external progra
 |---------|-------------|---------|
 | `connectionMode` | ACP (local) or API (remote) | `acp` |
 | `allowTerminal` | Enable terminal command execution | `false` |
+| `autoApproveSingleOptionPermissions` | Auto-approve single-option permissions (reduces security) | `false` |
 | `showReasoning` | Display agent reasoning steps | `false` |
 | `showToolUse` | Display tool invocation details | `false` |
 | `enableTypingSound` | Audio feedback during streaming | `false` |
 | `enableHapticFeedback` | Haptic feedback (mobile) | `false` |
 | `conversationOrganization` | `flat`, `by-date`, or `by-project` | `flat` |
 | `hasSeenOnboarding` | Whether user dismissed welcome panel | `false` |
+
+**Security Settings**:
+- **`allowTerminal`**: When enabled, the agent can execute shell commands on your system. Commands are restricted to a safe allowlist, but this still bypasses the file-change approval UI. **Only enable if you completely trust the agent.**
+- **`autoApproveSingleOptionPermissions`**: When enabled, permissions with exactly one "allow" option are approved automatically without user review. This is a convenience feature that reduces security. **Default: disabled.**
 
 ---
 

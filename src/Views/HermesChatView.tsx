@@ -101,7 +101,7 @@ function stripAnsi(text: string): string {
     .replace(/\x1b\x1b/g, ''); // Double escapes
 }
 
-const HELIX_FRAMES = ['⢌⣉⢎⣉', '⣉⡱⣉⡱', '⣉⢎⣉⢎', '⡱⣉⡱⣉'];
+const HELIX_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 function HelixSpinner({ isRunning }: { isRunning: boolean }): React.ReactElement {
   const [frame, setFrame] = useState(0);
@@ -459,7 +459,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
               };
               return updated;
             }
-            
+
             const newToolMsg: ChatMessage = {
               content: toolMsg,
               id: generateMessageId(),
@@ -471,7 +471,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
               toolName: resolvedToolName,
               toolStatus: currentToolStatus
             };
-            
+
             const assistantIndex = prev.findIndex((m) => m.id === streamingMessageIdRef.current);
             if (assistantIndex >= 0) {
               const updated = [...prev];
@@ -2655,39 +2655,92 @@ const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRej
         const toolCall = (permission.params as unknown as Record<string, unknown>)['toolCall'] as Record<string, unknown> | undefined;
         const toolTitle = String(toolCall?.['title'] || '');
         const toolKind = String(toolCall?.['kind'] || 'other');
-        const rawInput = toolCall?.['rawInput'] as Record<string, unknown> | undefined;
+        const rawInput = toolCall?.['rawInput'];
         const locations = toolCall?.['locations'] as Array<Record<string, unknown>> | undefined;
+        const toolCallContent = toolCall?.['content'] as Array<Record<string, unknown>> | undefined;
+
+        let parsedInput: Record<string, unknown> | undefined = undefined;
+        if (typeof rawInput === 'string') {
+          try {
+            const parsed = JSON.parse(rawInput);
+            if (typeof parsed === 'object' && parsed !== null) {
+              parsedInput = parsed as Record<string, unknown>;
+            }
+          } catch {
+            // Not JSON
+          }
+        } else if (typeof rawInput === 'object' && rawInput !== null) {
+          parsedInput = rawInput as Record<string, unknown>;
+        }
+
+        let patchContent: string | null = null;
+        if (toolCallContent && Array.isArray(toolCallContent)) {
+          const diffBlock = toolCallContent.find((c) => c['type'] === 'diff');
+          if (diffBlock) {
+            const oldText = typeof diffBlock['oldText'] === 'string' ? diffBlock['oldText'] : '';
+            const newText = typeof diffBlock['newText'] === 'string' ? diffBlock['newText'] : '';
+            const lines = computeDiffLines(oldText, newText);
+            const out: string[] = [];
+            for (let i = 0; i < lines.length; i++) {
+              const l = lines[i];
+              if (!l) continue;
+              if (l.type !== 'unchanged') {
+                out.push((l.type === 'added' ? '+ ' : '- ') + l.line);
+              } else {
+                let nearChange = false;
+                for (let j = Math.max(0, i - 3); j <= Math.min(lines.length - 1, i + 3); j++) {
+                  const lj = lines[j];
+                  if (lj && lj.type !== 'unchanged') {
+                    nearChange = true;
+                    break;
+                  }
+                }
+                if (nearChange) {
+                  out.push('  ' + l.line);
+                } else if (out.length > 0 && out[out.length - 1] !== '...') {
+                  out.push('...');
+                }
+              }
+            }
+            patchContent = out.join('\n');
+          }
+        }
+
+        if (!patchContent && parsedInput) {
+          const possiblePatch = parsedInput['patch'] || parsedInput['diff'] || parsedInput['content'];
+          if (typeof possiblePatch === 'string') {
+            patchContent = possiblePatch;
+          }
+        }
 
         // Build a human-readable description of what the tool wants to do
         const toolName = toolTitle || TOOL_KIND_LABELS[toolKind] || 'Unknown tool';
         const toolIcon = TOOL_KIND_ICONS[toolKind] || '🔧';
 
-        // Extract the action description from rawInput
         let actionDesc = '';
-        if (rawInput) {
-          if (typeof rawInput === 'string') {
-            actionDesc = rawInput;
-          } else {
-            // Try to build a description from common tool parameters
-            const path = rawInput['path'] || rawInput['file'] || rawInput['filename'];
-            const command = rawInput['command'] || rawInput['cmd'];
-            const query = rawInput['query'] || rawInput['search'];
-            const url = rawInput['url'] || rawInput['uri'];
+        if (parsedInput) {
+          const path = parsedInput['path'] || parsedInput['file'] || parsedInput['filename'];
+          const command = parsedInput['command'] || parsedInput['cmd'];
+          const query = parsedInput['query'] || parsedInput['search'];
+          const url = parsedInput['url'] || parsedInput['uri'];
 
-            if (path) {
-              actionDesc = `Target: \`${String(path)}\``;
-            } else if (command) {
-              actionDesc = `Command: \`${String(command)}\``;
-            } else if (query) {
-              actionDesc = `Query: "${String(query)}"`;
-            } else if (url) {
-              actionDesc = `URL: ${String(url)}`;
-            } else {
-              // Fallback: show all keys
-              const keys = Object.keys(rawInput).slice(0, 3);
-              actionDesc = keys.map((k) => `${k}: ${(JSON.stringify(rawInput[k]) ?? '').slice(0, 50)}`).join(', ');
+          if (path) {
+            actionDesc = `Target: \`${String(path)}\``;
+          } else if (command) {
+            actionDesc = `Command: \`${String(command)}\``;
+          } else if (query) {
+            actionDesc = `Query: "${String(query)}"`;
+          } else if (url) {
+            actionDesc = `URL: ${String(url)}`;
+          } else {
+            // Fallback: show all keys except patch/content if we are rendering it
+            const keys = Object.keys(parsedInput).filter(k => k !== 'patch' && k !== 'diff' && k !== 'content').slice(0, 3);
+            if (keys.length > 0) {
+              actionDesc = keys.map((k) => `${k}: ${(JSON.stringify(parsedInput![k]) ?? '').slice(0, 50)}`).join(', ');
             }
           }
+        } else if (typeof rawInput === 'string') {
+          actionDesc = rawInput;
         }
 
         // Show affected locations if available
@@ -2718,6 +2771,14 @@ const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRej
                       <span className="hermes-pending-permission-path" key={i}>{p}</span>
                     ))}
                   </span>
+                </div>
+              )}
+              {patchContent && (
+                <div className="hermes-pending-permission-patch">
+                  <span className="hermes-pending-permission-label">Patch Preview:</span>
+                  <pre className="hermes-pending-permission-diff">
+                    <code className="language-diff">{patchContent}</code>
+                  </pre>
                 </div>
               )}
             </div>

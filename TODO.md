@@ -2,7 +2,7 @@
 
 **Created:** 14 May 2026
 **Phase:** Phase 4 - Polish & Release Prep
-**Current Version:** 0.3.5-beta1
+**Current Version:** 0.4.0-beta
 
 ## Core Features (High Priority)
 
@@ -51,7 +51,7 @@
 - [x] Phase 3: Canvas Integration via `/canvas` command (16 May 2026)
 - [x] Phase 3: Terminal Streaming & Control with "Abort" button (16 May 2026)
 - [x] Phase 3: Conversation Branching with message editing (16 May 2026)
-- [x] Phase 3: Semantic Vault RAG via `/search` command and unit tests (16 May 2026)
+- [x] Phase 3: Vault Search via `/search` command and unit tests (16 May 2026)
 - [x] Added bulk actions (Approve All / Reject All) for file changes and permissions (16 May 2026)
 - [x] Supported file deletions via `FileChangeManager` (16 May 2026)
 - [x] Added Session-specific Tool Execution (per-chat capabilities) (16 May 2026)
@@ -125,6 +125,12 @@
   - Added `isRunning` clear on error handler to stop spinners/pulse when ACP errors occur
   - Added `reasoningMessageIdRef` clear in error handler
 
+- [x] **Inline Approvals & Layout Fixes (3 June 2026)**:
+  - Replaced whole-file approval workflow with an interactive, CodeMirror-based inline diff viewer (`FileHeaderWidget`, `HunkHeaderWidget`)
+  - Updated `FileChangeManager` to handle partial hunk applications directly to disk
+  - Added unified diff parsing and rendering to the chat view's `PendingPermissionsPanel` for the native `patch` tool
+  - Fixed CSS flexbox constraints causing the chat input to overlap and cut off permission approval buttons
+  - Hardcoded a system instruction in `AcpClient` to prevent the agent from blindly retrying tool calls that the user rejected
 ## Implementation Notes
 
 ### Markdown Rendering
@@ -442,7 +448,7 @@ Based on analysis of both codebases, the following Zotero features could usefull
 ### 🟡 Medium Impact — Nice to Have
 
 - [x] **Smart Context: Block-Level References** — Parse selections to detect `[[Note#Heading]]`, code blocks, list ranges. Embed just that block, not the whole note. ✅ Implemented 17 May 2026 — `blockReferences.ts` with heading/code-block/list/block-id parsing, block ref resolution in AcpClient and HermesApiClient.
-- [x] **Export Conversations (PDF/HTML/JSON)** — Add export options beyond markdown: HTML (self-contained), JSON (programmatic), PDF. ✅ Implemented 17 May 2026 — Export dropdown in chat header with HTML and JSON download, `exportToHtml()`, `exportToJson()`, `exportToPdfDataUri()` in VaultManager.
+- [x] **Export Conversations (HTML/JSON/Markdown)** — Add export options beyond markdown: HTML (self-contained), JSON (programmatic), Markdown. PDF export implemented in `VaultManager` but not yet exposed in the UI. ✅ Implemented 17 May 2026 — Export dropdown in chat header with HTML, JSON, and Markdown download, `exportToHtml()`, `exportToJson()`, `exportToMarkdown()`, `exportToPdfDataUri()` in VaultManager.
 - [x] **Token Usage Dashboard** — Display input/output tokens and estimated cost in chat footer. Parsed from `usage_update` ACP event. ✅ Implemented 17 May 2026 — `TokenUsageFooter` component with input/output/total tokens and estimated cost, listens to `hermes-usage-update` window events.
 - [x] **Command Palette Integration** — Register quick actions: "Ask Hermes about selection", "Summarize current note", "Generate tags". ✅ Implemented 17 May 2026 — Three new commands in Plugin.ts: `hermes-ask-selection`, `hermes-summarize-note`, `hermes-generate-tags`.
 
@@ -456,3 +462,4 @@ Based on analysis of both codebases, the following Zotero features could usefull
 ## Wishlist / Future Work
 
 - Diff approval for terminal-based file edits (Hermes config dependent, not reliably interceptable at the ACP layer)
+- [ ] Fix unicode helix spinner in the tool call chat bubble (still appears static)

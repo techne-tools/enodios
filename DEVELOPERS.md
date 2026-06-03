@@ -47,7 +47,49 @@ Instead of manual DOM manipulation, the entire sidebar chat interface is a React
   - **Partial Approval**: Users can select individual lines in the diff via checkboxes. The diff is snapshotted at registration time (`diffSnapshot`) to prevent race conditions if the file changes while the user is reviewing.
   - **Bulk Actions**: "Approve All" and "Reject All" buttons for handling multiple changes at once, with atomic path-level locking to prevent concurrent writes.
 - **`SecretsManager`**: Uses Obsidian's `loadLocalStorage`/`saveLocalStorage` specifically for handling remote API keys so they are never stored in plaintext `data.json`.
+  - **Security Warning**: localStorage is NOT encrypted. Secrets are stored in plaintext in the user's profile directory. API keys are revokable, which mitigates the risk, but users should rotate keys regularly and avoid storing non-revokable credentials.
 - **`AuditLog`**: Persistent audit trail recording every tool invocation, file change, permission grant, terminal command, and connection event. Writes are batched (500ms delay) to `hermes/audit-log.md` to avoid excessive I/O.
+  - **Security Warning**: The audit log contains sensitive information (file paths, command arguments, API errors) and is stored as plaintext in the vault. Users should not share it publicly.
+
+### Security Architecture
+
+#### Path Traversal Protection (`isPathSafe`)
+All file paths from the agent are validated before access:
+- Rejects paths starting with `..` or `/` (absolute paths)
+- Rejects paths containing `../` (parent directory traversal)
+- Rejects null bytes and control characters (`\x00-\x1f`)
+- Rejects Windows absolute paths (`C:\`, `D:\`, etc.) and UNC paths (`\\server\share`)
+- **Known Limitation**: Symlink traversal is not checked. If the vault contains a symlink to a sensitive directory, the agent can traverse it. Future versions should use `fs.realpath()` to resolve symlinks.
+
+#### Shell Command Sanitization (`sanitizeShellCommand`)
+Terminal commands are restricted to a curated allowlist:
+- **Allowed commands**: `cat`, `cp`, `curl`, `echo`, `find`, `git`, `grep`, `ls`, `mkdir`, `mv`, `rm`, `touch`, `wget`
+- **Rejected**: All shells (bash, zsh, fish), script interpreters (python, node, ruby), and any command not in the allowlist
+- **Argument validation**: Every argument is checked against dangerous patterns:
+  - `-c`, `--command`, `-e`, `--eval`, `-exec` (code execution flags)
+  - `|`, `;`, `&&`, `||` (shell metacharacters)
+  - `$(`, `` ` ``, `${`, `>>`, `<(` (command substitution, redirection)
+- **Security Note**: This is defense-in-depth. With `shell: false`, arguments are passed directly to the executable, but some "safe" commands have configuration options that enable arbitrary code execution (e.g., `git --config core.sshCommand=rm -rf /`). The argument sanitizer catches these.
+
+#### MCP Server Validation (`validateMcpServerPath`)
+MCP server executables are validated before being passed to the agent:
+- Must be absolute paths (no relative paths)
+- Cannot be in temporary directories (`/tmp`, `/var/tmp`, `/dev/shm`, `/run`)
+- Cannot be world-writable files (`statSync().mode & 0o002`)
+- Invalid servers are logged to the audit log and skipped
+
+#### Permission Auto-Approval (`autoApproveSingleOptionPermissions`)
+By default, ALL permission requests require explicit user approval. A setting (`autoApproveSingleOptionPermissions`, default: `false`) enables auto-approval for permissions with exactly one "allow" option. This is a convenience feature that reduces security — only enable if you completely trust the agent.
+
+#### Rate Limiting
+Both `AcpClient` and `HermesApiClient` enforce a 1-second rate limit on `sendPrompt()` to prevent accidental or malicious prompt flooding.
+
+#### Secret Redaction in Debug Logs
+`DebugLogger` automatically redacts common secret patterns from all output:
+- Bearer tokens: `Bearer abc123...` → `Bearer [REDACTED]`
+- API keys in query strings: `api_key=abc123` → `api_key=[REDACTED]`
+- Authorization headers: `Authorization: Basic abc123` → `Authorization: [REDACTED]`
+- Password fields in JSON: `"password": "secret"` → `"password": "[REDACTED]"`
 
 ### 4. Streaming & Performance (`src/Views/useStreamBuffer.ts`)
 Buffers rapid SSE/ACP stream chunks and flushes them into React state via `requestAnimationFrame` to avoid UI stutter.

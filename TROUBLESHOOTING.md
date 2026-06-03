@@ -23,7 +23,14 @@ If you run into issues using the Obsidian Hermes plugin, consult this guide for 
 2. Switch Connection Mode to **API**.
 3. Re-enter your API key and ensure the agent server is configured to accept it.
 
-## Features and UI
+### ❌ "API key is not configured"
+**Cause**: You are using API mode but have not set an API key.
+**Solution**:
+1. Go to `Settings > Hermes`.
+2. Switch Connection Mode to **API**.
+3. Enter your API key in the **API Key** field. The key is stored securely and never shown again after saving.
+
+## Security & Permissions
 
 ### 🛑 "Tool execution rejected: 'createTerminal' is disabled"
 **Cause**: Hermes attempted to run a terminal command, but terminal access is restricted.
@@ -31,6 +38,30 @@ If you run into issues using the Obsidian Hermes plugin, consult this guide for 
 By default, terminal execution is disabled for security (as it bypasses the Obsidian File Diff approval UI). To enable it:
 1. Go to `Settings > Hermes` and toggle on **Allow Terminal Access**.
 2. Open the chat, click the **Session Tools** (wrench icon), and ensure `createTerminal` is checked for that specific chat session.
+
+**Security Note**: Even when enabled, terminal commands are restricted to a safe allowlist (`cat`, `cp`, `curl`, `echo`, `find`, `git`, `grep`, `ls`, `mkdir`, `mv`, `rm`, `touch`, `wget`). Dangerous patterns (pipes, redirects, command substitution, option injection) are rejected.
+
+### 🛑 "Path traversal denied"
+**Cause**: The agent attempted to access a file outside the vault using `../`, an absolute path, or a Windows drive letter.
+**Solution**: This is a security feature. The agent can only access files within your Obsidian vault. If you need the agent to work with files outside the vault, move them into the vault first.
+
+### 🛑 "Disallowed shell command" or "Shell argument contains disallowed pattern"
+**Cause**: The agent attempted to run a command not in the safe allowlist, or passed dangerous arguments (e.g., `-c`, `|`, `;`, `&&`).
+**Solution**: This is a security feature. If you need to run a specific command, request it to be added to the allowlist in the plugin's GitHub issues. For complex operations, consider using the agent's file tools instead.
+
+### 🛑 "Please wait a moment before sending another prompt"
+**Cause**: You (or the agent) sent prompts too quickly. Both ACP and API modes enforce a 1-second rate limit to prevent accidental or malicious flooding.
+**Solution**: Wait at least 1 second between prompt sends.
+
+### 🛑 "MCP server rejected: ..."
+**Cause**: An MCP server configured in settings failed security validation.
+**Solution**: MCP servers must meet these requirements:
+- Absolute path (no relative paths)
+- Not in a temporary directory (`/tmp`, `/var/tmp`, `/dev/shm`, `/run`)
+- Not world-writable
+Check the audit log (`hermes/audit-log.md`) for the exact rejection reason.
+
+## Features and UI
 
 ### 👻 Inline Ghost Text isn't showing up
 **Cause**: The API might have timed out, or you moved your cursor before the agent finished generating the completion.
@@ -67,6 +98,20 @@ By default, terminal execution is disabled for security (as it bypasses the Obsi
 ### 🔄 Partial approval shows different lines than expected
 **Cause**: The file on disk changed between when the diff was generated and when you clicked approve.
 **Solution**: The diff is now snapshotted at registration time to prevent this race condition. If you still see discrepancies, reject the change and ask Hermes to regenerate it.
+
+## Audit Log & Debugging
+
+### 📋 Where is the audit log?
+The audit log is stored at `hermes/audit-log.md` in your vault (or whatever folder you configured in **Save Folder**). It records every action the agent takes — file changes, tool calls, permissions, terminal commands, and connections.
+
+**Security Note**: The audit log contains sensitive information (file paths, command arguments, API errors). Do not share it publicly or sync it to untrusted cloud services.
+
+### 🔍 How do I view debug logs?
+1. Open the Obsidian DevTools console (`Cmd/Ctrl + Option + I`)
+2. Enable debug mode in `Settings > Hermes > Debug Mode`
+3. Look for logs prefixed with `[Hermes]`
+
+**Security Note**: Debug logs automatically redact Bearer tokens, API keys, and passwords, but may still contain sensitive file paths. Do not share debug output publicly.
 
 ## Still need help?
 Enable verbose logging by opening the Obsidian DevTools console and running:

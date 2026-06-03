@@ -11,6 +11,16 @@ import type { Plugin } from './Plugin.ts';
  * - Provides log levels (debug, info, warn, error)
  * - Can be extended to write to a file or the audit log in the future
  *
+ * ARCHITECTURAL ROLE:
+ * Every major subsystem (AcpClient, HermesApiClient, FileChangeManager,
+ * VaultManager) receives a DebugLogger instance. This ensures consistent
+ * formatting and gives users a single toggle to control verbosity.
+ *
+ * DESIGN DECISION: `error()` is ALWAYS shown, even when debug mode is off,
+ * because errors represent broken functionality that users need to know about.
+ * All other levels are gated by `enableDebugMode` to keep the console clean
+ * during normal use.
+ *
  * USAGE:
  *   const debug = new DebugLogger(plugin);
  *   debug.info('Connection established');
@@ -70,6 +80,26 @@ export class DebugLogger {
   private format(level: string, message: string, ...args: unknown[]): string {
     const timestamp = new Date().toISOString();
     const argsStr = args.length > 0 ? ` ${args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}` : '';
-    return `[${timestamp}] [Hermes ${level}] ${message}${argsStr}`;
+    return this.redactSecrets(`[${timestamp}] [Hermes ${level}] ${message}${argsStr}`);
+  }
+
+  /**
+   * Redact common secret patterns from log strings to prevent accidental
+   * credential exposure in debug output.
+   *
+   * SECURITY NOTE: This is a best-effort heuristic. It catches common patterns
+   * like Bearer tokens and API keys, but may miss custom secret formats.
+   * Debug output should still be treated as potentially sensitive.
+   */
+  private redactSecrets(text: string): string {
+    // Redact Bearer tokens: "Bearer abc123..." → "Bearer [REDACTED]"
+    let redacted = text.replace(/(Bearer\s+)\S+/gi, '$1[REDACTED]');
+    // Redact API keys in query strings: "api_key=abc123" → "api_key=[REDACTED]"
+    redacted = redacted.replace(/(api[_-]?key=)\S+/gi, '$1[REDACTED]');
+    // Redact Authorization headers: "Authorization: Basic abc123" → "Authorization: [REDACTED]"
+    redacted = redacted.replace(/(Authorization:\s*\w+\s+)\S+/gi, '$1[REDACTED]');
+    // Redact password fields in JSON: "password": "secret" → "password": "[REDACTED]"
+    redacted = redacted.replace(/("password"\s*:\s*")[^"]*/gi, '$1[REDACTED]');
+    return redacted;
   }
 }

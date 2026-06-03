@@ -33,6 +33,22 @@ export interface ConversationMetadata {
 
 /**
  * Manages CRUD operations for conversation notes in the vault.
+ *
+ * ARCHITECTURAL ROLE:
+ * VaultManager is the single point of contact between the plugin and Obsidian's
+ * Vault API for file-system operations. It handles:
+ *   - Folder creation (with recursive parent-folder handling)
+ *   - Conversation persistence as markdown files with YAML frontmatter
+ *   - Export to multiple formats (HTML, JSON, Markdown, PDF data URI)
+ *   - Conversation listing and metadata extraction
+ *
+ * DESIGN DECISION: All folder creation goes through `ensureFolderExists()`
+ * which walks the path segment-by-segment. This avoids the common pitfall
+ * of `vault.createFolder()` failing when a parent directory doesn't exist.
+ *
+ * NOTE: This class does NOT handle the inline diff approval flow — that is
+ * FileChangeManager's responsibility. VaultManager only writes files that
+ * have already been approved (or are conversation exports created by the user).
  */
 export class VaultManager {
   private readonly plugin: Plugin;

@@ -165,8 +165,10 @@ describe('AcpClient', () => {
       acpClient.resolvePermission('test-perm-1', 'allow1');
 
       expect(mockResolve).toHaveBeenCalledWith(expect.objectContaining({
-        outcome: 'selected',
-        optionId: 'allow1',
+        outcome: expect.objectContaining({
+          outcome: 'selected',
+          optionId: 'allow1',
+        })
       }));
     });
 
@@ -190,7 +192,9 @@ describe('AcpClient', () => {
       acpClient.cancelPermission('test-perm-2');
 
       expect(mockResolve).toHaveBeenCalledWith(expect.objectContaining({
-        outcome: 'cancelled',
+        outcome: expect.objectContaining({
+          outcome: 'cancelled',
+        })
       }));
     });
   });

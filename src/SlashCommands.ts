@@ -11,6 +11,24 @@ export interface SlashCommand {
 /**
  * Registry of built-in slash commands.
  * Commands are invoked with `/name [args]` in the chat input.
+ *
+ * ARCHITECTURAL ROLE:
+ * Slash commands provide a lightweight, discoverable way for users to
+ * trigger plugin actions without leaving the chat context. They are
+ * parsed by the chat view (`HermesChatView`) and executed client-side.
+ *
+ * DESIGN DECISIONS:
+ * - Commands return strings (displayed as assistant messages) or null
+ *   (for silent operations like `/clear`).
+ * - The `execute` function receives the full Plugin instance so commands
+ *   can access vault, settings, and API clients directly.
+ * - Commands are NOT sent to the Hermes agent — they are purely local UI
+ *   shortcuts. This keeps latency low and avoids consuming API tokens.
+ *
+ * ADDING A NEW COMMAND:
+ * 1. Add an entry to `BUILT_IN_COMMANDS`
+ * 2. Implement `execute` — return a user-facing string or null
+ * 3. The chat view will auto-register `/help` to list all commands
  */
 const BUILT_IN_COMMANDS: SlashCommand[] = [
   {

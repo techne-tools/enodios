@@ -1644,7 +1644,7 @@
   border-top: 1px solid var(--background-modifier-border);
   border-bottom: 1px solid var(--background-modifier-border);
   background-color: var(--background-secondary);
-  max-height: 250px;
+  max-height: 45vh;
   overflow-y: auto;
   flex-shrink: 0;
   z-index: 10;
@@ -1680,6 +1680,7 @@
   border-radius: 6px;
   overflow: hidden;
   background-color: var(--background-primary);
+  flex-shrink: 0;
 
   &-header {
     display: flex;
@@ -1749,6 +1750,34 @@
     font-size: 11px;
     margin-right: 4px;
     margin-bottom: 2px;
+  }
+
+  &-patch {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  &-diff {
+    margin: 0;
+    padding: 8px;
+    background-color: var(--background-primary-alt);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 11px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-all;
+
+    code {
+      background-color: transparent !important;
+      padding: 0;
+      border-radius: 0;
+      font-size: inherit;
+    }
   }
 
   &-options {
@@ -1835,4 +1864,73 @@
 .hermes-diff-text {
   word-break: break-all;
   white-space: pre-wrap;
+}
+
+.hermes-diff-removed-line {
+  background-color: rgba(255, 0, 0, 0.15);
+}
+
+.hermes-diff-file-header {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hermes-diff-file-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-normal);
+}
+
+.hermes-diff-hunk-header {
+  background-color: var(--background-secondary-alt);
+  border: 1px solid var(--background-modifier-border);
+  border-bottom: none;
+  padding: 4px 8px;
+  display: flex;
+  justify-content: flex-end;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+
+.hermes-diff-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.hermes-btn-approve, .hermes-btn-reject, .hermes-btn-approve-sm, .hermes-btn-reject-sm {
+  cursor: pointer;
+  border-radius: 4px;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.hermes-btn-approve, .hermes-btn-reject {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.hermes-btn-approve-sm, .hermes-btn-reject-sm {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.hermes-btn-approve, .hermes-btn-approve-sm {
+  background-color: var(--interactive-success);
+  color: var(--text-on-accent);
+}
+
+.hermes-btn-reject, .hermes-btn-reject-sm {
+  background-color: transparent;
+  color: var(--text-error);
+  border: 1px solid var(--text-error);
+}
+
+.hermes-btn-reject:hover, .hermes-btn-reject-sm:hover {
+  background-color: rgba(255, 0, 0, 0.1);
 }
