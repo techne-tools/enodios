@@ -122,6 +122,7 @@ export const HERMES_CHAT_VIEW_TYPE = 'hermes-chat-view';
 export interface ChatMessage {
   content: string;
   id: string;
+  isBackgrounded?: boolean;
   isCollapsed?: boolean;
   isExited?: boolean;
   isRunning?: boolean;
@@ -142,9 +143,6 @@ interface AutocompleteSuggestion {
 interface ChatHeaderProps {
   agentName: string;
   isSaving: boolean;
-  onExportHtml: () => void;
-  onExportJson: () => void;
-  onExportMarkdown: () => void;
   onNewChat: () => void;
   onOpenSettings: () => void;
   onToggleConversationList: () => void;
@@ -426,7 +424,14 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         }
       } else if (update.type === 'tool_start' || update.type === 'tool_progress' || update.type === 'tool_complete') {
         flushNow();
-        if (settings.showToolUse && update.toolCall) {
+        // Always track tool messages in state so the conversation history is accurate,
+        // even when showToolUse rendering is disabled. When showToolUse is false:
+        // - tool messages are stored with isBackgrounded=true
+        // - they don't render as expanded bubbles but the agent's execution context
+        //   is preserved in the chat history, preventing hallucinated "denied" narratives
+        // - permission confirmations always show as compact status indicators regardless
+        const isBackgrounded = !settings.showToolUse;
+        if (update.toolCall) {
           // Force isRunning false on tool_complete regardless of backend status
           const isRunning = update.type !== 'tool_complete' && update.toolCall.status === 'running';
           const currentCallId = update.toolCall.callId;
@@ -453,6 +458,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
               updated[toolIndex] = {
                 ...prev[toolIndex]!,
                 content: toolMsg,
+                isBackgrounded,
                 isRunning,
                 toolName: resolvedToolName,
                 toolStatus: currentToolStatus
@@ -463,6 +469,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
             const newToolMsg: ChatMessage = {
               content: toolMsg,
               id: generateMessageId(),
+              isBackgrounded,
               isRunning,
               isCollapsed: true,
               role: 'tool',
@@ -1347,51 +1354,6 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       <ChatHeader
         agentName={settings.chatAgentName || 'Hermes'}
         isSaving={isSaving}
-        onExportHtml={async () => {
-          try {
-            const html = await plugin.vaultManager.exportToHtml(messages, conversationTitle || 'Hermes Conversation');
-            const blob = new Blob([html], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `hermes-conversation-${Date.now()}.html`;
-            a.click();
-            URL.revokeObjectURL(url);
-            new Notice('Exported conversation as HTML');
-          } catch {
-            new Notice('Failed to export conversation as HTML');
-          }
-        }}
-        onExportJson={() => {
-          try {
-            const json = plugin.vaultManager.exportToJson(messages, conversationTitle || 'Hermes Conversation');
-            const blob = new Blob([json], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `hermes-conversation-${Date.now()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            new Notice('Exported conversation as JSON');
-          } catch {
-            new Notice('Failed to export conversation as JSON');
-          }
-        }}
-        onExportMarkdown={() => {
-          try {
-            const md = plugin.vaultManager.exportToMarkdown(messages, conversationTitle || 'Hermes Conversation');
-            const blob = new Blob([md], { type: 'text/markdown' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `hermes-conversation-${Date.now()}.md`;
-            a.click();
-            URL.revokeObjectURL(url);
-            new Notice('Exported conversation as Markdown');
-          } catch {
-            new Notice('Failed to export conversation as Markdown');
-          }
-        }}
         onNewChat={handleNewChat}
         onOpenSettings={() => { plugin.openSettings(); }}
         onToggleConversationList={() => {
@@ -1591,9 +1553,6 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           onApproveAll={() => {
             plugin.acpClient?.resolveAllPermissions();
           }}
-          onReject={(permissionId) => {
-            plugin.acpClient?.cancelPermission(permissionId);
-          }}
           onRejectAll={() => {
             plugin.acpClient?.cancelAllPermissions();
           }}
@@ -1636,19 +1595,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   );
 }
 
-const ChatHeader = memo(({ agentName, isSaving, onExportHtml, onExportJson, onExportMarkdown, onNewChat, onOpenSettings, onToggleConversationList, onToggleSearch, onToggleSessionSettings }: ChatHeaderProps): ReactElement => {
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const exportMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent): void => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
-        setShowExportMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => { document.removeEventListener('mousedown', handleClickOutside); };
-  }, []);
+const ChatHeader = memo(({ agentName, isSaving, onNewChat, onOpenSettings, onToggleConversationList, onToggleSearch, onToggleSessionSettings }: ChatHeaderProps): ReactElement => {
   return (
     <div className="hermes-chat-header">
       <div className="hermes-chat-header-left">
@@ -1683,22 +1630,6 @@ const ChatHeader = memo(({ agentName, isSaving, onExportHtml, onExportJson, onEx
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </button>
-        <div ref={exportMenuRef} style={{ position: 'relative' }}>
-          <button className="hermes-icon-btn" onClick={() => { setShowExportMenu((prev) => !prev); }} title="Export" type="button">
-            <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" x2="12" y1="15" y2="3" />
-            </svg>
-          </button>
-          {showExportMenu && (
-            <div className="hermes-export-menu">
-              <button className="hermes-export-item" onClick={() => { onExportMarkdown(); setShowExportMenu(false); }} type="button">Export as Markdown</button>
-              <button className="hermes-export-item" onClick={() => { onExportHtml(); setShowExportMenu(false); }} type="button">Export as HTML</button>
-              <button className="hermes-export-item" onClick={() => { onExportJson(); setShowExportMenu(false); }} type="button">Export as JSON</button>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -1791,6 +1722,20 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
   }
 
   // Collapsible reasoning and tool messages
+  if (message.role === 'tool' && message.isBackgrounded) {
+    // Compact one-liner for backgrounded tool calls (showToolUse disabled).
+    // Preserves execution context in chat history without visual clutter.
+    const isError = message.toolStatus === 'error';
+    const isRunning = message.isRunning || message.toolStatus === 'running';
+    const statusIcon = isError ? '❌' : (isRunning ? '⚙️' : '✅');
+    const statusText = isError ? 'errored' : (isRunning ? 'running...' : 'completed');
+    return (
+      <div className="hermes-message hermes-tool hermes-tool-backgrounded">
+        <span className="hermes-backgrounded-tool-indicator">{statusIcon} {message.toolName} {statusText}</span>
+      </div>
+    );
+  }
+
   if (message.role === 'reasoning' || message.role === 'tool') {
     const [isExpanded, setIsExpanded] = useState(!message.isCollapsed);
     const toggleExpand = useCallback(() => { setIsExpanded((prev) => !prev); }, []);
@@ -2604,7 +2549,6 @@ const PendingChangesPanel = memo(({ changes, onApprove, onApproveAll, onClearRes
 interface PendingPermissionsPanelProps {
   onApprove: (permissionId: string, optionId: string) => void;
   onApproveAll: () => void;
-  onReject: (permissionId: string) => void;
   onRejectAll: () => void;
   permissions: PendingPermission[];
 }
@@ -2635,7 +2579,7 @@ const TOOL_KIND_LABELS: Record<string, string> = {
   think: 'Think'
 };
 
-const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRejectAll, permissions }: PendingPermissionsPanelProps): ReactElement => {
+const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onRejectAll, permissions }: PendingPermissionsPanelProps): ReactElement => {
   return (
     <div className="hermes-pending-permissions">
       <div className="hermes-pending-permissions-header">
@@ -2789,20 +2733,12 @@ const PendingPermissionsPanel = memo(({ onApprove, onApproveAll, onReject, onRej
                   className={`hermes-permission-option hermes-permission-option--${option.kind}`}
                   key={option.optionId}
                   onClick={() => { onApprove(permission.id, option.optionId); }}
-                  title={option.kind === 'allow_always' ? 'Allow this tool for the rest of the session' : option.kind === 'allow_once' ? 'Allow just this one call' : option.name}
+                  title={option.kind === 'allow_always' || option.kind === 'allow_once' || option.kind === 'reject_once' || option.kind === 'reject_always' ? option.name : option.name}
                   type="button"
                 >
-                  {option.kind === 'allow_always' ? '✅ Allow Always' : option.kind === 'allow_once' ? '👍 Allow Once' : option.name}
+                  {option.name}
                 </button>
               ))}
-              <button
-                className="hermes-permission-option hermes-permission-option--reject"
-                onClick={() => { onReject(permission.id); }}
-                title="Deny this request"
-                type="button"
-              >
-                ❌ Deny
-              </button>
             </div>
           </div>
         );

@@ -2,44 +2,21 @@
 
 All notable changes to the Obsidian Hermes plugin.
 
-## [0.4.0-beta] - 2026-06-03
+## [0.4.1-beta1] - 2026-06-10
 
-### Security (Major Hardening)
-This release includes a comprehensive security audit and hardening pass across the entire plugin. All users on previous beta versions are strongly encouraged to upgrade.
+### Bug Fixes
 
-- **Fixed command injection bypass** — `sanitizeShellArguments()` now rejects all shells and script interpreters (`bash`, `sh`, `zsh`, `fish`, `node`, `python`, `npm`, `npx`, etc.) from the terminal allowlist. Added `DANGEROUS_ARG_PATTERNS` to block pipes (`|`), redirects (`>`, `<`), command substitution (`$()`, backticks), and option injection (`-e`, `-c`, `--eval`).
-- **Fixed path traversal bypass** — `isPathSafe()` now rejects absolute paths (`/etc/passwd`), null bytes, control characters, and Windows drive-letter paths (`C:\Windows\...`). Applied consistently across `AcpClient.ts`, `FileChangeManager.ts`, and `VaultManager.ts`.
-- **Fixed plaintext secret exposure in debug logs** — `DebugLogger` now redacts Bearer tokens, API keys, and passwords via `redactSecrets()` before any log output. Pattern-based matching for `Authorization: Bearer`, `api_key`, `password`, and `token` fields.
-- **Added MCP server validation** — `validateMcpServerPath()` ensures MCP server executables are absolute paths (no relative paths), rejects temporary directories (`/tmp`, `/var/tmp`, `/dev/shm`), and blocks world-writable executables. Invalid servers are logged to the audit log and skipped.
-- **Gated auto-approval behind explicit setting** — `autoApproveSingleOptionPermissions` defaults to `false`. Users must explicitly opt-in to reduce security. The setting is documented in README with a clear warning.
-- **Added rate limiting** — Prompts are rate-limited to 1 per second in both `AcpClient.ts` and `HermesApiClient.ts` to prevent accidental or malicious flooding.
-- **Fixed API key handling** — `HermesApiClient` now fails fast with a clear error if the API key is missing or empty, rather than sending invalid requests.
-- **Fixed audit log exposure** — `AuditLog` no longer silently drops entries. Added 3-retry with exponential backoff (500ms → 1000ms → 2000ms). Shows user-visible `Notice` and logs to `console.error()` on permanent failure.
+- **Fixed tool execution context lost when `showToolUse` is off** — Tool call messages are now always added to chat history even when the "Show Tool Use" setting is disabled. Previously the entire tool message was silently dropped, leaving the agent's conversation history with no evidence of tool execution. This caused the agent to hallucinate "permission denied" narratives in its reasoning because it couldn't see its own tool activity.
+- **Fixed missing permission option labels** — Permission approval bubbles now display all options exactly as Hermes sends them via ACP ("Allow once", "Allow for session", "Allow always", "Deny", "Deny always") instead of hardcoding only two labels. Each option uses `option.name` directly from the protocol, so new or custom permission option names are correctly rendered without code changes.
+- **Removed duplicate hardcoded Deny button** — The separate "Deny" button was removed from the permission UI since Hermes already includes a "Deny" option (with `reject_once` or `reject_always` kind) in the options list. All permission options now flow through the same consistent rendering path.
 
-### Documentation
-- **Updated README.md** — Added comprehensive "Security Architecture" section documenting path traversal protection, shell command allowlisting, rate limiting, audit logging, and secret redaction. Fixed inaccurate feature claims: "Semantic Vault RAG" corrected to "Vault Search (Local RAG)" (keyword-based, not semantic/vector), and PDF export noted as planned but not yet in UI.
-- **Updated DEVELOPERS.md** — Added security section for contributors covering the threat model, secure coding guidelines, and audit log requirements.
-- **Updated TROUBLESHOOTING.md** — Added security error section documenting common permission denied, rate limit, and audit log failure scenarios.
-- **Updated TODO.md** — Corrected completed item names to match actual implementation status.
+### UX Improvements
 
-### Architecture
-- Added educational comments across 15+ source files explaining security-critical code, React optimization patterns, and ACP protocol handling.
-- Removed duplicate `PromptContextItem` interface definitions.
-- Fixed silent error swallowing in `AcpClient.ts` and `HermesApiClient.ts`.
-
-### Infrastructure
-- All 79 tests passing (5 test suites, ~388ms).
-- Build produces `main.js` (1.2M), `styles.css` (34k), `manifest.json`.
+- **Compact backgrounded tool indicators** — When "Show Tool Use" is disabled, tool calls now render as subtle single-line indicators (`⚙️ read_file running...` → `✅ read_file completed`) instead of being completely invisible. This preserves execution awareness without visual clutter.
 
 ## [0.3.5-beta1] - 2026-06-02
 
-### Features
-- **Inline File Approvals** — Replaced whole-file approval workflow with an interactive, CodeMirror-based inline diff viewer directly in the Obsidian editor. Users can now approve or reject changes hunk-by-hunk.
-
 ### Bug Fixes
-- **Fixed `patch` diff visibility** — The native `patch` tool's diffs are now parsed locally and rendered contextually in the Chat view's permission request bubble.
-- **Fixed permission bubble layout clipping** — Resolved a CSS flexbox issue where the chat input container would overlap and clip the bottom of the pending permissions panel.
-- **Fixed agent tool retry loops** — Injected a hardcoded system instruction into ACP prompt generation that explicitly commands the LLM to halt and ask the user for direction when a tool call fails due to permission rejection or cancellation.
 - **Fixed tool name confusion in ACP protocol** — Renamed all tool IDs to native names (`read_file`, `write_file`, `terminal`) across `PluginSettings.ts`, `SlashCommands.ts`, and `HermesChatView.tsx`. Updated system instructions in `AcpClient.ts` and `HermesApiClient.ts` to reference only native tool names, eliminating agent confusion about `fs/write_text_file` vs `write_file`.
 - **Fixed empty `allowedTools: []` treated as "allow all"** — Empty arrays now normalize to `null` (deny all) in both `AcpClient.ts` and `HermesApiClient.ts`, preventing unintended tool access when no tools are explicitly enabled.
 - **Fixed `checkToolAllowed('write_file')` blocking client methods** — Session tool restrictions now only apply to agent tools, not ACP client methods (`fs/write_text_file`, `fs/read_text_file`). Previously, disabling "Write Files" in session settings incorrectly blocked the client method entirely.

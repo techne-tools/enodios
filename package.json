@@ -1,6 +1,6 @@
 {
   "name": "hermes",
-  "version": "0.4.0-beta",
+  "version": "0.4.1-beta1",
   "description": "A plugin to allow working with your Hermes agent in your Obsidian Vault.",
   "keywords": [],
   "license": "MIT",
@@ -55,6 +55,12 @@
     "type-fest": "^4.41.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.7"
+  },
+  "overrides": {
+    "@antfu/utils": "9.2.0",
+    "boolean": "npm:dry-uninstall",
+    "dompurify": "3.0.1",
+    "type-fest": "latest"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.21.1",

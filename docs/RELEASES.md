@@ -2,6 +2,20 @@
 
 This document explains how to create and manage releases for the Obsidian Hermes plugin.
 
+## v0.4.1-beta1 — 10 June 2026
+
+### Improvements
+
+- **Tool activity is always visible** — Even with the "Show Tool Use" setting turned off, compact status indicators (`⚙️ tool running...` → `✅ tool completed`) now appear so you always know when the agent is working.
+
+### Bug Fixes
+
+- **Fixed the agent claiming permission was denied** when you actually clicked Allow — the agent's tool execution context was being silently dropped from conversation history. Now every tool call is tracked in the chat, so the agent can accurately see what happened.
+- **Permission options now show all choices** — The approval bubble correctly displays every option Hermes provides: "Allow once", "Allow for session", "Allow always", "Deny", and "Deny always".
+- **Removed duplicate "Deny" button** — The permission UI no longer has a redundant deny button since Hermes already sends one.
+
+---
+
 ## 🧪 Private Beta Releases
 
 Private beta releases are **manually triggered** via GitHub Actions. They are marked as `prerelease` on GitHub and are intended for a small group of testers.
