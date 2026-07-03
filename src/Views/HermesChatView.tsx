@@ -32,10 +32,10 @@ import type {
  PendingPermission,
 PromptContextItem
 } from '../AcpClient.ts';
-import type { AcpConnectionStatus } from '../ChatClient.ts';
 import type {
+ AcpConnectionStatus,
  ChatSessionUpdate,
-TokenUsageStats
+ TokenUsageStats
 } from '../ChatClient.ts';
 import type { PendingFileChange } from '../FileChangeManager.ts';
 import type { Plugin } from '../Plugin.ts';
