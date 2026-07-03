@@ -32,6 +32,7 @@ import type {
  PendingPermission,
 PromptContextItem
 } from '../AcpClient.ts';
+import type { AcpConnectionStatus } from '../ChatClient.ts';
 import type {
  ChatSessionUpdate,
 TokenUsageStats
@@ -225,6 +226,14 @@ export class HermesChatView extends ItemView {
     return this.pluginInstance.getChatClient().onAvailableCommands(callback);
   }
 
+  public subscribeToConnectionStatus(callback: (status: AcpConnectionStatus) => void): () => void {
+    const client = this.pluginInstance.getChatClient();
+    if (client.onConnectionStatus) {
+      return client.onConnectionStatus(callback);
+    }
+    return () => {};
+  }
+
   public subscribeToErrors(callback: (error: string) => void): () => void {
     return this.pluginInstance.getChatClient().onError(callback);
   }
@@ -241,6 +250,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<null | string>(null);
+  const [connectionStatus, setConnectionStatus] = useState<AcpConnectionStatus | null>(null);
   const [rateLimitSeconds, setRateLimitSeconds] = useState(0);
   const [contextItems, setContextItems] = useState<ContextItem[]>([]);
 
@@ -524,6 +534,15 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       }
     });
 
+    const unsubStatus = view.subscribeToConnectionStatus((status: AcpConnectionStatus) => {
+      setConnectionStatus(status);
+      // Only clear errors when we successfully connect, not while reconnecting,
+      // so the user can read the failure reason.
+      if (status.state === 'connected') {
+        setError(null);
+      }
+    });
+
     const unsubError = view.subscribeToErrors((err: string) => {
       flushNow();
       clearTypingTimeout();
@@ -617,6 +636,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       unsubscribeChanges();
       unsubscribePermissions?.();
       unsubUpdate();
+      unsubStatus();
       unsubError();
       unsubCommands();
       document.removeEventListener('keydown', handleGlobalKeyDown);
@@ -1509,6 +1529,18 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           );
         })}
         {isTyping && <TypingIndicator agentName={settings.chatAgentName || 'Hermes'} />}
+        {connectionStatus && connectionStatus.state !== 'connected' && !(connectionStatus.state === 'error' && error) && (
+          <div className={`hermes-status hermes-status-${connectionStatus.state}`} role="status">
+            <span className="hermes-status-icon">
+              {connectionStatus.state === 'error' ? '⚠️' : '⏳'}
+            </span>
+            <span className="hermes-status-text">
+              {connectionStatus.state === 'connecting' && 'Connecting to Hermes via ACP...'}
+              {connectionStatus.state === 'loading' && (connectionStatus.detail || 'Hermes is starting...')}
+              {connectionStatus.state === 'error' && (connectionStatus.detail || 'Connection error')}
+            </span>
+          </div>
+        )}
         {error && (
           <div className="hermes-error" role="alert">
             <span className="hermes-error-icon">⚠️</span>

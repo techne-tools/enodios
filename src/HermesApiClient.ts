@@ -4,6 +4,7 @@ TFile
 } from 'obsidian';
 
 import type {
+ AcpConnectionStatus,
  ChatClient,
 ChatSessionUpdate
 } from './ChatClient.ts';
@@ -192,6 +193,19 @@ export class HermesApiClient implements ChatClient {
         this.commandsCallbacks.splice(index, 1);
       }
     };
+  }
+
+  /**
+   * Subscribe to connection status updates. API mode connects instantly, so
+   * we immediately report connected and never emit loading states.
+   */
+  public onConnectionStatus(callback: (status: AcpConnectionStatus) => void): () => void {
+    try {
+      callback({ state: 'connected' });
+    } catch {
+      // Ignore callback errors
+    }
+    return () => {};
   }
 
   /**

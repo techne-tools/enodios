@@ -1183,33 +1183,77 @@
   padding: 24px;
 }
 
-/* Error Banner */
-.hermes-error {
+/* Status Banner (connecting / loading / error) */
+.hermes-status {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 8px 12px;
   margin: 4px 8px;
-  background-color: var(--background-modifier-error);
-  color: var(--text-error);
   border-radius: 6px;
   font-size: 13px;
   transition: opacity 0.2s;
-  max-height: 80px;
-  overflow: hidden;
+  max-height: 40vh;
+  overflow-y: auto;
+
+  .hermes-status-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    margin-top: 1px;
+  }
+
+  .hermes-status-text {
+    flex: 1;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+}
+
+.hermes-status-connecting,
+.hermes-status-loading {
+  background-color: var(--background-modifier-form-field);
+  color: var(--text-muted);
+}
+
+.hermes-status-error {
+  background-color: var(--background-modifier-error);
+  color: var(--text-on-accent, #ffffff);
+
+  .hermes-status-text {
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
+}
+
+/* Error Banner */
+.hermes-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 4px 8px;
+  background-color: var(--background-modifier-error);
+  color: var(--text-on-accent, #ffffff);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  transition: opacity 0.2s;
+  min-height: 36px;
+  max-height: 50vh;
+  overflow-y: auto;
 
   .hermes-error-icon {
     flex-shrink: 0;
     font-size: 14px;
+    margin-top: 2px;
   }
 
   .hermes-error-text {
     flex: 1;
     word-break: break-word;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
 
   .hermes-error-dismiss,
@@ -1220,11 +1264,11 @@
     border-radius: 4px;
     font-size: 12px;
     cursor: pointer;
-    background: rgba(255, 255, 255, 0.15);
-    color: inherit;
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--text-on-accent, #ffffff);
 
     &:hover {
-      background: rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.35);
     }
   }
 

@@ -39,6 +39,7 @@ TFile
 } from 'obsidian';
 
 import type {
+ AcpConnectionStatus,
  ChatClient,
 ChatSessionUpdate
 } from './ChatClient.ts';
@@ -47,6 +48,7 @@ import type { Plugin } from './Plugin.ts';
 import { generateMessageId } from './utils/uuid.ts';
 
 const MAX_TERMINAL_OUTPUT = 1024 * 1024; // 1MB cap on terminal output to prevent memory exhaustion
+const ACP_STARTUP_TIMEOUT_MS = 90000; // Hermes can take ~55s to initialize MCP servers
 
 const ALLOWED_SHELL_COMMANDS = new Set([
   'cat', 'cp', 'curl', 'echo', 'find', 'git', 'grep', 'ls', 'mkdir', 'mv', 'rm', 'touch', 'wget'
@@ -137,6 +139,7 @@ export class AcpClient implements ChatClient {
   private clientConnection: ClientSideConnection | null = null;
   private commandsCallbacks: ((commands: { description: string; name: string }[]) => void)[] = [];
   private connectPromise: null | Promise<void> = null;
+  private connectionStatusCallbacks: ((status: AcpConnectionStatus) => void)[] = [];
   private currentAllowedTools: null | string[] = null;
   private currentSessionId: null | string = null;
   // Rate limiting: prevent accidental or malicious prompt flooding
@@ -156,7 +159,10 @@ export class AcpClient implements ChatClient {
   // Auto-reconnection state
   private reconnectAttempts = 0;
   private reconnectTimeout: null | ReturnType<typeof setTimeout> = null;
+  private startupTimeout: null | ReturnType<typeof setTimeout> = null;
+  private processExited = false;
   private stderrHandler: ((chunk: Buffer) => void) | null = null;
+  private lastExitDiagnostic = '';
   private webReadable: null | ReadableStream<Uint8Array> = null;
   private webWritable: null | WritableStream<Uint8Array> = null;
 
@@ -253,6 +259,10 @@ export class AcpClient implements ChatClient {
   }
 
   public disconnect(): void {
+    // Capture caller so we can diagnose unexpected disconnects
+    const caller = new Error('disconnect() called').stack ?? 'unknown';
+    this.plugin.debug.warn('ACP disconnect invoked', caller);
+
     // Cancel any pending auto-reconnect
     this.cancelReconnect();
 
@@ -383,6 +393,28 @@ export class AcpClient implements ChatClient {
       const index = this.errorCallbacks.indexOf(callback);
       if (index >= 0) {
         this.errorCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Subscribe to connection status updates (connecting, loading, connected, error).
+   */
+  public onConnectionStatus(callback: (status: AcpConnectionStatus) => void): () => void {
+    this.connectionStatusCallbacks.push(callback);
+    // Immediately notify with current state if available
+    if (this.childProcess) {
+      const state = this.isReady() ? 'connected' : 'connecting';
+      try {
+        callback({ state });
+      } catch {
+        // Ignore callback errors
+      }
+    }
+    return () => {
+      const index = this.connectionStatusCallbacks.indexOf(callback);
+      if (index >= 0) {
+        this.connectionStatusCallbacks.splice(index, 1);
       }
     };
   }
@@ -845,6 +877,23 @@ export class AcpClient implements ChatClient {
   }
 
   private async doConnect(): Promise<void> {
+    // Clear any stale startup timeout from a previous attempt
+    if (this.startupTimeout) {
+      clearTimeout(this.startupTimeout);
+      this.startupTimeout = null;
+    }
+
+    this.emitConnectionStatus({ state: 'connecting' });
+    this.processExited = false;
+    // Clear previous diagnostic so a fresh attempt starts clean
+    this.lastExitDiagnostic = '';
+
+    // Heartbeat timer to re-emit progress when stderr is quiet
+    let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+    const stopHeartbeat = (): void => {
+      if (heartbeatTimer) { clearTimeout(heartbeatTimer); heartbeatTimer = null; }
+    };
+
     try {
       // Spawn hermes acp
       const hermesPath = this.resolveHermesPath();
@@ -857,12 +906,105 @@ export class AcpClient implements ChatClient {
         throw new Error('Failed to spawn hermes acp: stdio pipes not available');
       }
 
-      // Log stderr for debugging only — Hermes outputs INFO/WARNING to stderr
+      // Show an immediate status so the user knows something is happening
+      this.emitConnectionStatus({ detail: 'Hermes process started — waiting for MCP servers...', state: 'loading' });
+
+      // Track individual MCP server states for detailed progress reporting
+      const mcpServerStates = new Map<string, 'connected' | 'connecting' | 'failed'>();
+      const recentStderr: string[] = [];
+      const MAX_RECENT_STDERR = 20;
+      let mcpStatusTimer: ReturnType<typeof setTimeout> | null = null;
+
+      // Periodic heartbeat: if no stderr output arrives for 5s, re-emit the
+      // current progress so the UI doesn't look stuck.
+      const startHeartbeat = (): void => {
+        const beat = (): void => {
+          if (mcpServerStates.size > 0) {
+            emitMcpProgress();
+          } else {
+            this.emitConnectionStatus({ detail: 'Hermes is starting...', state: 'loading' });
+          }
+          heartbeatTimer = setTimeout(beat, 5000);
+        };
+        heartbeatTimer = setTimeout(beat, 5000);
+      };
+      startHeartbeat();
+
+      // Debounced status emitter: coalesces rapid stderr updates into one UI refresh
+      const emitMcpProgress = (): void => {
+        if (mcpStatusTimer) { clearTimeout(mcpStatusTimer); }
+        mcpStatusTimer = setTimeout(() => {
+          let connected = 0;
+          let failed = 0;
+          let connecting = 0;
+          for (const state of mcpServerStates.values()) {
+            if (state === 'connected') {
+              connected++;
+            } else if (state === 'failed') {
+              failed++;
+            } else {
+              connecting++;
+            }
+          }
+          const total = mcpServerStates.size;
+          const parts: string[] = [];
+          if (connected > 0) { parts.push(`${connected}/${total} connected`); }
+          if (failed > 0) { parts.push(`${failed} failed`); }
+          if (connecting > 0) { parts.push(`${connecting} remaining`); }
+          this.emitConnectionStatus({
+            detail: `Initializing MCP servers: ${parts.join(', ')}...`,
+            state: 'loading'
+          });
+        }, 200);
+      };
+
+      // Parse stderr for MCP progress. Hermes prints MCP initialization status
+      // to stderr; the ACP handshake must be sent immediately to keep Hermes
+      // alive, but initialize() may fail until MCP init finishes.
       if (this.childProcess.stderr) {
         this.stderrHandler = (chunk: Buffer) => {
           const stderrText = stripAnsi(chunk.toString('utf-8').trim());
-          if (stderrText) {
-            this.plugin.debug.debug('Agent stderr', stderrText);
+          if (!stderrText) { return; }
+
+          this.plugin.debug.debug('Agent stderr', stderrText);
+
+          // Keep recent stderr lines for crash diagnostics
+          recentStderr.push(stderrText);
+          if (recentStderr.length > MAX_RECENT_STDERR) {
+            recentStderr.shift();
+          }
+
+          const lower = stderrText.toLowerCase();
+
+          // Detect MCP server registered successfully
+          const registeredMatch = /mcp server '([^']+)' \(stdio\): registered \d+ tool\(s\)/.exec(lower);
+          if (registeredMatch) {
+            mcpServerStates.set(registeredMatch[1]!, 'connected');
+            emitMcpProgress();
+            return;
+          }
+
+          // Detect MCP server initial connection attempt (retry)
+          const retryMatch = /mcp server '([^']+)' initial connection failed \(attempt \d+\/\d+\)/.exec(lower);
+          if (retryMatch) {
+            const name = retryMatch[1]!;
+            if (!mcpServerStates.has(name)) {
+              mcpServerStates.set(name, 'connecting');
+            }
+            emitMcpProgress();
+            return;
+          }
+
+          // Detect MCP server giving up after all retries
+          const giveUpMatch = /mcp server '([^']+)' failed initial connection after \d+ attempts/.exec(lower);
+          if (giveUpMatch) {
+            mcpServerStates.set(giveUpMatch[1]!, 'failed');
+            emitMcpProgress();
+            return;
+          }
+
+          if (lower.includes('error') || lower.includes('traceback')) {
+            this.plugin.debug.warn('Hermes startup stderr error', stderrText);
           }
         };
         this.childProcess.stderr.on('data', this.stderrHandler);
@@ -872,14 +1014,26 @@ export class AcpClient implements ChatClient {
       this.childProcess.on('error', (err) => {
         this.plugin.debug.error('ACP child process error', err);
         this.plugin.auditLog.recordConnection('connect', 'acp', 'failure', err.message);
-        this.scheduleReconnect();
+        this.emitConnectionStatus({ detail: err.message, state: 'error' });
+        throw err;
       });
 
       // Handle unexpected child process exit
       this.childProcess.on('close', (code, signal) => {
+        this.processExited = true;
         if (code !== null || signal !== null) {
           this.plugin.debug.error('ACP child process exited', { code, signal });
           this.plugin.auditLog.recordConnection('disconnect', 'acp', 'failure', `exit code ${code}, signal ${signal}`);
+          const exitMessage = `Hermes process exited unexpectedly (code ${code ?? 'null'}, signal ${signal ?? 'null'})`;
+          const diagnostic = recentStderr.length > 0
+            ? `\n\nRecent Hermes output:\n${recentStderr.slice(-5).join('\n')}`
+            : '';
+          if (diagnostic) {
+            this.lastExitDiagnostic = diagnostic;
+          }
+          const fullMessage = exitMessage + (diagnostic || this.lastExitDiagnostic);
+          this.emitConnectionStatus({ detail: fullMessage, state: 'error' });
+          this.emitError(fullMessage);
           this.scheduleReconnect();
         }
       });
@@ -917,7 +1071,8 @@ export class AcpClient implements ChatClient {
         stream
       );
 
-      // Initialize the connection
+      // Initialize the connection with retries. Hermes may still be loading
+      // MCP servers and will reject the handshake until it's done.
       const initRequest: InitializeRequest = {
         clientCapabilities: {
           fs: { readTextFile: true, writeTextFile: true },
@@ -929,7 +1084,9 @@ export class AcpClient implements ChatClient {
         },
         protocolVersion: 1
       };
-      const initResponse = await this.clientConnection.initialize(initRequest);
+
+      this.emitConnectionStatus({ detail: 'Waiting for Hermes to finish starting...', state: 'loading' });
+      const initResponse = await this.retryInitialize(initRequest);
 
       // ACP initialized successfully
 
@@ -991,13 +1148,78 @@ export class AcpClient implements ChatClient {
       this.currentSessionId = sessionResponse.sessionId;
       // ACP session created successfully
 
+      stopHeartbeat();
+      if (this.startupTimeout) {
+        clearTimeout(this.startupTimeout);
+        this.startupTimeout = null;
+      }
+
+      this.emitConnectionStatus({ state: 'connected' });
       new Notice('Connected to Hermes via ACP');
     } catch (error) {
+      stopHeartbeat();
+      if (this.startupTimeout) {
+        clearTimeout(this.startupTimeout);
+        this.startupTimeout = null;
+      }
+
       const message = error instanceof Error ? error.message : String(error);
+      const isConfigError = message.includes('context window') ||
+        message.includes('minimum') ||
+        message.includes('required by Hermes') ||
+        message.includes('Model') ||
+        message.includes('api_key') ||
+        message.includes('auth-required');
+
+      this.emitConnectionStatus({ detail: message, state: 'error' });
+      this.emitError(`ACP connection failed: ${message}`);
       new Notice(`ACP connection failed: ${message}`);
+
       this.disconnect();
+
+      if (isConfigError) {
+        // Hermes is running but rejected the request due to bad configuration.
+        // Stop retrying — the user needs to fix config.yaml and retry manually.
+        this.cancelReconnect();
+      }
+
       throw error;
     }
+  }
+
+  /**
+   * Retry initialize() with exponential backoff. Hermes may reject the
+   * handshake while it's still loading MCP servers, so we keep trying
+   * until it succeeds or the startup timeout expires.
+   */
+  private async retryInitialize(initRequest: InitializeRequest): ReturnType<ClientSideConnection['initialize']> {
+    const deadline = Date.now() + ACP_STARTUP_TIMEOUT_MS;
+    let attempt = 0;
+    let lastError: Error | null = null;
+
+    while (Date.now() < deadline) {
+      attempt++;
+      try {
+        const result = await this.clientConnection!.initialize(initRequest);
+        return result;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        this.plugin.debug.warn(`ACP initialize attempt ${attempt} failed`, lastError.message);
+
+        // If the process died, don't keep retrying
+        if (this.processExited || this.childProcess?.killed || this.childProcess?.exitCode !== null) {
+          throw lastError;
+        }
+
+        // Exponential backoff: 1s, 2s, 4s, 8s, ... up to 10s max
+        const delay = Math.min(1000 * (2 ** (attempt - 1)), 10000);
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, delay);
+        });
+      }
+    }
+
+    throw lastError ?? new Error('Timed out waiting for Hermes to start');
   }
 
   private emitUpdate(update: ChatSessionUpdate): void {
@@ -1044,6 +1266,28 @@ export class AcpClient implements ChatClient {
       try {
         callback(current);
       } catch {}
+    }
+  }
+
+  private emitConnectionStatus(status: AcpConnectionStatus): void {
+    for (const callback of this.connectionStatusCallbacks) {
+      try {
+        callback(status);
+      } catch {
+        // Ignore callback errors
+      }
+    }
+  }
+
+  private emitError(message: string): void {
+    const cleaned = stripAnsi(message).trim();
+    if (!cleaned) { return; }
+    for (const callback of this.errorCallbacks) {
+      try {
+        callback(cleaned);
+      } catch {
+        // Ignore callback errors
+      }
     }
   }
 

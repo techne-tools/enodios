@@ -28,9 +28,15 @@ export interface ChatClient {
   getConnectionState?(): { isReconnecting: boolean; maxAttempts: number; reconnectAttempt: number };
   isReady(): boolean;
   onAvailableCommands(callback: (commands: { description: string; name: string }[]) => void): () => void;
+  onConnectionStatus?(callback: (status: AcpConnectionStatus) => void): () => void;
   onError(callback: (error: string) => void): () => void;
   onUpdate(callback: (update: ChatSessionUpdate) => void): () => void;
   sendPrompt(text: string, contextItems?: PromptContextItem[], options?: { allowedTools?: null | string[] }): Promise<void>;
+}
+
+export interface AcpConnectionStatus {
+  detail?: string;
+  state: 'connected' | 'connecting' | 'error' | 'loading';
 }
 
 export interface ChatSessionUpdate {

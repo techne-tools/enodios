@@ -59,8 +59,7 @@
   "overrides": {
     "@antfu/utils": "9.2.0",
     "boolean": "npm:dry-uninstall",
-    "dompurify": "3.0.1",
-    "type-fest": "latest"
+    "dompurify": "3.0.1"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.21.1",
