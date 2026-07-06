@@ -34,10 +34,15 @@ WidgetType
  * The current implementation clears the ghost text on Alt+ArrowRight;
  * the plugin is responsible for re-dispatching with the next alternative.
  */
-interface GhostTextState {
+export interface GhostTextState {
   alternatives: string[];
   currentIndex: number;
   pos: number;
+}
+
+export interface GhostTextStateValue {
+  decorations: DecorationSet;
+  state: GhostTextState | null;
 }
 
 /**
@@ -71,19 +76,25 @@ export const setGhostTextEffect = StateEffect.define<GhostTextState | null>();
  * CodeMirror StateField that manages ghost text decorations.
  * Maps decorations across document changes and handles set/clear effects.
  */
-export const ghostTextStateField = StateField.define<DecorationSet>({
+export const ghostTextStateField = StateField.define<GhostTextStateValue>({
   create() {
-    return Decoration.none;
+    return { decorations: Decoration.none, state: null };
   },
-  provide: (f) => EditorView.decorations.from(f),
+  provide: (f) => EditorView.decorations.from(f, (val) => val.decorations),
   update(value, tr) {
-    // Shift decorations if the document changed (e.g. typing)
-    value = value.map(tr.changes);
+    let { decorations, state } = value;
+    decorations = decorations.map(tr.changes);
+    if (state) {
+      state = {
+        ...state,
+        pos: tr.changes.mapPos(state.pos)
+      };
+    }
 
     for (const effect of tr.effects) {
       if (effect.is(setGhostTextEffect)) {
         if (effect.value === null) {
-          return Decoration.none; // Clear suggestion
+          return { decorations: Decoration.none, state: null };
         }
         const { alternatives, currentIndex, pos } = effect.value;
         const text = alternatives[currentIndex] ?? alternatives[0] ?? '';
@@ -91,73 +102,91 @@ export const ghostTextStateField = StateField.define<DecorationSet>({
           side: 1, // Render after the cursor
           widget: new GhostTextWidget(text, currentIndex, alternatives.length)
         });
-        return Decoration.set([widget.range(pos)]);
+        return {
+          decorations: Decoration.set([widget.range(pos)]),
+          state: effect.value
+        };
       }
     }
 
     // Clear the ghost text if the user types anything and we didn't just explicitly set it
     if (tr.docChanged && !tr.effects.some((e) => e.is(setGhostTextEffect))) {
-      return Decoration.none;
+      return { decorations: Decoration.none, state: null };
     }
 
-    return value;
+    return { decorations, state };
   }
 });
 
 /**
  * Keymap for ghost text interactions.
  * - Tab: Accept the current suggestion (insert text, clear decoration).
- * - Alt+ArrowRight: Cycle to next alternative (clears current; plugin must re-dispatch).
+ * - Alt+ArrowRight: Cycle to next alternative.
+ * - Alt+ArrowLeft: Cycle to previous alternative.
  */
 export const ghostTextKeymap = keymap.of([
   {
     key: 'Tab',
     run: (view: EditorView) => {
-      const field = view.state.field(ghostTextStateField, false);
-      if (!field) { return false; }
+      const fieldVal = view.state.field(ghostTextStateField, false);
+      if (!fieldVal || !fieldVal.state) { return false; }
 
-      let accepted = false;
-      field.between(0, view.state.doc.length, (from, _to, value) => {
-        const widget = value.spec.widget as GhostTextWidget;
-        if (widget) {
-          // Insert the text and clear the decoration
-          view.dispatch({
-            changes: { from, insert: widget.text, to: from },
-            effects: setGhostTextEffect.of(null)
-          });
-          accepted = true;
-          return false;
-        }
-        return false;
-      });
+      const { alternatives, currentIndex, pos } = fieldVal.state;
+      const text = alternatives[currentIndex];
+      if (text) {
+        // Insert the text and clear the decoration
+        view.dispatch({
+          changes: { from: pos, insert: text, to: pos },
+          effects: setGhostTextEffect.of(null)
+        });
+        return true;
+      }
 
-      return accepted; // Return true to prevent default Tab behavior if we handled it
+      return false;
     }
   },
   {
     key: 'Alt-ArrowRight',
     run: (view: EditorView) => {
-      const field = view.state.field(ghostTextStateField, false);
-      if (!field) { return false; }
+      const fieldVal = view.state.field(ghostTextStateField, false);
+      if (!fieldVal || !fieldVal.state) { return false; }
 
-      let cycled = false;
-      field.between(0, view.state.doc.length, (_from, _to, value) => {
-        const widget = value.spec.widget as GhostTextWidget;
-        if (widget && widget.total > 1) {
-          // We need to cycle to the next alternative
-          // Since we don't store the full state in the widget, we dispatch a new effect
-          // The plugin will need to handle cycling externally
-          // For now, just clear the ghost text
-          view.dispatch({
-            effects: setGhostTextEffect.of(null)
-          });
-          cycled = true;
-          return false;
-        }
-        return false;
-      });
+      const { alternatives, currentIndex, pos } = fieldVal.state;
+      if (alternatives.length > 1) {
+        const nextIndex = (currentIndex + 1) % alternatives.length;
+        view.dispatch({
+          effects: setGhostTextEffect.of({
+            alternatives,
+            currentIndex: nextIndex,
+            pos
+          })
+        });
+        return true;
+      }
 
-      return cycled;
+      return false;
+    }
+  },
+  {
+    key: 'Alt-ArrowLeft',
+    run: (view: EditorView) => {
+      const fieldVal = view.state.field(ghostTextStateField, false);
+      if (!fieldVal || !fieldVal.state) { return false; }
+
+      const { alternatives, currentIndex, pos } = fieldVal.state;
+      if (alternatives.length > 1) {
+        const nextIndex = (currentIndex - 1 + alternatives.length) % alternatives.length;
+        view.dispatch({
+          effects: setGhostTextEffect.of({
+            alternatives,
+            currentIndex: nextIndex,
+            pos
+          })
+        });
+        return true;
+      }
+
+      return false;
     }
   }
 ]);

@@ -20,30 +20,34 @@ Load this skill when:
 
 ## Project Overview
 
-<!-- 
-TIP: Update this section with your project's high-level architecture.
-Example:
-- **Architecture**: Organized structure with main code in `src/main.ts` and settings in `src/settings.ts`.
-- **Reference Management**: Uses a `.ref` folder with symlinks to centralized Obsidian repositories.
--->
-
-- **Primary Stack**: [e.g., TypeScript, Svelte, Lucide icons]
-- **Key Directories**: [e.g., src/, styles/, scripts/]
+- **Primary Stack**: TypeScript, React 18, CodeMirror 6, Obsidian Plugin API, Agent Client Protocol (ACP) CLI subprocess, Vitest, esbuild.
+- **Key Directories**:
+  - `src/`: Core plugin code and client logic.
+  - `src/ReactComponents/`: React-based chat interface elements.
+  - `src/Views/`: HermesChatView implementation.
+  - `src/styles/`: SCSS styling and CodeMirror 6 inline diff/ghost text extensions.
+  - `src/__tests__ /`: Vitest-based unit testing suite.
+  - `dist/`: Compiled production bundles.
 
 ## Core Architecture
 
-- [Detail how primary components interact here]
+- **Plugin Lifecycle**: `Plugin.ts` registers command palette callbacks, settings pane (`PluginSettingsTab`), the right sidebar leaf (`HermesChatView`), and editor decorations.
+- **Agent Integration**:
+  - **Local Subprocess**: `AcpClient` spawns the Hermes CLI to execute prompts and handle interactive shell/permission commands using stdin/stdout.
+  - **Remote Server**: `HermesApiClient` connects to a remote Hermes deployment via stateless HTTP post requests and Server-Sent Events (SSE).
+- **User Approval Pipeline**: `FileChangeManager` captures all file edit/deletion suggestions from the agent, holding them as pending. The user can review, partial-approve, or reject changes via an inline CodeMirror unified diff before files are written.
 
 ## Project-Specific Conventions
 
-- **Naming**: [e.g., class names use PascalCase, private methods prefixed with _]
-- **Patterns**: [e.g., use of custom stores, specific state management]
+- **Module System**: Strictly utilizes standard ES modules with `.ts` extensions inside imports (`import { ... } from './AcpClient.ts'`).
+- **Typing Strictness**: Strictly inherits `@tsconfig/strictest`. Always use precise parameter types and handle `undefined` or `null` returns cleanly.
+- **Unit Testing**: All classes/managers have companion unit tests inside `src/__tests__/`. Mocks for Obsidian objects are managed in `src/__tests__/mocks/`.
 
 ## Plugin Installation
 
-**CRITICAL**: Plugins must be installed in `<vault>/.obsidian/plugins/<plugin-name>/`:
+**CRITICAL**: Plugins must be installed in `<vault>/.obsidian/plugins/hermes/`:
 ```
-<Vault>/.obsidian/plugins/<plugin-name>/
+<Vault>/.obsidian/plugins/hermes/
   ├── main.js          # Compiled JavaScript
   ├── manifest.json    # Plugin manifest
   └── styles.css       # Compiled CSS
@@ -53,10 +57,13 @@ The `.obsidian/plugins` directory is required - Obsidian will not detect plugins
 
 ## Key Files
 
-- `manifest.json`: Plugin/theme manifest
-- `package.json`: Build scripts and dependencies
+- `manifest.json`: Plugin manifest (configured with id: `hermes`, `isDesktopOnly: true`).
+- `package.json`: NPM package configuration containing dependencies (`@agentclientprotocol/sdk`, `prismjs`) and build utilities.
 
 ## Maintenance Tasks
 
-- [e.g., npm run dev to start development server]
-- [e.g., npm run version-bump to release new version]
+- `pnpm dev`: Start esbuild watcher to compile on the fly.
+- `pnpm build`: Perform full compilation and lint check.
+- `pnpm lint`: Run ESLint analysis.
+- `pnpm test`: Run the Vitest suite synchronously.
+

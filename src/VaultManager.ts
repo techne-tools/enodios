@@ -394,6 +394,9 @@ export class VaultManager {
     if (/^[a-zA-Z]:[\\\/]/.test(normalized)) {
       return false;
     }
+    if (normalized.startsWith('\\\\')) {
+      return false;
+    }
     return true;
   }
 

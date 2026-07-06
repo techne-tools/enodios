@@ -209,13 +209,13 @@ export class Plugin extends PluginBase<PluginTypes> {
           const systemPrompt = 'You are an inline auto-completion assistant. Continue the text naturally based on the prefix and suffix context. Do NOT repeat the prefix. ONLY output the exact text that should be inserted at the cursor position. Keep it concise.';
           const userText = `<PREFIX>\n${prefix}\n</PREFIX>\n<SUFFIX>\n${suffix}\n</SUFFIX>`;
 
-          const completion = await this.apiClient.getInlineCompletion(systemPrompt, userText);
+          const completions = await this.apiClient.getInlineCompletions(systemPrompt, userText);
 
-          if (completion) {
+          if (completions && completions.length > 0) {
             // Only show if the cursor hasn't moved while we were waiting
             const currentPos = editor.posToOffset(editor.getCursor());
             if (currentPos === pos) {
-              cmView.dispatch({ effects: setGhostTextEffect.of({ alternatives: [completion], currentIndex: 0, pos }) });
+              cmView.dispatch({ effects: setGhostTextEffect.of({ alternatives: completions, currentIndex: 0, pos }) });
             } else {
               cmView.dispatch({ effects: setGhostTextEffect.of(null) });
             }

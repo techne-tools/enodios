@@ -148,6 +148,7 @@ export class AcpClient implements ChatClient {
   private disconnectKillTimeout: null | ReturnType<typeof setTimeout> = null;
   private errorCallbacks: ((error: string) => void)[] = [];
   private isReconnecting = false;
+  private isIntentionalDisconnect = false;
   private lastAvailableCommands: { description: string; name: string }[] = [];
   private readonly MAX_RECONNECT_ATTEMPTS = 5;
   private readonly MAX_RECONNECT_DELAY_MS = 30000;
@@ -262,6 +263,8 @@ export class AcpClient implements ChatClient {
     // Capture caller so we can diagnose unexpected disconnects
     const caller = new Error('disconnect() called').stack ?? 'unknown';
     this.plugin.debug.warn('ACP disconnect invoked', caller);
+
+    this.isIntentionalDisconnect = true;
 
     // Cancel any pending auto-reconnect
     this.cancelReconnect();
@@ -448,15 +451,11 @@ export class AcpClient implements ChatClient {
 
   /**
    * Resolve all pending permission requests with the first available "allow" option.
+   * This is triggered by explicit user manual action ("Approve All" in UI), so it bypasses
+   * settings restrictions and resolves using the first available allow/general option.
    */
   public resolveAllPermissions(): void {
     if (this.pendingPermissions.length === 0) { return; }
-
-    // SECURITY: Auto-approval is gated by user setting (default: disabled).
-    // Even when enabled, only single-option allow permissions are auto-approved.
-    // This prevents malicious agents from crafting single-option permissions
-    // to bypass user review.
-    const autoApproveEnabled = this.plugin.settings.autoApproveSingleOptionPermissions;
 
     const pending = [...this.pendingPermissions];
     this.pendingPermissions = [];
@@ -465,16 +464,14 @@ export class AcpClient implements ChatClient {
       const allowOptions = options.filter((o: Record<string, unknown>) => String(o['kind']).startsWith('allow_'));
       const permType = String((p.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
 
-      // SECURITY: Only auto-approve permissions that have exactly one option
-      // and that option is an allow, AND only when the user has explicitly
-      // enabled auto-approval in settings. Permissions with multiple options
-      // (or a mix of allow/deny) always require explicit per-permission review.
-      if (autoApproveEnabled && allowOptions.length === 1 && options.length === 1) {
-        const outcome = String(allowOptions[0]!.kind || allowOptions[0]!.optionId);
+      const targetOption = allowOptions[0] || options[0];
+
+      if (targetOption) {
+        const outcome = String(targetOption.kind || targetOption.optionId);
         this.plugin.auditLog.recordPermission(permType, outcome, 'success');
         p.resolve({
           outcome: {
-            optionId: String(allowOptions[0]!.optionId),
+            optionId: String(targetOption.optionId),
             outcome: 'selected'
           }
         } as RequestPermissionResponse);
@@ -812,11 +809,25 @@ export class AcpClient implements ChatClient {
       },
 
       requestPermission: async (params: RequestPermissionRequest): Promise<RequestPermissionResponse> => {
-        // Pass all permission requests through to the UI for user approval.
-        // The agent's native tools (write_file, patch, read_file, search_files)
-        // run on the agent's machine with CWD set to the vault root, so
-        // approved writes go directly to the vault filesystem.
-        // For diff-based file approval, the agent should use fs/write_text_file.
+        // SECURITY: Auto-approval is gated by user setting (default: disabled).
+        // Even when enabled, only single-option allow permissions are auto-approved on arrival.
+        const autoApproveEnabled = this.plugin.settings.autoApproveSingleOptionPermissions;
+        const options = params.options ?? [];
+        const allowOptions = options.filter((o: Record<string, unknown>) => String(o['kind']).startsWith('allow_'));
+        const permType = String((params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+
+        if (autoApproveEnabled && allowOptions.length === 1 && options.length === 1) {
+          const outcome = String(allowOptions[0]!.kind || allowOptions[0]!.optionId);
+          this.plugin.auditLog.recordPermission(permType, outcome, 'success');
+          return {
+            outcome: {
+              optionId: String(allowOptions[0]!.optionId),
+              outcome: 'selected'
+            }
+          } as RequestPermissionResponse;
+        }
+
+        // Pass permission requests through to the UI for manual user approval.
         return new Promise((resolve, reject) => {
           const pending: PendingPermission = {
             id: generateMessageId(),
@@ -862,21 +873,26 @@ export class AcpClient implements ChatClient {
       writeTextFile: async (params: WriteTextFileRequest): Promise<WriteTextFileResponse> => {
         // SECURITY: Session-level tool restrictions apply BEFORE queuing.
         this.checkToolAllowed('write_file');
-        try {
-          // Queue the change for user approval instead of writing immediately
-          await this.plugin.fileChangeManager.registerChange(params.path, params.content);
-          this.plugin.auditLog.recordFileChange(params.path, params.content === null ? 'delete' : 'modify', 'pending');
-          return {};
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          this.plugin.auditLog.recordToolCall('write_file', { path: params.path }, 'failure', message);
-          throw new Error(`Failed to queue file change: ${message}`);
-        }
+        return new Promise<WriteTextFileResponse>((resolve, reject) => {
+          this.plugin.fileChangeManager.registerChange(
+            params.path,
+            params.content,
+            () => resolve({}),
+            (err) => reject(err)
+          ).then(() => {
+            this.plugin.auditLog.recordFileChange(params.path, params.content === null ? 'delete' : 'modify', 'pending');
+          }).catch((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            this.plugin.auditLog.recordToolCall('write_file', { path: params.path }, 'failure', message);
+            reject(new Error(`Failed to queue file change: ${message}`));
+          });
+        });
       }
     };
   }
 
   private async doConnect(): Promise<void> {
+    this.isIntentionalDisconnect = false;
     // Clear any stale startup timeout from a previous attempt
     if (this.startupTimeout) {
       clearTimeout(this.startupTimeout);
@@ -1015,12 +1031,15 @@ export class AcpClient implements ChatClient {
         this.plugin.debug.error('ACP child process error', err);
         this.plugin.auditLog.recordConnection('connect', 'acp', 'failure', err.message);
         this.emitConnectionStatus({ detail: err.message, state: 'error' });
-        throw err;
       });
 
       // Handle unexpected child process exit
       this.childProcess.on('close', (code, signal) => {
         this.processExited = true;
+        if (this.isIntentionalDisconnect) {
+          this.plugin.debug.info('ACP child process exited cleanly after intentional disconnect');
+          return;
+        }
         if (code !== null || signal !== null) {
           this.plugin.debug.error('ACP child process exited', { code, signal });
           this.plugin.auditLog.recordConnection('disconnect', 'acp', 'failure', `exit code ${code}, signal ${signal}`);
@@ -1508,6 +1527,9 @@ function isPathSafe(filePath: string): boolean {
  */
 function sanitizeShellCommand(command: string): string {
   const trimmed = command.trim();
+  if (trimmed.includes(' ')) {
+    throw new Error("Command must be a single executable name. Pass arguments in the 'arguments' field.");
+  }
   // Extract the base command (first token before any whitespace)
   const baseMatch = /^([a-zA-Z0-9_\-\.]+)/.exec(trimmed);
   const base = baseMatch?.[1] ?? '';

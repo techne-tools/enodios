@@ -47,6 +47,7 @@ export class AuditLog {
   private readonly maxEntries = 1000;
   private readonly plugin: Plugin;
   private writeQueue: AuditEntry[] = [];
+  private callbacks: (() => void)[] = [];
 
   private get logFilePath(): string {
     const folder = this.plugin.settings.chatSaveFolder || 'hermes';
@@ -133,6 +134,47 @@ export class AuditLog {
       timestamp: Date.now()
     });
     this.scheduleFlush();
+    this.notify();
+  }
+
+  /**
+   * Subscribe to changes in the audit log.
+   */
+  public onChange(callback: () => void): () => void {
+    this.callbacks.push(callback);
+    return () => {
+      const index = this.callbacks.indexOf(callback);
+      if (index >= 0) {
+        this.callbacks.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Clear the audit log (both in memory and file).
+   */
+  public async clear(): Promise<void> {
+    this.writeQueue = [];
+    try {
+      const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
+      if (file instanceof TFile) {
+        const header = '---\ntype: hermes-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n';
+        await this.plugin.app.vault.modify(file, header);
+      }
+    } catch (error) {
+      this.plugin.debug.error('Failed to clear audit log file', error);
+    }
+    this.notify();
+  }
+
+  private notify(): void {
+    for (const cb of this.callbacks) {
+      try {
+        cb();
+      } catch {
+        // Ignore callback errors
+      }
+    }
   }
 
   /**

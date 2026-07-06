@@ -120,9 +120,9 @@ export class HermesApiClient implements ChatClient {
   }
 
   /**
-   * Fetch a stateless inline completion for ghost text.
+   * Fetch stateless inline completions for ghost text.
    */
-  public async getInlineCompletion(systemPrompt: string, userText: string): Promise<null | string> {
+  public async getInlineCompletions(systemPrompt: string, userText: string): Promise<null | string[]> {
     if (!this.isReady()) {
       new Notice('Hermes API URL is not configured.');
       return null;
@@ -142,6 +142,7 @@ export class HermesApiClient implements ChatClient {
             { content: userText, role: 'user' }
           ],
           model: this.plugin.settings.hermesAgentName,
+          n: 3,
           stream: false
         }),
         headers: {
@@ -158,8 +159,13 @@ export class HermesApiClient implements ChatClient {
         choices?: { message?: { content?: string } }[];
       };
 
-      const content = data.choices?.[0]?.message?.content;
-      return content ? content.trim() : null;
+      if (!data.choices || data.choices.length === 0) { return null; }
+
+      const completions = data.choices
+        .map((choice) => choice.message?.content?.trim())
+        .filter((content): content is string => Boolean(content));
+
+      return completions.length > 0 ? completions : null;
     } catch (error) {
       // Log at debug level so users aren't spammed, but developers can trace
       // why inline completion stopped working (network, JSON parse, etc.)

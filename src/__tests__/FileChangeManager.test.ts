@@ -235,4 +235,45 @@ describe('FileChangeManager', () => {
       expect(modifyCalls).toBe(2);
     });
   });
+
+  describe('processPartialChange', () => {
+    it('should correctly approve an added line', async () => {
+      const { TFile } = await import('obsidian');
+      const file = new TFile('test.md');
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(file);
+      plugin.app.vault.read = vi.fn().mockResolvedValue('line 1\nline 2');
+
+      const change = await manager.registerChange('test.md', 'line 1\nadded line\nline 2');
+      // The diffSnapshot should look like:
+      // index 0: unchanged 'line 1'
+      // index 1: added 'added line'
+      // index 2: unchanged 'line 2'
+      expect(change.diffSnapshot).toHaveLength(3);
+      expect(change.diffSnapshot[1]?.type).toBe('added');
+
+      await manager.processPartialChange(change.id, [1], 'approve');
+
+      // The new disk file should contain the approved added line
+      expect(plugin.app.vault.modify).toHaveBeenCalledWith(file, 'line 1\nadded line\nline 2');
+      // After approval, the newContent should still have it (it matches the disk)
+      expect(change.newContent).toBe('line 1\nadded line\nline 2');
+    });
+
+    it('should correctly reject an added line', async () => {
+      const { TFile } = await import('obsidian');
+      const file = new TFile('test.md');
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(file);
+      plugin.app.vault.read = vi.fn().mockResolvedValue('line 1\nline 2');
+
+      const change = await manager.registerChange('test.md', 'line 1\nadded line\nline 2');
+      expect(change.diffSnapshot[1]?.type).toBe('added');
+
+      await manager.processPartialChange(change.id, [1], 'reject');
+
+      // The disk file should NOT have the added line (stays original)
+      expect(plugin.app.vault.modify).toHaveBeenCalledWith(file, 'line 1\nline 2');
+      // The newContent should have the added line removed
+      expect(change.newContent).toBe('line 1\nline 2');
+    });
+  });
 });

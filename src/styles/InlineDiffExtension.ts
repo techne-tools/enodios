@@ -65,20 +65,25 @@ class HunkHeaderWidget extends WidgetType {
       </div>
     `;
     div.querySelector('.hermes-btn-approve-sm')!.addEventListener('click', () => {
-      this.manager.applyPartialHunk(this.changeId, this.indices);
+      this.manager.processPartialChange(this.changeId, this.indices, 'approve');
     });
     div.querySelector('.hermes-btn-reject-sm')!.addEventListener('click', () => {
-      this.manager.rejectPartialHunk(this.changeId, this.indices);
+      this.manager.processPartialChange(this.changeId, this.indices, 'reject');
     });
     return div;
   }
 }
 
 class InlineDiffWidget extends WidgetType {
-  constructor(public readonly line: DiffLineState) { super(); }
+  constructor(
+    public readonly line: DiffLineState,
+    public readonly index: number,
+    public readonly changeId: string,
+    public readonly manager: FileChangeManager
+  ) { super(); }
 
   override eq(other: InlineDiffWidget): boolean {
-    return this.line.line === other.line.line && this.line.type === other.line.type;
+    return this.line.line === other.line.line && this.line.type === other.line.type && this.index === other.index && this.changeId === other.changeId;
   }
 
   toDOM(): HTMLElement {
@@ -94,6 +99,32 @@ class InlineDiffWidget extends WidgetType {
     text.className = 'hermes-diff-text';
     text.textContent = this.line.line || ' ';
     span.appendChild(text);
+
+    // Add inline action buttons on hover
+    const actions = document.createElement('span');
+    actions.className = 'hermes-diff-line-actions';
+
+    const approveBtn = document.createElement('button');
+    approveBtn.className = 'hermes-btn-approve-line';
+    approveBtn.title = 'Approve change';
+    approveBtn.textContent = '✓';
+    approveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.manager.processPartialChange(this.changeId, [this.index], 'approve');
+    });
+
+    const rejectBtn = document.createElement('button');
+    rejectBtn.className = 'hermes-btn-reject-line';
+    rejectBtn.title = 'Reject change';
+    rejectBtn.textContent = '✗';
+    rejectBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.manager.processPartialChange(this.changeId, [this.index], 'reject');
+    });
+
+    actions.appendChild(approveBtn);
+    actions.appendChild(rejectBtn);
+    span.appendChild(actions);
 
     return span;
   }
@@ -165,7 +196,7 @@ export const inlineDiffStateField = StateField.define<DecorationSet>({
 
                  // Insert our custom diff block widget
                  ranges.push(Decoration.widget({
-                   widget: new InlineDiffWidget(line),
+                   widget: new InlineDiffWidget(line, i, changeId, manager),
                    block: true,
                    side: -1
                  }).range(lineStart));
@@ -175,7 +206,7 @@ export const inlineDiffStateField = StateField.define<DecorationSet>({
             } else if (line.type === 'added') {
                const pos = docLine <= doc.lines ? doc.line(docLine).from : doc.length;
                ranges.push(Decoration.widget({
-                 widget: new InlineDiffWidget(line),
+                 widget: new InlineDiffWidget(line, i, changeId, manager),
                  block: true,
                  side: -1
                }).range(pos));

@@ -39,6 +39,7 @@ import type {
 } from '../ChatClient.ts';
 import type { PendingFileChange } from '../FileChangeManager.ts';
 import type { Plugin } from '../Plugin.ts';
+import type { AuditEntry } from '../AuditLog.ts';
 
 import {
  getSlashCommands,
@@ -149,7 +150,66 @@ interface ChatHeaderProps {
   onToggleConversationList: () => void;
   onToggleSearch: () => void;
   onToggleSessionSettings: () => void;
+  onToggleAuditLog: () => void;
 }
+
+interface AuditLogPanelProps {
+  entries: AuditEntry[];
+  onClear: () => void;
+  onClose: () => void;
+}
+
+const AuditLogPanel = memo(({ entries, onClear, onClose }: AuditLogPanelProps): ReactElement => {
+  return (
+    <div className="hermes-audit-log-panel">
+      <div className="hermes-audit-log-header">
+        <span>Audit Trace Log</span>
+        <div className="hermes-audit-log-actions">
+          <button className="hermes-text-btn" onClick={onClear} type="button">Clear</button>
+          <button className="hermes-icon-btn" onClick={onClose} title="Close" type="button">✕</button>
+        </div>
+      </div>
+      <div className="hermes-audit-log-list">
+        {entries.length === 0
+? (
+          <div className="hermes-audit-empty">No trace entries recorded yet</div>
+        )
+: (
+          entries.map((entry, idx) => {
+            const time = new Date(entry.timestamp).toLocaleTimeString();
+            const icon = {
+              blocked: '🚫',
+              failure: '❌',
+              pending: '⏳',
+              success: '✅'
+            }[entry.status];
+
+            const actionLabel = {
+              connection: '🔌',
+              error: '💥',
+              file_change: '📝',
+              permission: '🔐',
+              terminal: '💻',
+              tool_call: '🔧'
+            }[entry.action];
+
+            return (
+              <div className={`hermes-audit-entry ${entry.status}`} key={idx}>
+                <div className="hermes-audit-entry-header">
+                  <span>{icon} {actionLabel} <strong>{entry.action}</strong></span>
+                  <span className="hermes-audit-entry-time">{time}</span>
+                </div>
+                <div className="hermes-audit-entry-details">
+                  {entry.details}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+});
 
 // Re-export ContextItem shape from AcpClient for UI use
 type ContextItem = PromptContextItem;
@@ -292,6 +352,8 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   const [conversations, setConversations] = useState<{ filePath: string; title: string }[]>([]);
   const [fileChanges, setFileChanges] = useState<PendingFileChange[]>([]);
   const [pendingPermissions, setPendingPermissions] = useState<PendingPermission[]>([]);
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
 
   // Conversation search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -642,6 +704,29 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       document.removeEventListener('keydown', handleGlobalKeyDown);
     };
   }, [view, plugin, clearTypingTimeout, scheduleSave, appendContent, appendReasoning, flushNow, settings.showReasoning, settings.showToolUse]);
+
+  const loadAuditLog = useCallback(async (): Promise<void> => {
+    try {
+      const entries = await plugin.auditLog.getRecentEntries(50);
+      setAuditEntries(entries);
+    } catch {
+      setAuditEntries([]);
+    }
+  }, [plugin]);
+
+  const handleClearAuditLog = useCallback(async (): Promise<void> => {
+    await plugin.auditLog.clear();
+    await loadAuditLog();
+  }, [plugin, loadAuditLog]);
+
+  useEffect(() => {
+    if (!isAuditLogOpen) { return; }
+    void loadAuditLog();
+    const unsubscribe = plugin.auditLog.onChange(() => {
+      void loadAuditLog();
+    });
+    return unsubscribe;
+  }, [isAuditLogOpen, loadAuditLog, plugin]);
 
   const loadConversationList = useCallback(async (): Promise<void> => {
     try {
@@ -1376,23 +1461,31 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         isSaving={isSaving}
         onNewChat={handleNewChat}
         onOpenSettings={() => { plugin.openSettings(); }}
+        onToggleAuditLog={() => {
+          setIsConversationListOpen(false);
+          setIsSessionSettingsOpen(false);
+          setIsAuditLogOpen((prev) => !prev);
+        }}
         onToggleConversationList={() => {
           if (!isConversationListOpen) {
             void loadConversationList();
           }
           setIsSessionSettingsOpen(false);
+          setIsAuditLogOpen(false);
           setIsConversationListOpen((prev) => !prev);
         }}
         onToggleSearch={() => {
           setIsSearchOpen((prev) => !prev);
           setIsConversationListOpen(false);
           setIsSessionSettingsOpen(false);
+          setIsAuditLogOpen(false);
           if (!isSearchOpen) {
             setTimeout(() => searchInputRef.current?.focus(), 0);
           }
         }}
         onToggleSessionSettings={() => {
           setIsConversationListOpen(false);
+          setIsAuditLogOpen(false);
           setIsSessionSettingsOpen((prev) => !prev);
         }}
       />
@@ -1413,6 +1506,14 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         }}
       />
     )}
+
+      {isAuditLogOpen && (
+        <AuditLogPanel
+          entries={auditEntries}
+          onClear={handleClearAuditLog}
+          onClose={() => { setIsAuditLogOpen(false); }}
+        />
+      )}
 
       {isConversationListOpen && (
         <div className="hermes-conversation-list">
@@ -1627,7 +1728,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   );
 }
 
-const ChatHeader = memo(({ agentName, isSaving, onNewChat, onOpenSettings, onToggleConversationList, onToggleSearch, onToggleSessionSettings }: ChatHeaderProps): ReactElement => {
+const ChatHeader = memo(({ agentName, isSaving, onNewChat, onOpenSettings, onToggleConversationList, onToggleSearch, onToggleSessionSettings, onToggleAuditLog }: ChatHeaderProps): ReactElement => {
   return (
     <div className="hermes-chat-header">
       <div className="hermes-chat-header-left">
@@ -1649,6 +1750,12 @@ const ChatHeader = memo(({ agentName, isSaving, onNewChat, onOpenSettings, onTog
         <button className="hermes-icon-btn" onClick={onToggleSessionSettings} title="Session Tools" type="button">
           <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+          </svg>
+        </button>
+        <button className="hermes-icon-btn" onClick={onToggleAuditLog} title="Audit Trace Log" type="button">
+          <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
           </svg>
         </button>
         <button className="hermes-icon-btn" onClick={onNewChat} title="New Chat" type="button">

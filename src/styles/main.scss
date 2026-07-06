@@ -1856,6 +1856,15 @@
   font-style: italic;
 }
 
+.hermes-ghost-text[data-alternatives]::after {
+  content: " (" attr(data-alternatives) ")";
+  font-size: 0.8em;
+  opacity: 0.7;
+  font-style: normal;
+  margin-left: 4px;
+  color: var(--text-accent);
+}
+
 /* Inline Diff Extension Styles */
 .hermes-diff-line {
   display: inline-flex;
@@ -1958,3 +1967,146 @@
 .hermes-btn-reject:hover, .hermes-btn-reject-sm:hover {
   background-color: rgba(255, 0, 0, 0.1);
 }
+
+/* Audit Log Panel Styles */
+.hermes-audit-log-panel {
+  position: absolute;
+  top: 40px; /* Right under the header */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--background-primary);
+  border-top: 1px solid var(--background-modifier-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 15;
+}
+
+.hermes-audit-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.hermes-audit-log-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hermes-text-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-accent);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.hermes-text-btn:hover {
+  text-decoration: underline;
+}
+
+.hermes-audit-log-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hermes-audit-empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+.hermes-audit-entry {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 8px;
+  background-color: var(--background-secondary-alt);
+  font-size: 12px;
+
+  &.failure {
+    border-left: 3px solid var(--text-error);
+  }
+  &.success {
+    border-left: 3px solid var(--interactive-success);
+  }
+  &.blocked {
+    border-left: 3px solid var(--text-warning);
+  }
+  &.pending {
+    border-left: 3px solid var(--text-accent);
+  }
+}
+
+.hermes-audit-entry-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.hermes-audit-entry-time {
+  color: var(--text-muted);
+}
+
+.hermes-audit-entry-details {
+  color: var(--text-normal);
+  word-break: break-all;
+  font-family: var(--font-monospace);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+/* Individual line actions in inline diff */
+.hermes-diff-line-actions {
+  display: inline-flex;
+  margin-left: 8px;
+  gap: 4px;
+  opacity: 0.3;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.hermes-diff-line:hover .hermes-diff-line-actions {
+  opacity: 1.0;
+}
+
+.hermes-btn-approve-line, .hermes-btn-reject-line {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: bold;
+  border-radius: 3px;
+  line-height: 1;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hermes-btn-approve-line {
+  color: var(--text-success);
+}
+.hermes-btn-approve-line:hover {
+  background-color: rgba(0, 255, 0, 0.15);
+}
+
+.hermes-btn-reject-line {
+  color: var(--text-error);
+}
+.hermes-btn-reject-line:hover {
+  background-color: rgba(255, 0, 0, 0.15);
+}
+

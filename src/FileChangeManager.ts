@@ -29,6 +29,8 @@ export interface PendingFileChange {
   path: string;
   status: 'approved' | 'partial' | 'pending' | 'rejected';
   timestamp: number;
+  resolve?: (() => void) | undefined;
+  reject?: ((error: Error) => void) | undefined;
 }
 
 type ChangeCallback = (changes: PendingFileChange[]) => void;
@@ -132,9 +134,11 @@ export class FileChangeManager {
           }
           change.status = 'approved';
           this.plugin.auditLog.recordFileChange(change.path, change.action, 'success');
+          if (change.resolve) change.resolve();
           successCount++;
         } catch (error) {
           this.plugin.debug.error(`Failed to apply changes to ${change.path}`, error);
+          if (change.reject) change.reject(error instanceof Error ? error : new Error(String(error)));
         } finally {
           this.processingPaths.delete(change.path);
           this.clearInlineDiffForPath(change.path);
@@ -189,6 +193,9 @@ export class FileChangeManager {
       change.partialContent = contentOverride;
       this.plugin.auditLog.recordFileChange(change.path, isPartial ? 'modify' : change.action, 'success');
       new Notice(`Applied ${isPartial ? 'partial ' : ''}changes to ${change.path}`);
+      if (change.status === 'approved' && change.resolve) {
+        change.resolve();
+      }
 
       // Refresh diff snapshots for any remaining pending changes on the same file
       // so the UI shows diffs against the newly-written content.
@@ -245,7 +252,12 @@ export class FileChangeManager {
    * Register a file change from the agent.
    * Reads the current file content to compute a diff.
    */
-  public async registerChange(path: string, newContent: null | string): Promise<PendingFileChange> {
+  public async registerChange(
+    path: string,
+    newContent: null | string,
+    resolveCallback?: () => void,
+    rejectCallback?: (error: Error) => void
+  ): Promise<PendingFileChange> {
     if (!this.isPathSafe(path)) {
       throw new Error(`Invalid file path: ${path}`);
     }
@@ -298,13 +310,20 @@ export class FileChangeManager {
       originalContent,
       path,
       status: 'pending',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      resolve: resolveCallback,
+      reject: rejectCallback
     };
 
     if (existingPendingIndex !== -1) {
       // Coalesce / overwrite the existing pending change to prevent rapid duplicates
-      // Preserve the original ID so the React UI doesn't forcibly unmount if expanded
-      change.id = this.changes[existingPendingIndex]!.id;
+      // Reject the previous pending change if it has callbacks
+      const oldChange = this.changes[existingPendingIndex]!;
+      if (oldChange.reject) {
+        oldChange.reject(new Error('Superceded by new change'));
+      }
+      new Notice(`Pending change to ${path} was superseded by an update from the agent.`);
+      change.id = oldChange.id;
       this.changes[existingPendingIndex] = change;
     } else {
       this.changes.push(change);
@@ -417,6 +436,9 @@ export class FileChangeManager {
       change.status = 'rejected';
       this.clearInlineDiffForPath(change.path);
       await this.cleanupEmptyCreatedFile(change);
+      if (change.reject) {
+        change.reject(new Error('Permission Denied: User rejected all changes'));
+      }
     }
     new Notice(`Rejected ${pending.length} pending change(s)`);
     this.notify();
@@ -432,11 +454,14 @@ export class FileChangeManager {
       new Notice(`Rejected changes to ${change.path}`);
       this.clearInlineDiffForPath(change.path);
       await this.cleanupEmptyCreatedFile(change);
+      if (change.reject) {
+        change.reject(new Error('Permission Denied: User rejected the change'));
+      }
     }
     this.notify();
   }
 
-  public async applyPartialHunk(changeId: string, hunkIndices: number[]): Promise<void> {
+  public async processPartialChange(changeId: string, indices: number[], decision: 'approve' | 'reject'): Promise<void> {
     const change = this.changes.find((c) => c.id === changeId);
     if (!change || !change.diffSnapshot || change.status !== 'pending') return;
 
@@ -444,20 +469,48 @@ export class FileChangeManager {
     this.processingPaths.add(change.path);
 
     try {
-      const newContentLines: string[] = [];
-      const approvedIndices = new Set(hunkIndices);
+      const targetIndices = new Set(indices);
+      const diskLines: string[] = [];
+      const proposedLines: string[] = [];
+
       for (let i = 0; i < change.diffSnapshot.length; i++) {
-        const line = change.diffSnapshot[i];
-        if (!line) continue;
-        if (line.type === 'unchanged') {
-          newContentLines.push(line.line);
-        } else if (line.type === 'added' && approvedIndices.has(i)) {
-          newContentLines.push(line.line);
-        } else if (line.type === 'removed' && !approvedIndices.has(i)) {
-          newContentLines.push(line.line);
+        const item = change.diffSnapshot[i];
+        if (!item) continue;
+
+        if (item.type === 'unchanged') {
+          diskLines.push(item.line);
+          proposedLines.push(item.line);
+        } else if (item.type === 'removed') {
+          if (targetIndices.has(i)) {
+            if (decision === 'approve') {
+              // Approve removal: do not write to disk, do not write to proposed
+            } else {
+              // Reject removal: keep line on disk and in proposed
+              diskLines.push(item.line);
+              proposedLines.push(item.line);
+            }
+          } else {
+            // Unrelated removed line: keep on disk (since it's still there), but do not put in proposed
+            diskLines.push(item.line);
+          }
+        } else if (item.type === 'added') {
+          if (targetIndices.has(i)) {
+            if (decision === 'approve') {
+              // Approve addition: write to disk and to proposed
+              diskLines.push(item.line);
+              proposedLines.push(item.line);
+            } else {
+              // Reject addition: do not write to disk, do not write to proposed
+            }
+          } else {
+            // Unrelated added line: not on disk, but keep in proposed
+            proposedLines.push(item.line);
+          }
         }
       }
-      const contentToWrite = newContentLines.join('\n');
+
+      const contentToWrite = diskLines.join('\n');
+      change.newContent = proposedLines.join('\n');
 
       const existingFile = this.plugin.app.vault.getAbstractFileByPath(change.path);
       if (existingFile instanceof TFile) {
@@ -471,6 +524,15 @@ export class FileChangeManager {
       if (!change.diffSnapshot || !change.diffSnapshot.some((l) => l.type !== 'unchanged')) {
         change.status = 'approved';
         this.clearInlineDiffForPath(change.path);
+        if (change.newContent === change.originalContent) {
+          if (change.reject) {
+            change.reject(new Error('Permission Denied: All changes rejected'));
+          }
+        } else {
+          if (change.resolve) {
+            change.resolve();
+          }
+        }
       } else {
         const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView && activeView.file?.path === change.path) {
@@ -481,41 +543,6 @@ export class FileChangeManager {
       }
     } finally {
       this.processingPaths.delete(change.path);
-      this.notify();
-    }
-  }
-
-  public async rejectPartialHunk(changeId: string, hunkIndices: number[]): Promise<void> {
-    const change = this.changes.find((c) => c.id === changeId);
-    if (!change || !change.diffSnapshot || change.status !== 'pending') return;
-
-    const newTargetLines: string[] = [];
-    const rejectedIndices = new Set(hunkIndices);
-
-    for (let i = 0; i < change.diffSnapshot.length; i++) {
-      const line = change.diffSnapshot[i];
-      if (!line) continue;
-      if (line.type === 'unchanged') {
-        newTargetLines.push(line.line);
-      } else if (line.type === 'added' && !rejectedIndices.has(i)) {
-        newTargetLines.push(line.line);
-      } else if (line.type === 'removed' && rejectedIndices.has(i)) {
-        newTargetLines.push(line.line);
-      }
-    }
-
-    change.newContent = newTargetLines.join('\n');
-    change.diffSnapshot = computeDiffLines(change.originalContent, change.newContent);
-
-    if (!change.diffSnapshot.some((l) => l.type !== 'unchanged')) {
-      await this.rejectChange(changeId);
-    } else {
-      const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
-      if (activeView && activeView.file?.path === change.path) {
-        // @ts-expect-error - Internal CM view
-        const cmView = activeView.editor.cm;
-        if (cmView) this.triggerInlineDiff(change, cmView);
-      }
       this.notify();
     }
   }
