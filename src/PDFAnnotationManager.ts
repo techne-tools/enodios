@@ -29,7 +29,8 @@ export class PDFAnnotationManager {
     }
 
     // Access the built-in PDF.js library in Obsidian
-    const pdfjs = typeof window !== 'undefined' ? (window as any).pdfjsLib : (global as any).pdfjsLib;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfjs: any = typeof window !== 'undefined' ? (window as any).pdfjsLib : (global as any).pdfjsLib;
     if (!pdfjs) {
       throw new Error('Obsidian PDF.js library is not available in this environment.');
     }
@@ -47,17 +48,18 @@ export class PDFAnnotationManager {
 
         // Retrieve text content to map coordinates for highlights/underlines
         const textContent = await page.getTextContent();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const textItems = textContent.items.map((item: any) => {
-          const transform = item.transform; // [scaleX, skewX, skewY, scaleY, x, y]
-          const x = transform[4];
-          const y = transform[5];
-          const fontSize = Math.abs(transform[3]) || 10;
+          const transform = item.transform as number[]; // [scaleX, skewX, skewY, scaleY, x, y]
+          const x = transform[4]!;
+          const y = transform[5]!;
+          const fontSize = Math.abs(transform[3]!) || 10;
           return {
             x,
             y,
-            width: item.width || (item.str.length * fontSize * 0.6),
+            width: (item.width as number) || ((item.str as string).length * fontSize * 0.6),
             height: fontSize,
-            str: item.str
+            str: item.str as string
           };
         });
 
@@ -74,10 +76,9 @@ export class PDFAnnotationManager {
           let text = '';
           if (type !== 'Text' && annot.rect) {
             // Rect is [minX, minY, maxX, maxY]
-            const rect = annot.rect;
+            const rect = annot.rect as number[];
             const tolerance = 2.0;
 
-            // Find overlapping text items
             // Find overlapping text items
             const overlapping = textItems.filter((item: { x: number; y: number; width: number; height: number; str: string }) => {
               const itemMinX = item.x;
@@ -86,10 +87,10 @@ export class PDFAnnotationManager {
               const itemMaxY = item.y + item.height;
 
               return (
-                itemMinX < rect[2] + tolerance &&
-                itemMaxX > rect[0] - tolerance &&
-                itemMinY < rect[3] + tolerance &&
-                itemMaxY > rect[1] - tolerance
+                itemMinX < rect[2]! + tolerance &&
+                itemMaxX > rect[0]! - tolerance &&
+                itemMinY < rect[3]! + tolerance &&
+                itemMaxY > rect[1]! - tolerance
               );
             });
 
@@ -158,14 +159,14 @@ export class PDFAnnotationManager {
   /**
    * Helper: formats PDF color array [r, g, b] to a hex string or readable color name.
    */
-  private formatColor(colorArray: any): string | undefined {
-    if (!colorArray || !Array.isArray(colorArray) || colorArray.length < 3) {
+  private formatColor(colorArray: unknown): string | undefined {
+    if (!Array.isArray(colorArray) || colorArray.length < 3) {
       return undefined;
     }
 
-    const r = Math.round(colorArray[0]);
-    const g = Math.round(colorArray[1]);
-    const b = Math.round(colorArray[2]);
+    const r = Math.round(colorArray[0] as number);
+    const g = Math.round(colorArray[1] as number);
+    const b = Math.round(colorArray[2] as number);
 
     // Map common colors to readable names for better display
     if (r > 200 && g > 200 && b < 100) return 'Yellow';
@@ -191,7 +192,8 @@ export class PDFAnnotationManager {
       throw new Error('File is not a PDF');
     }
 
-    const pdfjs = typeof window !== 'undefined' ? (window as any).pdfjsLib : (global as any).pdfjsLib;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfjs: any = typeof window !== 'undefined' ? (window as any).pdfjsLib : (global as any).pdfjsLib;
     if (!pdfjs) {
       throw new Error('Obsidian PDF.js library is not available in this environment.');
     }
@@ -205,7 +207,8 @@ export class PDFAnnotationManager {
 
     const page = await pdf.getPage(pageNumber);
     const textContent = await page.getTextContent();
-    const textItems = textContent.items.map((item: any) => item.str);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const textItems = textContent.items.map((item: any) => item.str as string);
     return textItems.join(' ').replace(/\s+/g, ' ').trim();
   }
 
@@ -217,7 +220,8 @@ export class PDFAnnotationManager {
       throw new Error('File is not a PDF');
     }
 
-    const pdfjs = typeof window !== 'undefined' ? (window as any).pdfjsLib : (global as any).pdfjsLib;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfjs: any = typeof window !== 'undefined' ? (window as any).pdfjsLib : (global as any).pdfjsLib;
     if (!pdfjs) {
       throw new Error('Obsidian PDF.js library is not available in this environment.');
     }

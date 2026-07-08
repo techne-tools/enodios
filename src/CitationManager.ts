@@ -193,7 +193,7 @@ export class CitationManager {
           braceCount--;
         }
         if (braceCount > 0) {
-          entryText += char;
+          entryText += char!;
         }
         pos++;
       }
@@ -211,29 +211,29 @@ export class CitationManager {
         }
 
         let val = '';
-        let valEnd = valStart;
-        if (entryText[valStart] === '{') {
+        let valEnd: number;
+        const valStartChar = entryText[valStart]!;
+        if (valStartChar === '{') {
           let bCount = 1;
-          valStart++;
-          valEnd = valStart;
+          valEnd = valStart + 1;
           while (valEnd < entryText.length && bCount > 0) {
-            if (entryText[valEnd] === '{') bCount++;
-            else if (entryText[valEnd] === '}') bCount--;
-            if (bCount > 0) val += entryText[valEnd];
+            const c = entryText[valEnd]!;
+            if (c === '{') bCount++;
+            else if (c === '}') bCount--;
+            if (bCount > 0) val += c;
             valEnd++;
           }
-        } else if (entryText[valStart] === '"') {
-          valStart++;
-          valEnd = valStart;
+        } else if (valStartChar === '"') {
+          valEnd = valStart + 1;
           while (valEnd < entryText.length && entryText[valEnd] !== '"') {
-            val += entryText[valEnd];
+            val += entryText[valEnd]!;
             valEnd++;
           }
           valEnd++;
         } else {
           valEnd = valStart;
           while (valEnd < entryText.length && entryText[valEnd] !== ',' && entryText[valEnd] !== '\n') {
-            val += entryText[valEnd];
+            val += entryText[valEnd]!;
             valEnd++;
           }
         }
@@ -305,6 +305,7 @@ export class CitationManager {
       const data = JSON.parse(content);
       if (!Array.isArray(data)) return [];
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return data.map((item: any) => {
         const key = String(item.id || item.key || '');
         const type = String(item.type || '');
@@ -313,6 +314,7 @@ export class CitationManager {
         let author = '';
         if (Array.isArray(item.author)) {
           author = item.author
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .map((a: any) => {
               if (a.family && a.given) return `${a.family}, ${a.given}`;
               return a.literal || a.family || a.name || '';
@@ -410,7 +412,7 @@ export class CitationManager {
       if (authors.length === 0) return 'Unknown Author';
       if (styleName === 'apa') {
         const formatted = authors.map((a) => {
-          const init = a.first ? a.first.split(/\s+/).map((n) => n[0] + '.').join(' ') : '';
+            const init = a.first ? a.first.split(/\s+/).map((n) => (n[0] || '') + '.').join(' ') : '';
           return `${a.last}, ${init}`;
         });
         if (formatted.length === 1) return formatted[0]!;
@@ -454,7 +456,7 @@ export class CitationManager {
       case 'ieee': {
         // IEEE bibliography item format: [1] F. M. Last, "Title," Journal, vol. X, no. Y, pp. Z, Year.
         const formattedIEEE = authors.map((a) => {
-          const init = a.first ? a.first.split(/\s+/).map((n) => n[0] + '.').join(' ') : '';
+          const init = a.first ? a.first.split(/\s+/).map((n) => (n[0] || '') + '.').join(' ') : '';
           return `${init} ${a.last}`;
         });
         let ieeeAuthors = '';
@@ -464,8 +466,8 @@ export class CitationManager {
         let main = `[${index}] ${ieeeAuthors || 'Unknown Author'}, "${title}," `;
         if (journal) main += `*${journal}*, `;
         else if (booktitle) main += `in *${booktitle}*, `;
-        if (volume) main += `vol. ${volume}, `;
-        if (number) main += `no. ${number}, `;
+        if (volume) main += `vol. ${String(volume)}, `;
+        if (number) main += `no. ${String(number)}, `;
         if (pages) main += `pp. ${pages}, `;
         main += `${year}.`;
         if (doi) main += ` DOI: ${doi}.`;

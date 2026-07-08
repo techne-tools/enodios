@@ -1,5 +1,6 @@
 import { Modal, TFile, Notice } from 'obsidian';
-import { createRoot, type Root } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
+import type { Root } from 'react-dom/client';
 import { useState, useEffect } from 'react';
 import type { Plugin } from '../Plugin.ts';
 
@@ -190,9 +191,9 @@ export class TagSuggestionModal extends Modal {
     this.root = createRoot(this.contentEl);
     this.root.render(
       <TagSuggestionComponent
-        plugin={this.plugin}
-        file={activeFile}
         close={() => this.close()}
+        file={activeFile}
+        plugin={this.plugin}
       />
     );
   }

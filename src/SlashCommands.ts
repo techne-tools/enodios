@@ -45,8 +45,8 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       if (leaves.length === 0) {
         return 'No active chat view found.';
       }
-      const view = leaves[0]!.view as any;
-      const items: any[] = view.activeContextItems || [];
+      const view = leaves[0]!.view as unknown as { activeContextItems: Array<Record<string, unknown>> };
+      const items = view.activeContextItems || [];
       if (items.length === 0) {
         return 'Context is currently empty. Use the `@` button or type `[[` to add notes.';
       }
@@ -54,27 +54,27 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       let list = '### 📎 Active Chat Context\n\n';
       for (const item of items) {
         let details = '';
-        if (item.type === 'note') {
-          const path = item.id.replace(/^note-/, '');
+        if (item['type'] === 'note') {
+          const path = (item['id'] as string).replace(/^note-/, '');
           const file = plugin.app.vault.getAbstractFileByPath(path);
           if (file instanceof TFile) {
             const content = await plugin.app.vault.read(file);
             const words = content.split(/\s+/).filter(Boolean).length;
             details = ` (${words} words, ${content.length} chars)`;
           }
-        } else if (item.type === 'selection') {
-          details = ` (selection: ${item.text.length} chars)`;
-        } else if (item.type === 'folder') {
-          const path = item.id.replace(/^folder-/, '');
+        } else if (item['type'] === 'selection') {
+          details = ` (selection: ${(item['text'] as string).length} chars)`;
+        } else if (item['type'] === 'folder') {
+          const path = (item['id'] as string).replace(/^folder-/, '');
           const files = plugin.app.vault.getFiles().filter((f) => f.path.startsWith(path + '/'));
           details = ` (folder: ${files.length} files)`;
-        } else if (item.type === 'pdf') {
+        } else if (item['type'] === 'pdf') {
           details = ' (PDF attachment)';
-        } else if (item.type === 'image') {
+        } else if (item['type'] === 'image') {
           details = ' (image)';
         }
 
-        list += `* **[${item.type.toUpperCase()}]** ${item.text}${details}\n`;
+        list += `* **[${String(item['type']).toUpperCase()}]** ${item['text'] as string}${details}\n`;
       }
       return list;
     },
@@ -384,13 +384,13 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         if (leaves.length === 0) {
           return 'No active chat view found.';
         }
-        const chatView = leaves[0]!.view as any;
+        const chatView = leaves[0]!.view as unknown as { activeMessages: Array<Record<string, unknown>> };
         const messages = chatView.activeMessages || [];
-        const userMsgs = messages.filter((m: any) => m.role === 'user');
+        const userMsgs = messages.filter((m) => m['role'] === 'user');
         if (userMsgs.length === 0) {
           return 'No user prompt found in this conversation to save as template.';
         }
-        const lastPrompt = userMsgs[userMsgs.length - 1].content;
+        const lastPrompt = userMsgs[userMsgs.length - 1]!['content'] as string;
 
         await plugin.templateManager.saveTemplate(name, lastPrompt);
         return `Template **${name}** saved successfully.`;
