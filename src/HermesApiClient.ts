@@ -361,7 +361,8 @@ export class HermesApiClient implements ChatClient {
           } else {
             const file = this.plugin.app.vault.getAbstractFileByPath(notePath);
             if (file instanceof TFile) {
-              const content = await this.plugin.app.vault.read(file);
+              const { getEnhancedNoteContext } = await import('./utils/contextEnhancer.ts');
+              const content = await getEnhancedNoteContext(this.plugin, file);
               userContentParts.push({ text: `\n\n--- Reference Note: ${notePath} ---\n${content}\n`, type: 'text' });
             }
           }
@@ -370,6 +371,15 @@ export class HermesApiClient implements ChatClient {
         }
       } else if (item.type === 'selection') {
         userContentParts.push({ text: `\n\n--- Selected Text ---\n${item.text}\n`, type: 'text' });
+      } else if (item.type === 'folder') {
+        const folderPath = item.id.replace(/^folder-/, '');
+        try {
+          const { getFolderContext } = await import('./utils/contextEnhancer.ts');
+          const content = await getFolderContext(this.plugin, folderPath);
+          userContentParts.push({ text: `\n\n--- Reference Folder: ${folderPath} ---\n${content}\n`, type: 'text' });
+        } catch {
+          // Skip folders that fail to load
+        }
       }
     }
     userContentParts.push({ text, type: 'text' });

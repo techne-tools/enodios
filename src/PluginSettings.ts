@@ -18,6 +18,16 @@ export class PluginSettings {
   // Connection
   public connectionMode: 'acp' | 'api' = 'acp';
 
+  // Academic & Citations Settings
+  public bibliographyPath = 'references.bib';
+  public citationStyle: 'apa' | 'mla' | 'chicago' | 'ieee' = 'apa';
+  public autoExtractPdfAnnotations = false;
+
+  // Feature Toggles
+  public enableCitations = true;
+  public enableAnnotations = true;
+  public enableTags = true;
+
   // Context Behavior
   public contextEntireNote = false;
   public conversationOrganization: 'by-date' | 'by-project' | 'flat' = 'flat';

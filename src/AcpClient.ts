@@ -585,7 +585,8 @@ export class AcpClient implements ChatClient {
           } else {
             const file = this.plugin.app.vault.getAbstractFileByPath(notePath);
             if (file instanceof TFile) {
-              const content = await this.plugin.app.vault.read(file);
+              const { getEnhancedNoteContext } = await import('./utils/contextEnhancer.ts');
+              const content = await getEnhancedNoteContext(this.plugin, file);
               promptBlocks.push({
                 resource: {
                   mimeType: 'text/markdown',
@@ -617,8 +618,23 @@ export class AcpClient implements ChatClient {
           },
           type: 'resource'
         });
+      } else if (item.type === 'folder') {
+        const folderPath = item.id.replace(/^folder-/, '');
+        try {
+          const { getFolderContext } = await import('./utils/contextEnhancer.ts');
+          const content = await getFolderContext(this.plugin, folderPath);
+          promptBlocks.push({
+            resource: {
+              mimeType: 'text/markdown',
+              text: content,
+              uri: `vault://${folderPath}`
+            },
+            type: 'resource'
+          });
+        } catch {
+          // Skip folders that fail to load
+        }
       }
-      // Folder type is skipped — no single file to embed
     }
 
     // Add the user's text message

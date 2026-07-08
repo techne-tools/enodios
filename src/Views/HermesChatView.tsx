@@ -40,6 +40,7 @@ import type {
 import type { PendingFileChange } from '../FileChangeManager.ts';
 import type { Plugin } from '../Plugin.ts';
 import type { AuditEntry } from '../AuditLog.ts';
+import type { ChatTemplate } from '../TemplateManager.ts';
 
 import {
  getSlashCommands,
@@ -139,7 +140,7 @@ export interface ChatMessage {
 interface AutocompleteSuggestion {
   id: string;
   text: string;
-  type: 'folder' | 'note';
+  type: 'folder' | 'note' | 'citation';
 }
 
 interface ChatHeaderProps {
@@ -151,6 +152,8 @@ interface ChatHeaderProps {
   onToggleSearch: () => void;
   onToggleSessionSettings: () => void;
   onToggleAuditLog: () => void;
+  onToggleReasoning: () => void;
+  showReasoning: boolean;
 }
 
 interface AuditLogPanelProps {
@@ -223,6 +226,10 @@ export class HermesChatView extends ItemView {
 
   constructor(leaf: WorkspaceLeaf, private readonly pluginInstance: Plugin) {
     super(leaf);
+  }
+
+  public get plugin(): Plugin {
+    return this.pluginInstance;
   }
 
   public abortTerminal(terminalId: string): void {
@@ -345,6 +352,45 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     inputRef.current = input;
   }, [input]);
 
+  // Synchronize context items to view instance for slash command access
+  useEffect(() => {
+    (view as unknown as { activeContextItems: typeof contextItems }).activeContextItems = contextItems;
+  }, [contextItems, view]);
+
+  const [templates, setTemplates] = useState<ChatTemplate[]>([]);
+
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const loaded = await view.plugin.templateManager.loadTemplates();
+        setTemplates(loaded);
+      } catch (err) {
+        view.plugin.debug.error('Failed to load conversation templates', err);
+      }
+    };
+    void fetchTemplates();
+  }, [view.plugin, messages.length]);
+
+  // Synchronize messages to view instance for template saving slash command
+  useEffect(() => {
+    (view as unknown as { activeMessages: typeof messages }).activeMessages = messages;
+  }, [messages, view]);
+
+  // Listen for custom event to load template prompts
+  useEffect(() => {
+    const handleLoadTemplate = (e: Event) => {
+      const prompt = (e as CustomEvent).detail;
+      setInput(prompt);
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 0);
+    };
+    window.addEventListener('hermes-load-template', handleLoadTemplate);
+    return () => {
+      window.removeEventListener('hermes-load-template', handleLoadTemplate);
+    };
+  }, []);
+
   const [conversationFilePath, setConversationFilePath] = useState<null | string>(null);
   const [conversationTitle, setConversationTitle] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
@@ -365,6 +411,13 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
 
   const plugin = view.getPlugin();
   const settings = view.getSettings();
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [showReasoningSession, setShowReasoningSession] = useState(settings.showReasoning);
+
+  useEffect(() => {
+    setShowReasoningSession(settings.showReasoning);
+  }, [settings.showReasoning]);
+
   const lastChunkTimeRef = useRef<number>(0);
   const typingTimeoutRef = useRef<null | ReturnType<typeof setTimeout>>(null);
 
@@ -756,6 +809,12 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const onLoadTemplate = useCallback((prompt: string) => {
+    setInput(prompt);
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 0);
+  }, []);
   const isAtBottomRef = useRef(true);
   const lastPromptRef = useRef<string>('');
   const lastContextItemsRef = useRef<ContextItem[]>([]);
@@ -776,6 +835,36 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     setAllowedTools(null);
     view.clearConversation();
   }, [view, conversationFilePath, plugin]);
+
+  // Global Chat Hotkeys (⌘⌥C, ⌘⌥L, ⌘⌥S, ⌘⌥E)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const isModifier = e.ctrlKey || e.metaKey;
+      const isAlt = e.altKey;
+
+      if (isModifier && isAlt) {
+        const key = e.key.toLowerCase();
+        if (key === 'c') {
+          e.preventDefault();
+          handleNewChat();
+        } else if (key === 'l') {
+          e.preventDefault();
+          setIsConversationListOpen((prev) => !prev);
+        } else if (key === 's') {
+          e.preventDefault();
+          setIsSessionSettingsOpen((prev) => !prev);
+        } else if (key === 'e') {
+          e.preventDefault();
+          setShowReasoningSession((prev) => !prev);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [handleNewChat]);
 
   const handleEditSubmit = useCallback(async (messageId: string, newText: string): Promise<void> => {
     const current = stateRef.current;
@@ -1037,11 +1126,21 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       }
     }
 
+    if (e.key === 'ArrowUp' && inputRef.current === '') {
+      const userMsgs = messages.filter((m) => m.role === 'user');
+      if (userMsgs.length > 0) {
+        e.preventDefault();
+        const lastUser = userMsgs[userMsgs.length - 1]!;
+        setEditingMessageId(lastUser.id);
+      }
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
     }
-  }, [isSlashOpen, slashSuggestions, slashSelectionIndex, isAutocompleteOpen, autocompleteSuggestions, autocompleteSelectionIndex, handleSend]);
+  }, [isSlashOpen, slashSuggestions, slashSelectionIndex, isAutocompleteOpen, autocompleteSuggestions, autocompleteSelectionIndex, handleSend, messages, setEditingMessageId]);
 
   const insertAutocomplete = useCallback((suggestion: AutocompleteSuggestion): void => {
     // Instead of inserting text, add the selected item to context.
@@ -1057,16 +1156,25 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           type: contextType
         }]);
       }
-    }
 
-    // Clear the autocomplete part from the input
-    const value = input;
-    const lastOpen = Math.max(value.lastIndexOf('[['), value.lastIndexOf('{'));
-    if (lastOpen !== -1) {
-      setInput(value.substring(0, lastOpen));
-    } else {
-      // This case shouldn't happen if autocomplete is open, but as a fallback...
-      setInput('');
+      // Clear the autocomplete part from the input
+      const value = input;
+      const lastOpen = Math.max(value.lastIndexOf('[['), value.lastIndexOf('{'));
+      if (lastOpen !== -1) {
+        setInput(value.substring(0, lastOpen));
+      } else {
+        setInput('');
+      }
+    } else if (suggestion.type === 'citation') {
+      // For citations, we want to insert the text `[@citationKey]` into the textarea
+      const value = input;
+      const lastOpen = value.lastIndexOf('[@');
+      if (lastOpen !== -1) {
+        const key = suggestion.id.replace(/^citation-/, '');
+        const before = value.substring(0, lastOpen);
+        const after = value.substring(lastOpen + 2 + autocompleteQuery.length);
+        setInput(before + `[@${key}]` + after);
+      }
     }
 
     setIsAutocompleteOpen(false);
@@ -1077,7 +1185,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     setTimeout(() => {
       textareaRef.current?.focus();
     }, 0);
-  }, [input, contextItems]);
+  }, [input, contextItems, autocompleteQuery]);
 
   const handleContextClick = useCallback(async (): Promise<void> => {
     const activeFile = plugin.app.workspace.getActiveFile();
@@ -1195,8 +1303,54 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           continue; // Skip duplicates silently
         }
 
-        await plugin.app.vault.createBinary(targetPath, arrayBuffer);
+        const newFile = await plugin.app.vault.createBinary(targetPath, arrayBuffer);
         copied.push(fileName);
+
+        const isPdf = fileName.toLowerCase().endsWith('.pdf');
+        const isImage = /\.(jpe?g|png|gif|webp)$/i.test(fileName);
+        const base64 = Buffer.from(arrayBuffer).toString('base64');
+
+        if (isPdf) {
+          setContextItems((prev) => [...prev, {
+            data: base64,
+            id: `pdf-${targetPath}`,
+            mimeType: 'application/pdf',
+            text: fileName,
+            type: 'pdf'
+          }]);
+
+          if (settings.autoExtractPdfAnnotations) {
+            try {
+              const annots = await plugin.pdfAnnotationManager.extractAnnotations(newFile);
+              if (annots.length > 0) {
+                const markdown = plugin.pdfAnnotationManager.formatAnnotationsMarkdown(annots, fileName);
+                setContextItems((prev) => [...prev, {
+                  id: `pdf-annotations-${targetPath}`,
+                  text: markdown, // The actual text content is the markdown summary
+                  type: 'selection'
+                }]);
+              }
+            } catch (err) {
+              plugin.debug.error('Auto-extraction of PDF annotations failed', err);
+            }
+          }
+        } else if (isImage) {
+          const ext = fileName.split('.').pop()?.toLowerCase();
+          const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+          setContextItems((prev) => [...prev, {
+            data: base64,
+            id: `image-${targetPath}`,
+            mimeType,
+            text: fileName,
+            type: 'image'
+          }]);
+        } else if (fileName.endsWith('.md')) {
+          setContextItems((prev) => [...prev, {
+            id: `note-${targetPath}`,
+            text: fileName.replace(/\.md$/, ''),
+            type: 'note'
+          }]);
+        }
       } catch {
         // Silently ignore individual file errors
       }
@@ -1205,7 +1359,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     if (copied.length > 0) {
       new Notice(`Copied ${copied.length} file(s) to vault`);
     }
-  }, [plugin]);
+  }, [plugin, settings, contextItems]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -1284,17 +1438,24 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     const lastTwoChars = input.length > 1 ? input.slice(-2) : '';
 
     const justOpened = (lastChar === '{' && input[input.length - 2] !== '\\')
-                       || (lastTwoChars === '[[' && input[input.length - 3] !== '\\');
+                       || (lastTwoChars === '[[' && input[input.length - 3] !== '\\')
+                       || (lastTwoChars === '[@' && input[input.length - 3] !== '\\');
 
     if (justOpened) {
       setIsAutocompleteOpen(true);
       setAutocompleteQuery('');
       setAutocompleteSelectionIndex(0);
     } else if (isAutocompleteOpen) {
-      const lastOpen = Math.max(input.lastIndexOf('[['), input.lastIndexOf('{'));
+      const lastOpen = Math.max(
+        input.lastIndexOf('[['),
+        input.lastIndexOf('{'),
+        input.lastIndexOf('[@')
+      );
       if (lastOpen >= 0) {
-        const isWikiLink = input[lastOpen] === '[';
-        const query = input.substring(lastOpen + (isWikiLink ? 2 : 1));
+        const isCitation = input.substring(lastOpen, lastOpen + 2) === '[@';
+        const isWikiLink = !isCitation && input[lastOpen] === '[';
+        const offset = (isWikiLink || isCitation) ? 2 : 1;
+        const query = input.substring(lastOpen + offset);
         setAutocompleteQuery(query);
         if (query.length > 0) {
           setAutocompleteSelectionIndex(0);
@@ -1307,6 +1468,32 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   useEffect(() => {
     if (autocompleteQuery.length === 0) {
       setAutocompleteSuggestions([]);
+      return;
+    }
+
+    const lastOpen = Math.max(
+      inputRef.current.lastIndexOf('[['),
+      inputRef.current.lastIndexOf('{'),
+      inputRef.current.lastIndexOf('[@')
+    );
+    const isCitation = lastOpen !== -1 && inputRef.current.substring(lastOpen, lastOpen + 2) === '[@';
+
+    if (isCitation) {
+      const fetchCitations = async () => {
+        try {
+          await plugin.citationManager.loadBibliography();
+          const results = plugin.citationManager.search(autocompleteQuery);
+          const suggestions: AutocompleteSuggestion[] = results.slice(0, 5).map((item) => ({
+            id: `citation-${item.key}`,
+            text: item.key,
+            type: 'citation'
+          }));
+          setAutocompleteSuggestions(suggestions);
+        } catch {
+          setAutocompleteSuggestions([]);
+        }
+      };
+      void fetchCitations();
       return;
     }
 
@@ -1358,7 +1545,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
 
   // Close autocomplete on bracket close
   useEffect(() => {
-    if (input.endsWith(']]') || input.endsWith('}')) {
+    if (input.endsWith(']]') || input.endsWith('}') || input.endsWith(']')) {
       setIsAutocompleteOpen(false);
     }
   }, [input]);
@@ -1373,7 +1560,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       return;
     }
 
-    if (input.startsWith('/')) {
+    if (input.startsWith('/') && !/\s/.test(input)) {
       const query = input.slice(1).toLowerCase();
       const commands = getSlashCommands();
       const filtered = commands.filter((cmd) =>
@@ -1474,6 +1661,9 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           setIsAuditLogOpen(false);
           setIsConversationListOpen((prev) => !prev);
         }}
+        onToggleReasoning={() => {
+          setShowReasoningSession((prev) => !prev);
+        }}
         onToggleSearch={() => {
           setIsSearchOpen((prev) => !prev);
           setIsConversationListOpen(false);
@@ -1488,6 +1678,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
           setIsAuditLogOpen(false);
           setIsSessionSettingsOpen((prev) => !prev);
         }}
+        showReasoning={showReasoningSession}
       />
 
     {isSessionSettingsOpen && (
@@ -1610,9 +1801,14 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
               plugin.settings.hasSeenOnboarding = true;
               void plugin.settingsManager.saveToFile();
             }}
+            onLoadTemplate={onLoadTemplate}
+            templates={templates}
           />
         )}
         {messages.map((msg) => {
+          if (msg.role === 'reasoning' && !showReasoningSession) {
+            return null;
+          }
           // Skip rendering the empty assistant placeholder while the typing indicator is shown;
           // Once content streams in, the message will render normally.
           if (isTyping && msg.role === 'assistant' && !msg.content) {
@@ -1625,7 +1821,17 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
                 if (el) { messageRefs.current.set(msg.id, el); }
               }}
             >
-              <ChatMessageItem message={msg} onEdit={handleEditSubmit} view={view} />
+              <ChatMessageItem
+                isEditing={editingMessageId === msg.id}
+                message={msg}
+                onCancelEdit={() => setEditingMessageId(null)}
+                onEdit={(id, text) => {
+                  setEditingMessageId(null);
+                  void handleEditSubmit(id, text);
+                }}
+                onStartEdit={() => setEditingMessageId(msg.id)}
+                view={view}
+              />
             </div>
           );
         })}
@@ -1728,7 +1934,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
   );
 }
 
-const ChatHeader = memo(({ agentName, isSaving, onNewChat, onOpenSettings, onToggleConversationList, onToggleSearch, onToggleSessionSettings, onToggleAuditLog }: ChatHeaderProps): ReactElement => {
+const ChatHeader = memo(({ agentName, isSaving, onNewChat, onOpenSettings, onToggleConversationList, onToggleSearch, onToggleSessionSettings, onToggleAuditLog, onToggleReasoning, showReasoning }: ChatHeaderProps): ReactElement => {
   return (
     <div className="hermes-chat-header">
       <div className="hermes-chat-header-left">
@@ -1736,18 +1942,29 @@ const ChatHeader = memo(({ agentName, isSaving, onNewChat, onOpenSettings, onTog
         {isSaving && <span className="hermes-saving-indicator" title="Saving...">●</span>}
       </div>
       <div className="hermes-chat-header-right">
+        <button
+          className="hermes-icon-btn"
+          onClick={onToggleReasoning}
+          style={{ color: showReasoning ? 'var(--interactive-accent)' : 'var(--text-muted)' }}
+          title={showReasoning ? 'Hide Reasoning Steps (⌘⌥E)' : 'Show Reasoning Steps (⌘⌥E)'}
+          type="button"
+        >
+          <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
+            <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3 3 0 0 1 0-3.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2zM14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3 3 0 0 0 0-3.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2z" />
+          </svg>
+        </button>
         <button className="hermes-icon-btn" onClick={onToggleSearch} title="Search Messages (Cmd+F)" type="button">
           <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.35-4.35" />
           </svg>
         </button>
-        <button className="hermes-icon-btn" onClick={onToggleConversationList} title="Previous Conversations" type="button">
+        <button className="hermes-icon-btn" onClick={onToggleConversationList} title="Previous Conversations (⌘⌥L)" type="button">
           <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
             <path d="M3 12h18M3 6h18M3 18h18" />
           </svg>
         </button>
-        <button className="hermes-icon-btn" onClick={onToggleSessionSettings} title="Session Tools" type="button">
+        <button className="hermes-icon-btn" onClick={onToggleSessionSettings} title="Session Tools (⌘⌥S)" type="button">
           <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
           </svg>
@@ -1758,7 +1975,7 @@ const ChatHeader = memo(({ agentName, isSaving, onNewChat, onOpenSettings, onTog
             <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
           </svg>
         </button>
-        <button className="hermes-icon-btn" onClick={onNewChat} title="New Chat" type="button">
+        <button className="hermes-icon-btn" onClick={onNewChat} title="New Chat (⌘⌥C)" type="button">
           <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 5v14M5 12h14" />
           </svg>
@@ -1828,12 +2045,26 @@ interface ChatMessageItemProps {
   message: ChatMessage;
   onEdit?: (messageId: string, newContent: string) => void;
   view: HermesChatView;
+  isEditing?: boolean;
+  onStartEdit?: () => void;
+  onCancelEdit?: () => void;
 }
 
-const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): ReactElement => {
-  const [isEditing, setIsEditing] = useState(false);
+const ChatMessageItem = memo(({ message, onEdit, view, isEditing, onStartEdit, onCancelEdit }: ChatMessageItemProps): ReactElement => {
+  const [isEditingLocal, setIsEditingLocal] = useState(false);
   const [editValue, setEditValue] = useState(message.content);
   const [isCopied, setIsCopied] = useState(false);
+
+  const activeEditing = isEditing !== undefined ? isEditing : isEditingLocal;
+  const setEditing = (val: boolean) => {
+    if (val) {
+      if (onStartEdit) onStartEdit();
+      else setIsEditingLocal(true);
+    } else {
+      if (onCancelEdit) onCancelEdit();
+      else setIsEditingLocal(false);
+    }
+  };
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(message.content).then(() => {
@@ -1977,7 +2208,7 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
     );
   }
 
-  if (isEditing) {
+  if (activeEditing) {
     return (
       <div className={`hermes-message hermes-${message.role}`}>
         <div className="hermes-message-header">
@@ -1985,6 +2216,7 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
         </div>
         <div className="hermes-message-content">
           <textarea
+            autoFocus={true}
             className="hermes-edit-input"
             onChange={(e) => { setEditValue(e.target.value); }}
             rows={Math.max(3, editValue.split('\n').length)}
@@ -1993,14 +2225,14 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
           <div className="hermes-edit-actions">
             <button
               className="hermes-btn-approve"
-              onClick={() => { setIsEditing(false); onEdit?.(message.id, editValue); }}
+              onClick={() => { setEditing(false); onEdit?.(message.id, editValue); }}
               type="button"
             >
               Save & Submit
             </button>
             <button
               className="hermes-btn-reject"
-              onClick={() => { setIsEditing(false); setEditValue(message.content); }}
+              onClick={() => { setEditing(false); setEditValue(message.content); }}
               type="button"
             >
               Cancel
@@ -2038,7 +2270,7 @@ const ChatMessageItem = memo(({ message, onEdit, view }: ChatMessageItemProps): 
             )}
           </button>
           {message.role === 'user' && (
-            <button className="hermes-icon-btn hermes-msg-action-btn" onClick={() => { setIsEditing(true); }} title="Edit Message" type="button">
+            <button className="hermes-icon-btn hermes-msg-action-btn" onClick={() => { setEditing(true); }} title="Edit Message" type="button">
               <svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -2294,7 +2526,9 @@ const ChatInput = memo(({
 
       {isAutocompleteOpen && autocompleteSuggestions.length > 0 && (
         <div className="hermes-autocomplete hermes-autocomplete-rich" ref={autocompleteRef}>
-          <div className="hermes-autocomplete-hint">Type to search files...</div>
+          <div className="hermes-autocomplete-hint">
+            {autocompleteSuggestions[0]?.type === 'citation' ? 'Type to search citations...' : 'Type to search files...'}
+          </div>
           {autocompleteSuggestions.map((suggestion, index) => (
             <div
               aria-selected={index === autocompleteSelectionIndex}
@@ -2304,11 +2538,13 @@ const ChatInput = memo(({
               role="option"
             >
               <span className="hermes-autocomplete-icon">
-                {suggestion.type === 'folder' ? '📁' : '📄'}
+                {suggestion.type === 'folder' ? '📁' : suggestion.type === 'citation' ? '🎓' : '📄'}
               </span>
               <span className="hermes-autocomplete-text">
                 <strong>{suggestion.text}</strong>
-                <span className="hermes-autocomplete-desc">{suggestion.type === 'folder' ? 'Folder' : 'Note'}</span>
+                <span className="hermes-autocomplete-desc">
+                  {suggestion.type === 'folder' ? 'Folder' : suggestion.type === 'citation' ? 'Citation' : 'Note'}
+                </span>
               </span>
             </div>
           ))}
@@ -2575,15 +2811,61 @@ const PendingChangesPanel = memo(({ changes, onApprove, onApproveAll, onClearRes
     return result.join('\n');
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isModifier = e.ctrlKey || e.metaKey;
+
+      if (isModifier && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        onApproveAll();
+      }
+
+      if (isModifier && e.shiftKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        onRejectAll();
+      }
+
+      if (expandedId) {
+        if (isModifier && e.key === 'Enter') {
+          e.preventDefault();
+          const target = changes.find((c) => c.id === expandedId);
+          if (target && target.status === 'pending') {
+            const selected = selectedLines.get(expandedId);
+            if (selected && selected.size > 0) {
+              onApprove(expandedId, getPartialContent(target, selected));
+            } else {
+              onApprove(expandedId);
+            }
+          }
+        }
+
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onReject(expandedId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [expandedId, changes, selectedLines, onApprove, onApproveAll, onReject, onRejectAll]);
+
   return (
     <div className="hermes-pending-changes">
       <div className="hermes-pending-changes-header">
-        <span>File Changes ({pendingCount} pending{resolvedCount > 0 ? `, ${resolvedCount} resolved` : ''})</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <span>File Changes ({pendingCount} pending{resolvedCount > 0 ? `, ${resolvedCount} resolved` : ''})</span>
+          <span style={{ fontSize: '0.75em', color: 'var(--text-muted)' }}>
+            Shortcuts: ⌘⇧A (Approve All) • ⌘⇧R (Reject All)
+          </span>
+        </div>
         <div className="hermes-pending-changes-actions">
           {pendingCount > 1 && (
             <>
-              <button className="hermes-btn-approve" onClick={onApproveAll} type="button">Approve All</button>
-              <button className="hermes-btn-reject" onClick={onRejectAll} type="button">Reject All</button>
+              <button className="hermes-btn-approve" onClick={onApproveAll} title="Shortcut: ⌘⇧A" type="button">Approve All</button>
+              <button className="hermes-btn-reject" onClick={onRejectAll} title="Shortcut: ⌘⇧R" type="button">Reject All</button>
             </>
           )}
           {resolvedCount > 0 && (
@@ -2665,11 +2947,12 @@ const PendingChangesPanel = memo(({ changes, onApprove, onApproveAll, onClearRes
                         onApprove(change.id);
                       }
                     }}
+                      title="Shortcut: ⌘Enter"
                       type="button"
                     >
                       {hasSelections ? 'Approve Selected' : 'Approve All'}
                     </button>
-                    <button className="hermes-btn-reject" onClick={() => { onReject(change.id); }} type="button">
+                    <button className="hermes-btn-reject" onClick={() => { onReject(change.id); }} title="Shortcut: Esc" type="button">
                       Reject
                     </button>
                   </div>
@@ -2950,9 +3233,11 @@ interface OnboardingPanelProps {
   agentName: string;
   hasSeenOnboarding: boolean;
   onDismiss: () => void;
+  templates: ChatTemplate[];
+  onLoadTemplate: (prompt: string) => void;
 }
 
-const OnboardingPanel = memo(({ agentName, hasSeenOnboarding, onDismiss }: OnboardingPanelProps): ReactElement => {
+const OnboardingPanel = memo(({ agentName, hasSeenOnboarding, onDismiss, templates, onLoadTemplate }: OnboardingPanelProps): ReactElement => {
   const [isVisible, setIsVisible] = useState(!hasSeenOnboarding);
 
   useEffect(() => {
@@ -2969,8 +3254,55 @@ const OnboardingPanel = memo(({ agentName, hasSeenOnboarding, onDismiss }: Onboa
 
   if (!isVisible) {
     return (
-      <div className="hermes-empty-state">
-        Start a conversation with {agentName}
+      <div className="hermes-empty-state-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px', padding: '30px 20px', alignItems: 'center', height: '100%', justifyContent: 'center' }}>
+        <div className="hermes-empty-state" style={{ fontSize: '1.2em', fontWeight: 'bold', color: 'var(--text-muted)' }}>
+          Start a conversation with {agentName}
+        </div>
+
+        {templates.length > 0 && (
+          <div style={{ width: '100%', maxWidth: '400px' }}>
+            <div style={{ fontSize: '0.85em', color: 'var(--text-muted)', marginBottom: '12px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>
+              Conversation Starters
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              {templates.map((tpl) => (
+                <button
+                  className="btn"
+                  key={tpl.id}
+                  onClick={() => onLoadTemplate(tpl.prompt)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--text-accent)';
+                    e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-color)';
+                    e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+                  }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '16px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--background-secondary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    textAlign: 'center',
+                    gap: '8px',
+                    height: '100%'
+                  }}
+                  title={tpl.description}
+                  type="button"
+                >
+                  <span style={{ fontSize: '1.8em' }}>{tpl.icon}</span>
+                  <span style={{ fontSize: '0.85em', fontWeight: '600', color: 'var(--text-normal)' }}>{tpl.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }

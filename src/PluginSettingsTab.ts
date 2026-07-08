@@ -1,6 +1,6 @@
 import {
- Notice,
-TFile
+  Notice,
+  TFile
 } from 'obsidian';
 import { PluginSettingsTabBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginSettingsTabBase';
 import { SettingEx } from 'obsidian-dev-utils/obsidian/SettingEx';
@@ -22,21 +22,29 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
     super.display();
     this.containerEl.empty();
 
-    this.renderConnectionSection();
-    this.renderAgentIdentitySection();
-    this.renderChatDisplaySection();
-    this.renderContextSection();
-    this.renderConversationStorageSection();
-    this.renderFeedbackSection();
-    this.renderSecuritySection();
-    this.renderDebugSection();
+    this.containerEl.createEl('h2', { text: 'Hermes Plugin Settings' });
+
+    this.renderCollapsibleSection('🔌 Connection Settings', (el) => this.renderConnectionSection(el));
+    this.renderCollapsibleSection('🤖 Agent Personality', (el) => this.renderAgentIdentitySection(el));
+    this.renderCollapsibleSection('💬 What You See in Chat', (el) => this.renderChatDisplaySection(el));
+    this.renderCollapsibleSection('📎 Automatic Context', (el) => this.renderContextSection(el));
+    this.renderCollapsibleSection('🎓 Academic, Citations & Toggles', (el) => this.renderAcademicSection(el));
+    this.renderCollapsibleSection('🗂️ Saving Conversations', (el) => this.renderConversationStorageSection(el));
+    this.renderCollapsibleSection('🔊 Sound & Feel', (el) => this.renderFeedbackSection(el));
+    this.renderCollapsibleSection('🛡️ Security', (el) => this.renderSecuritySection(el));
+    this.renderCollapsibleSection('🐛 Troubleshooting', (el) => this.renderDebugSection(el));
+  }
+
+  private renderCollapsibleSection(title: string, renderFunc: (el: HTMLElement) => void): void {
+    const details = this.containerEl.createEl('details', { cls: 'hermes-settings-details' });
+    details.createEl('summary', { text: title, cls: 'hermes-settings-summary' });
+    const content = details.createEl('div', { cls: 'hermes-settings-content' });
+    renderFunc(content);
   }
 
   // ─── Agent Identity ───
-  private renderAgentIdentitySection(): void {
-    this.containerEl.createEl('h3', { text: '🤖 Agent Personality' });
-
-    new SettingEx(this.containerEl)
+  private renderAgentIdentitySection(containerEl: HTMLElement): void {
+    new SettingEx(containerEl)
       .setName('Agent Display Name')
       .setDesc('What you call your assistant in the chat. Change it to whatever feels right — "Claude", "Friday", "Research Buddy", etc.')
       .addText((text) => {
@@ -47,10 +55,8 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   }
 
   // ─── Chat Display ───
-  private renderChatDisplaySection(): void {
-    this.containerEl.createEl('h3', { text: '💬 What You See in Chat' });
-
-    new SettingEx(this.containerEl)
+  private renderChatDisplaySection(containerEl: HTMLElement): void {
+    new SettingEx(containerEl)
       .setName('Show Reasoning Steps')
       .setDesc('When the agent "thinks out loud" before answering, show those thoughts in the chat. Useful for understanding how it reached a conclusion.')
       .addToggle((toggle) => {
@@ -58,7 +64,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         this.bind(toggle, 'showReasoning');
       });
 
-    new SettingEx(this.containerEl)
+    new SettingEx(containerEl)
       .setName('Show Tool Use')
       .setDesc('Show a notice when the agent reads a file, searches your vault, or runs a command. Helpful for understanding what it is doing behind the scenes.')
       .addToggle((toggle) => {
@@ -66,7 +72,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         this.bind(toggle, 'showToolUse');
       });
 
-    new SettingEx(this.containerEl)
+    new SettingEx(containerEl)
       .setName('Show Token Count')
       .setDesc('Display the real-time token usage counter in the chat footer. Shows input/output tokens and estimated cost per conversation.')
       .addToggle((toggle) => {
@@ -76,10 +82,8 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   }
 
   // ─── Connection ───
-  private renderConnectionSection(): void {
-    this.containerEl.createEl('h3', { text: '🔌 How Hermes Connects' });
-
-    new SettingEx(this.containerEl)
+  private renderConnectionSection(containerEl: HTMLElement): void {
+    new SettingEx(containerEl)
       .setName('Connection Mode')
       .setDesc('Choose how Hermes talks to your AI agent. "Local" runs on your computer (fastest, private). "Remote" connects to a server (good for teams or powerful GPUs).')
       .addDropdown((dropdown) => {
@@ -95,7 +99,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     // Local mode settings
     if (this.plugin.settings.connectionMode === 'acp') {
-      new SettingEx(this.containerEl)
+      new SettingEx(containerEl)
         .setName('Hermes Program Location')
         .setDesc('If Hermes is not in your system PATH, paste the full file path here. Leave blank to let the plugin find it automatically.')
         .addText((text) => {
@@ -104,7 +108,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
           this.bind(text, 'hermesBinaryPath');
         });
 
-      new SettingEx(this.containerEl)
+      new SettingEx(containerEl)
         .setName('Test Local Connection')
         .setDesc('Make sure Hermes is installed and reachable.')
         .addButton((button) => {
@@ -114,7 +118,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
             });
         });
 
-      new SettingEx(this.containerEl)
+      new SettingEx(containerEl)
         .setName('⚠️ Enable External Tool Servers (MCP)')
         .setDesc('MCP servers are external programs that Hermes can call. They bypass file-approval and permission checks, and can execute arbitrary code with your user privileges. Only enable if you fully trust every server you add below.')
         .addToggle((toggle) => {
@@ -127,7 +131,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         });
 
       if (this.plugin.settings.mcpServersEnabled) {
-        new SettingEx(this.containerEl)
+        new SettingEx(containerEl)
           .setName('External Tool Server Paths')
           .setDesc('One absolute path per line. These executables run with your user privileges and are not sandboxed. Restart the connection after changing.')
           .addTextArea((text) => {
@@ -142,7 +146,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     // Remote mode settings
     if (this.plugin.settings.connectionMode === 'api') {
-      new SettingEx(this.containerEl)
+      new SettingEx(containerEl)
         .setName('Server Address')
         .setDesc('The web address of your Hermes server.')
         .addText((text) => {
@@ -151,7 +155,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
           this.bind(text, 'hermesApiUrl');
         });
 
-      new SettingEx(this.containerEl)
+      new SettingEx(containerEl)
         .setName('API Key')
         .setDesc('Your secret key for the server. This is stored securely and never shown again after saving.')
         .addText((text) => {
@@ -167,7 +171,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
           });
         });
 
-      new SettingEx(this.containerEl)
+      new SettingEx(containerEl)
         .setName('Agent Name on Server')
         .setDesc('The name your server knows this agent by. Usually "hermes-agent" unless your admin changed it.')
         .addText((text) => {
@@ -176,7 +180,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
           this.bind(text, 'hermesAgentName');
         });
 
-      new SettingEx(this.containerEl)
+      new SettingEx(containerEl)
         .setName('Test Remote Connection')
         .setDesc('Check that the server is online and your key works.')
         .addButton((button) => {
@@ -189,10 +193,8 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   }
 
   // ─── Context ───
-  private renderContextSection(): void {
-    this.containerEl.createEl('h3', { text: '📎 Automatic Context' });
-
-    new SettingEx(this.containerEl)
+  private renderContextSection(containerEl: HTMLElement): void {
+    new SettingEx(containerEl)
       .setName('Auto-Add Open Note')
       .setDesc('When you switch to a different note, automatically include it in the conversation context. This saves you from clicking the @ button every time.')
       .addToggle((toggle) => {
@@ -201,11 +203,65 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
       });
   }
 
-  // ─── Conversation Storage ───
-  private renderConversationStorageSection(): void {
-    this.containerEl.createEl('h3', { text: '🗂️ Saving Conversations' });
+  // ─── Academic & Citations ───
+  private renderAcademicSection(containerEl: HTMLElement): void {
+    new SettingEx(containerEl)
+      .setName('Enable Citations')
+      .setDesc('Enable bibliography management, inline citation suggestions using [@, and Zotero integration.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.enableCitations);
+        this.bind(toggle, 'enableCitations');
+      });
 
-    new SettingEx(this.containerEl)
+    new SettingEx(containerEl)
+      .setName('Enable PDF Integrations')
+      .setDesc('Enable extracting highlights/comments from PDF files, page text extraction, and metadata extraction.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.enableAnnotations);
+        this.bind(toggle, 'enableAnnotations');
+      });
+
+    new SettingEx(containerEl)
+      .setName('Enable Auto-Tagging & Suggestions')
+      .setDesc('Enable term-matching tag suggestions and frontmatter tags updating.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.enableTags);
+        this.bind(toggle, 'enableTags');
+      });
+
+    new SettingEx(containerEl)
+      .setName('Bibliography File Path')
+      .setDesc('Path to your bibliography file in the vault (e.g., "references.bib" or "references.json" for CSL JSON).')
+      .addText((text) => {
+        text.setPlaceholder('references.bib')
+          .setValue(this.plugin.settings.bibliographyPath);
+        this.bind(text, 'bibliographyPath');
+      });
+
+    new SettingEx(containerEl)
+      .setName('Citation Style')
+      .setDesc('The active style for formatting citations and bibliographies.')
+      .addDropdown((dropdown) => {
+        dropdown.addOption('apa', 'APA (7th edition)');
+        dropdown.addOption('mla', 'MLA (9th edition)');
+        dropdown.addOption('chicago', 'Chicago (Author-Date)');
+        dropdown.addOption('ieee', 'IEEE');
+        dropdown.setValue(this.plugin.settings.citationStyle);
+        this.bind(dropdown, 'citationStyle');
+      });
+
+    new SettingEx(containerEl)
+      .setName('Auto-Extract PDF Annotations')
+      .setDesc('Automatically extract highlights and comments from PDF files when you attach them to the conversation context.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.autoExtractPdfAnnotations);
+        this.bind(toggle, 'autoExtractPdfAnnotations');
+      });
+  }
+
+  // ─── Conversation Storage ───
+  private renderConversationStorageSection(containerEl: HTMLElement): void {
+    new SettingEx(containerEl)
       .setName('Save Folder')
       .setDesc('Where conversation files are stored in your vault. Default is a folder called "hermes".')
       .addText((text) => {
@@ -214,7 +270,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         this.bind(text, 'chatSaveFolder');
       });
 
-    new SettingEx(this.containerEl)
+    new SettingEx(containerEl)
       .setName('Folder Organization')
       .setDesc('How to organize saved conversations. "Flat" puts everything in one folder. "By Date" groups them into monthly folders like 2026-05.')
       .addDropdown((dropdown) => {
@@ -227,10 +283,8 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   }
 
   // ─── Debug ───
-  private renderDebugSection(): void {
-    this.containerEl.createEl('h3', { text: '🐛 Troubleshooting' });
-
-    new SettingEx(this.containerEl)
+  private renderDebugSection(containerEl: HTMLElement): void {
+    new SettingEx(containerEl)
       .setName('Debug Mode')
       .setDesc('Write detailed technical logs to the browser console. Turn this on when something is broken and you need to report a bug. You can view the console with Cmd+Option+I (Mac) or Ctrl+Shift+I (Windows/Linux).')
       .addToggle((toggle) => {
@@ -238,7 +292,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         this.bind(toggle, 'enableDebugMode');
       });
 
-    new SettingEx(this.containerEl)
+    new SettingEx(containerEl)
       .setName('View Audit Log')
       .setDesc('Open the audit log file that records every action the agent takes — file changes, tool calls, and permissions.')
       .addButton((button) => {
@@ -255,7 +309,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
           });
       });
 
-    new SettingEx(this.containerEl)
+    new SettingEx(containerEl)
       .setName('Reset Onboarding')
       .setDesc('Show the welcome message again the next time you open the chat.')
       .addButton((button) => {
@@ -269,10 +323,8 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   }
 
   // ─── Feedback ───
-  private renderFeedbackSection(): void {
-    this.containerEl.createEl('h3', { text: '🔊 Sound & Feel' });
-
-    new SettingEx(this.containerEl)
+  private renderFeedbackSection(containerEl: HTMLElement): void {
+    new SettingEx(containerEl)
       .setName('Typing Sounds')
       .setDesc('Play a soft click sound while the agent is writing a response. Makes it feel more like a real conversation.')
       .addToggle((toggle) => {
@@ -280,7 +332,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         this.bind(toggle, 'enableTypingSound');
       });
 
-    new SettingEx(this.containerEl)
+    new SettingEx(containerEl)
       .setName('Haptic Feedback')
       .setDesc('Vibrate briefly when the agent starts responding. Only works on devices with vibration support (most phones and some laptops).')
       .addToggle((toggle) => {
@@ -290,10 +342,8 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   }
 
   // ─── Security ───
-  private renderSecuritySection(): void {
-    this.containerEl.createEl('h3', { text: '🛡️ Security' });
-
-    new SettingEx(this.containerEl)
+  private renderSecuritySection(containerEl: HTMLElement): void {
+    new SettingEx(containerEl)
       .setName('Allow Terminal Commands')
       .setDesc('⚠️ DANGER: This lets the agent run shell commands on your computer — things like deleting files, installing software, or accessing the internet. These commands bypass the file-change approval system. ONLY enable this if you completely trust the agent and understand the risks.')
       .addToggle((toggle) => {

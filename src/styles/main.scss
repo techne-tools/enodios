@@ -2110,3 +2110,63 @@
   background-color: rgba(255, 0, 0, 0.15);
 }
 
+/* Collapsible Settings Accordion (Tier 3) */
+.hermes-settings-details {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  background-color: var(--background-primary);
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+
+  &:hover {
+    border-color: var(--interactive-accent);
+  }
+
+  &[open] {
+    border-color: var(--interactive-accent);
+    
+    .hermes-settings-summary {
+      border-bottom: 1px solid var(--background-modifier-border);
+      background-color: var(--background-secondary-alt);
+    }
+  }
+}
+
+.hermes-settings-summary {
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 1.05em;
+  cursor: pointer;
+  background-color: var(--background-secondary);
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  outline: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::before {
+    content: "▶";
+    font-size: 0.8em;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+  }
+}
+
+.hermes-settings-details[open] .hermes-settings-summary::before {
+  transform: rotate(90deg);
+}
+
+.hermes-settings-content {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--background-primary);
+}
+

@@ -36,8 +36,23 @@ Keep track of your API usage with the real-time token counter in the chat footer
 ### 🔍 Conversation Search
 Press `Cmd+F` in the chat to search through all messages with real-time filtering, match counter, and up/down navigation. Perfect for finding that one piece of advice Hermes gave 50 messages ago.
 
-### 🎨 Persona Templates
-Switch between pre-configured personas (Coding Assistant, Writing Coach, Research Assistant) using the `/persona` slash command. Each persona has its own system prompt and default tool set. Customize or create your own in Settings.
+### 🎨 Persona & Starter Templates
+Switch between pre-configured personas using the `/persona` slash command, or load custom template prompts from `hermes/templates/` via the empty chat starter dashboard or `/template` commands.
+
+### 🎓 Academic Citations & PDF Extraction
+Manage bibliography files, search inline citations using `[@`, format references in multiple styles (APA, MLA, Chicago, IEEE), and extract PDF page text, metadata, or comments/highlights using PDFJS.
+
+### 🏷️ Intelligent Tag Suggestions
+Scan note keyword frequencies against active vault tags to get term-matching recommendations via an interactive checkboxes modal (`/tags suggest`) and write them straight into the note frontmatter.
+
+### 📋 Enhanced Note Context
+When you attach a note to the conversation, Hermes automatically enriches it with metadata — word count, character count, tags, YAML frontmatter, created/modified timestamps, and backlinks — giving the agent richer context for better responses.
+
+### ⌨️ Unified Keyboard Shortcuts & QoL
+- **ArrowUp to Edit**: Press `ArrowUp` inside the empty text area to immediately edit the last sent user message.
+- **Reasoning Quick-Toggle**: Click the brain icon `🧠` in the header (or press `⌘⌥E`) to toggle thinking visibility.
+- **Sidebar Hotkeys**: Use fast shortcuts (`⌘⌥C` for new chat, `⌘⌥L` for conversations list, `⌘⌥S` for tools drawer).
+- **Diff Reviews**: Approve or reject pending files with `⌘⇧A`, `⌘⇧R`, `⌘Enter`, and `Esc`.
 
 ### 📤 Export Conversations
 Export your conversations in multiple formats:
@@ -78,19 +93,37 @@ Configuring local MCP servers allows the Hermes agent to execute external progra
 5. **Open the Chat**: Click the message bubble icon in your left ribbon menu, or run the "Open Hermes Chat" command.
 
 ### 💬 Chat Commands & Usage
-- Type `{` or `[[` to instantly auto-complete files and folders into your prompt context.
+- Type `{`, `[[`, or `[@` to instantly auto-complete files, notes, and citations in your prompt context.
+- **Slash Commands**:
+  - `/cite style [apa|mla|chicago|ieee]`: Switch reference formatting.
+  - `/cite search [query]`: Query bibliography matches.
+  - `/cite bib`: Print formatted bibliography.
+  - `/pdf page <pdf-path> <page>`: Retrieve text on a single PDF page.
+  - `/pdf metadata <pdf-path>`: Query PDF metadata properties.
+  - `/annotations <pdf-path>`: Extract highlighted comments/texts.
+  - `/tags suggest`: Launch tag suggestions checklist modal.
+  - `/tags apply [tag1] [tag2]...`: Append tags to frontmatter.
+  - `/template save <name>`: Persist current session prompt as a custom starter template.
+  - `/template load <name>`: Load template prompt into active input.
+  - `/search <query>`: Scan note contents.
+  - `/persona`: Switch assistant system instructions.
 - Use the **Session Tools** (wrench icon in the chat header) to restrict which tools Hermes is allowed to use on a per-conversation basis.
-- Hover over any of your previous messages to reveal the **Edit** button. Editing a message truncates the chat history and branches the conversation.
+- Hover over any of your previous messages to reveal the **Edit** button (or press `ArrowUp` while focused on empty input). Editing a message truncates history and branches.
 - If you enable **Terminal Access** in settings, Hermes can run shell commands. You can view the live stdout stream directly in the chat and use the 🛑 **Abort** button to kill runaway processes.
 - **Command Palette**: Use "Ask Hermes about selection", "Summarize current note", or "Generate tags" for quick actions without opening the chat.
 - **Export**: Click the download icon in the chat header to export as HTML, JSON, or Markdown.
 - **Search**: Press `Cmd+F` in the chat to search through all messages.
-- **Personas**: Type `/persona` to switch between coding, writing, and research assistants.
 
 ### ⚙️ Settings Reference
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `connectionMode` | ACP (local) or API (remote) | `acp` |
+| `enableCitations` | Enable bibliography management and inline citation suggestions (`[@`) | `true` |
+| `enableAnnotations` | Enable extracting annotations, text-by-page, and metadata from PDF files | `true` |
+| `enableTags` | Enable vault term-frequency tag suggestions and frontmatter insertions | `true` |
+| `bibliographyPath` | Path to bibliography file in vault (e.g. `references.bib`) | `references.bib` |
+| `citationStyle` | Reference layout style (`apa`, `mla`, `chicago`, `ieee`) | `apa` |
+| `autoExtractPdfAnnotations` | Auto-extract highlights on PDF attachments | `true` |
 | `allowTerminal` | Enable terminal command execution | `false` |
 | `autoApproveSingleOptionPermissions` | Auto-approve single-option permissions (reduces security) | `false` |
 | `showReasoning` | Display agent reasoning steps | `false` |

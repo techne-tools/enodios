@@ -114,6 +114,20 @@ Handles persistence, loading, and export of chat conversations.
 - **Export formats**: HTML (self-contained with escaped output), JSON (with metadata), PDF (via printable blob URL — caller must revoke).
 - **Security**: `escapeHtml` properly escapes `&`, `<`, `>`, `"`, `'`, and backticks (`` ` ``) to prevent XSS in exported HTML.
 
+### 8. Academic & Utility Managers
+- **`PDFAnnotationManager`** (`src/PDFAnnotationManager.ts`): Integrates `pdfjs-dist` to extract plain text per page, parse metadata, and pull highlights/comments from embedded PDF annotations.
+- **`TagManager`** (`src/TagManager.ts`): Implements an term-frequency keyword matching heuristic against vault-wide tags. Suggestions are presented to the user via a React-based checklist modal (`TagSuggestionModal.tsx`) and committed directly to the note frontmatter.
+- **`TemplateManager`** (`src/TemplateManager.ts`): Loads pre-configured built-in templates and user custom prompts (from `hermes/templates/`) supporting frontmatter metadata. Starters are rendered in empty chat views as clickable cards.
+- **`contextEnhancer`** (`src/utils/contextEnhancer.ts`): Generates enriched note context including word count, character count, tags, YAML frontmatter, created/modified timestamps, and backlinks. Used by both `AcpClient` and `HermesApiClient` when sending note context to the agent.
+
+### 9. Unified Keyboard Hotkeys & Focus Flow
+- **Diff Reviews**: Keyboard events are bound in `PendingChangesPanel` (`src/Views/HermesChatView.tsx`) to approve/reject changes quickly (`⌘⇧A`, `⌘⇧R`, `⌘Enter`, `Esc`).
+- **Sidebar Chat Actions**: Context-aware window keydown listeners support quick session controls:
+  - `⌘⌥C`: Reset and start a New Chat.
+  - `⌘⌥L`: Toggle Previous Conversations sidebar drawer.
+  - `⌘⌥S`: Toggle Session Tools drawer.
+  - `⌘⌥E`: Toggle Reasoning Visibility bubble filters.
+
 ## AI Agent Setup (For AI Coding Assistants)
 
 If you are using an AI coding assistant (like GitHub Copilot, Gemini Code Assist, or Cursor), this repository is heavily optimized for agentic development.

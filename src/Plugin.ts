@@ -32,6 +32,12 @@ import {
   HERMES_CHAT_VIEW_TYPE,
   HermesChatView
 } from './Views/HermesChatView.tsx';
+import { CitationManager } from './CitationManager.ts';
+import { PDFAnnotationManager } from './PDFAnnotationManager.ts';
+import { CitationSuggestModal } from './Modals/CitationSuggestModal.ts';
+import { TagManager } from './TagManager.ts';
+import { TemplateManager } from './TemplateManager.ts';
+import { TagSuggestionModal } from './Modals/TagSuggestionModal.tsx';
 
 export class Plugin extends PluginBase<PluginTypes> {
   public acpClient!: AcpClient;
@@ -41,6 +47,10 @@ export class Plugin extends PluginBase<PluginTypes> {
   public fileChangeManager!: FileChangeManager;
   public secrets!: SecretsManager;
   public vaultManager!: VaultManager;
+  public citationManager!: CitationManager;
+  public pdfAnnotationManager!: PDFAnnotationManager;
+  public tagManager!: TagManager;
+  public templateManager!: TemplateManager;
   public activeEditorView?: EditorView;
   private ribbonBadgeEl?: HTMLElement;
   private statusBarItemEl?: HTMLElement;
@@ -89,6 +99,10 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.debug = new DebugLogger(this);
     this.acpClient = new AcpClient(this);
     this.apiClient = new HermesApiClient(this, this.secrets);
+    this.citationManager = new CitationManager(this);
+    this.pdfAnnotationManager = new PDFAnnotationManager(this);
+    this.tagManager = new TagManager(this);
+    this.templateManager = new TemplateManager(this);
 
     this.statusBarItemEl = this.addStatusBarItem();
     this.statusBarItemEl.style.display = 'none';
@@ -329,6 +343,69 @@ export class Plugin extends PluginBase<PluginTypes> {
       },
       id: 'hermes-generate-tags',
       name: 'Generate tags for current note'
+    });
+
+    // Command: Insert Citation
+    this.addCommand({
+      callback: async () => {
+        const items = await this.citationManager.loadBibliography();
+        new CitationSuggestModal(this, items).open();
+      },
+      id: 'hermes-insert-citation',
+      name: 'Insert Citation'
+    });
+
+    // Command: Generate Bibliography for Current Note
+    this.addCommand({
+      callback: async () => {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (!activeFile) {
+          new Notice('No active note to generate bibliography for.');
+          return;
+        }
+        const content = await this.app.vault.read(activeFile);
+        const style = this.settings.citationStyle;
+        const bib = this.citationManager.generateBibliographyForContent(content, style);
+        if (!bib) {
+          new Notice('No citations found in current note to generate bibliography for.');
+          return;
+        }
+
+        let newContent = content;
+        const refHeaders = [
+          /\n\n## References[\s\S]*$/i,
+          /\n\n# References[\s\S]*$/i,
+          /\n\n## Bibliography[\s\S]*$/i,
+          /\n\n# Bibliography[\s\S]*$/i
+        ];
+
+        let replaced = false;
+        for (const regex of refHeaders) {
+          if (regex.test(content)) {
+            newContent = content.replace(regex, bib);
+            replaced = true;
+            break;
+          }
+        }
+
+        if (!replaced) {
+          newContent = content + bib;
+        }
+
+        await this.app.vault.modify(activeFile, newContent);
+        new Notice('Bibliography generated successfully');
+      },
+      id: 'hermes-generate-bibliography',
+      name: 'Generate Bibliography for Current Note'
+    });
+
+    // Command: Suggest Tags for Current Note
+    this.addCommand({
+      callback: () => {
+        new TagSuggestionModal(this).open();
+      },
+      id: 'hermes-suggest-tags',
+      name: 'Suggest Tags for Current Note'
     });
   }
 

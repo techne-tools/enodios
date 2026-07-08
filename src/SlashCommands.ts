@@ -39,13 +39,44 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     name: 'clear'
   },
   {
-    description: 'Add the current note or selection to context',
+    description: 'Display a summary of the currently attached context items.',
     execute: async (plugin) => {
-      const activeFile = plugin.app.workspace.getActiveFile();
-      if (!activeFile) {
-        return 'No active file to add to context.';
+      const leaves = plugin.app.workspace.getLeavesOfType('hermes-chat-view');
+      if (leaves.length === 0) {
+        return 'No active chat view found.';
       }
-      return `Added **${activeFile.basename}** to context.`;
+      const view = leaves[0]!.view as any;
+      const items: any[] = view.activeContextItems || [];
+      if (items.length === 0) {
+        return 'Context is currently empty. Use the `@` button or type `[[` to add notes.';
+      }
+
+      let list = '### 📎 Active Chat Context\n\n';
+      for (const item of items) {
+        let details = '';
+        if (item.type === 'note') {
+          const path = item.id.replace(/^note-/, '');
+          const file = plugin.app.vault.getAbstractFileByPath(path);
+          if (file instanceof TFile) {
+            const content = await plugin.app.vault.read(file);
+            const words = content.split(/\s+/).filter(Boolean).length;
+            details = ` (${words} words, ${content.length} chars)`;
+          }
+        } else if (item.type === 'selection') {
+          details = ` (selection: ${item.text.length} chars)`;
+        } else if (item.type === 'folder') {
+          const path = item.id.replace(/^folder-/, '');
+          const files = plugin.app.vault.getFiles().filter((f) => f.path.startsWith(path + '/'));
+          details = ` (folder: ${files.length} files)`;
+        } else if (item.type === 'pdf') {
+          details = ' (PDF attachment)';
+        } else if (item.type === 'image') {
+          details = ' (image)';
+        }
+
+        list += `* **[${item.type.toUpperCase()}]** ${item.text}${details}\n`;
+      }
+      return list;
     },
     name: 'context'
   },
@@ -169,6 +200,255 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       return result;
     },
     name: 'search'
+  },
+  {
+    description: 'Manage citations & styles. Usage: /cite style [apa|mla|chicago|ieee] OR /cite search [query] OR /cite bib',
+    execute: async (plugin, args) => {
+      if (!plugin.settings.enableCitations) {
+        return 'Citations feature is disabled in settings.';
+      }
+      const parts = args.trim().split(/\s+/);
+      const sub = parts[0]?.toLowerCase();
+      const subArgs = parts.slice(1).join(' ');
+
+      if (sub === 'style') {
+        const style = subArgs.toLowerCase().trim() as 'apa' | 'mla' | 'chicago' | 'ieee';
+        if (!['apa', 'chicago', 'ieee', 'mla'].includes(style)) {
+          return `Invalid style. Available: **apa**, **mla**, **chicago**, **ieee**`;
+        }
+        // @ts-expect-error - mutable setting
+        plugin.settings.citationStyle = style;
+        await plugin.settingsManager.saveToFile();
+        return `Citation style updated to **${style.toUpperCase()}**.`;
+      }
+
+      if (sub === 'search') {
+        const query = subArgs;
+        await plugin.citationManager.loadBibliography();
+        const results = plugin.citationManager.search(query);
+        if (results.length === 0) {
+          return `No citations found for query "${query}".`;
+        }
+        let list = `### 🔍 Citation Search Results for "${query}"\n\n`;
+        results.forEach((item) => {
+          list += `* **[@${item.key}]** — *${item.title}* by ${item.author} (${item.year})\n`;
+        });
+        return list;
+      }
+
+      if (sub === 'bib') {
+        const activeFile = plugin.app.workspace.getActiveFile();
+        if (!activeFile) {
+          return 'No active file to generate bibliography for.';
+        }
+        const content = await plugin.app.vault.read(activeFile);
+        const style = plugin.settings.citationStyle;
+        const bib = plugin.citationManager.generateBibliographyForContent(content, style);
+        if (!bib) {
+          return 'No citations found in this file to generate references for. Ensure citations use `[@citation-key]` format.';
+        }
+
+        let newContent = content;
+        const refHeaders = [
+          /\n\n## References[\s\S]*$/i,
+          /\n\n# References[\s\S]*$/i,
+          /\n\n## Bibliography[\s\S]*$/i,
+          /\n\n# Bibliography[\s\S]*$/i
+        ];
+
+        let replaced = false;
+        for (const regex of refHeaders) {
+          if (regex.test(content)) {
+            newContent = content.replace(regex, bib);
+            replaced = true;
+            break;
+          }
+        }
+
+        if (!replaced) {
+          newContent = content + bib;
+        }
+
+        await plugin.app.vault.modify(activeFile, newContent);
+        return `Generated bibliography and appended to **${activeFile.basename}**.`;
+      }
+
+      return 'Usage:\n* `/cite style [apa|mla|chicago|ieee]`\n* `/cite search [query]`\n* `/cite bib`';
+    },
+    name: 'cite'
+  },
+  {
+    description: 'Extract highlights/comments from a PDF file. Usage: /annotations <file-path>',
+    execute: async (plugin, args) => {
+      if (!plugin.settings.enableAnnotations) {
+        return 'PDF integrations are disabled in settings.';
+      }
+      const path = args.trim();
+      if (!path) {
+        return 'Please specify a PDF file path. Example: `/annotations papers/my-paper.pdf`';
+      }
+      const file = plugin.app.vault.getAbstractFileByPath(path);
+      if (!(file instanceof TFile) || file.extension !== 'pdf') {
+        return `File not found or is not a PDF: \`${path}\`. Ensure it is a valid path in your vault.`;
+      }
+
+      try {
+        const annots = await plugin.pdfAnnotationManager.extractAnnotations(file);
+        const md = plugin.pdfAnnotationManager.formatAnnotationsMarkdown(annots, file.basename);
+        return md;
+      } catch (err) {
+        return `Failed to extract annotations: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    },
+    name: 'annotations'
+  },
+  {
+    description: 'Suggest or apply tags. Usage: /tags suggest OR /tags apply [tag1] [tag2] ...',
+    execute: async (plugin, args) => {
+      if (!plugin.settings.enableTags) {
+        return 'Tags suggestion feature is disabled in settings.';
+      }
+      const parts = args.trim().split(/\s+/);
+      const sub = parts[0]?.toLowerCase();
+      const tagsToApply = parts.slice(1);
+
+      const activeFile = plugin.app.workspace.getActiveFile();
+      if (!activeFile) {
+        return 'No active note found.';
+      }
+
+      if (sub === 'suggest') {
+        const content = await plugin.app.vault.read(activeFile);
+        const title = activeFile.basename;
+        const results = plugin.tagManager.suggestTagsForContent(content, title);
+        if (results.length === 0) {
+          return 'No matching tags from your vault were found in this note.';
+        }
+        let list = `### 🏷️ Tag Suggestions for **${title}**\n\n`;
+        results.forEach((r) => {
+          list += `* **${r.tag}** (${Math.round(r.confidence * 100)}% confidence)\n`;
+        });
+        return list;
+      }
+
+      if (sub === 'apply') {
+        if (tagsToApply.length === 0) {
+          return 'Please specify one or more tags to apply. Example: `/tags apply academic study`';
+        }
+        await plugin.tagManager.applyTagsToNote(activeFile, tagsToApply);
+        return `Applied tags: ${tagsToApply.map((t) => `**${t}**`).join(', ')} to **${activeFile.basename}**.`;
+      }
+
+      return 'Usage:\n* `/tags suggest` — Suggest tags for the current note\n* `/tags apply <tag1> <tag2> ...` — Apply tags to the current note';
+    },
+    name: 'tags'
+  },
+  {
+    description: 'List, load, or save conversation templates. Usage: /template list OR /template load [name] OR /template save [name]',
+    execute: async (plugin, args) => {
+      const parts = args.trim().split(/\s+/);
+      const sub = parts[0]?.toLowerCase();
+      const name = parts.slice(1).join(' ').trim();
+
+      if (sub === 'list') {
+        const list = await plugin.templateManager.loadTemplates();
+        let res = `### 📚 Conversation Templates\n\n`;
+        list.forEach((t) => {
+          res += `* **${t.icon} ${t.name}** — ${t.description}\n`;
+        });
+        return res;
+      }
+
+      if (sub === 'load') {
+        if (!name) {
+          return 'Please specify a template name. Example: `/template load Literature Review`';
+        }
+        const list = await plugin.templateManager.loadTemplates();
+        const found = list.find((t) => t.name.toLowerCase() === name.toLowerCase());
+        if (!found) {
+          return `Template "${name}" not found. Type \`/template list\` to see available templates.`;
+        }
+
+        const event = new CustomEvent('hermes-load-template', { detail: found.prompt });
+        window.dispatchEvent(event);
+
+        return `Loaded template **${found.name}** into chat input.`;
+      }
+
+      if (sub === 'save') {
+        if (!name) {
+          return 'Please specify a name for the template. Example: `/template save my-coach`';
+        }
+
+        const leaves = plugin.app.workspace.getLeavesOfType('hermes-chat-view');
+        if (leaves.length === 0) {
+          return 'No active chat view found.';
+        }
+        const chatView = leaves[0]!.view as any;
+        const messages = chatView.activeMessages || [];
+        const userMsgs = messages.filter((m: any) => m.role === 'user');
+        if (userMsgs.length === 0) {
+          return 'No user prompt found in this conversation to save as template.';
+        }
+        const lastPrompt = userMsgs[userMsgs.length - 1].content;
+
+        await plugin.templateManager.saveTemplate(name, lastPrompt);
+        return `Template **${name}** saved successfully.`;
+      }
+
+      return 'Usage:\n* `/template list` — List all templates\n* `/template load <name>` — Load a template prompt\n* `/template save <name>` — Save the last user prompt as a template';
+    },
+    name: 'template'
+  },
+  {
+    description: 'Extract PDF page text or metadata. Usage: /pdf page [path] [page] OR /pdf metadata [path]',
+    execute: async (plugin, args) => {
+      if (!plugin.settings.enableAnnotations) {
+        return 'PDF integrations are disabled in settings.';
+      }
+      const parts = args.trim().split(/\s+/);
+      const sub = parts[0]?.toLowerCase();
+      const path = parts[1];
+      const pageStr = parts[2];
+
+      if (!sub || !path) {
+        return 'Usage:\n* `/pdf page <pdf-path> <page-number>`\n* `/pdf metadata <pdf-path>`';
+      }
+
+      const file = plugin.app.vault.getAbstractFileByPath(path);
+      if (!(file instanceof TFile) || file.extension !== 'pdf') {
+        return `File not found or is not a PDF: \`${path}\`.`;
+      }
+
+      if (sub === 'page') {
+        const pageNum = parseInt(pageStr || '', 10);
+        if (isNaN(pageNum) || pageNum < 1) {
+          return 'Please specify a valid page number. Example: `/pdf page papers/my-paper.pdf 2`';
+        }
+        try {
+          const text = await plugin.pdfAnnotationManager.extractPageText(file, pageNum);
+          return `### 📄 Extracted Text from ${file.basename} (Page ${pageNum})\n\n${text}`;
+        } catch (err) {
+          return `Failed to extract page text: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      }
+
+      if (sub === 'metadata') {
+        try {
+          const info = await plugin.pdfAnnotationManager.extractMetadata(file);
+          let res = `### 📋 Metadata for ${file.basename}\n\n`;
+          Object.entries(info).forEach(([k, v]) => {
+            res += `* **${k}:** ${v}\n`;
+          });
+          return res;
+        } catch (err) {
+          return `Failed to extract metadata: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      }
+
+      return 'Usage:\n* `/pdf page <pdf-path> <page-number>`\n* `/pdf metadata <pdf-path>`';
+    },
+    name: 'pdf'
   }
 ];
 

@@ -98,6 +98,22 @@ This agent excels at:
 
 This agent has access to the project's specialized skills:
 - `obsidian-dev`: Core development patterns
+- `obsidian-ops`: Operations, syncing, versioning, releases
+- `obsidian-ref`: Technical references, manifest rules, UX guidelines
+- `project`: Project-specific architecture and conventions
+
+## Key Plugin Managers (Obsidian Hermes)
+
+The plugin uses these manager classes, all accessible via `Plugin`:
+- `AcpClient` / `HermesApiClient` — Dual-mode chat clients (local ACP subprocess / remote REST API)
+- `FileChangeManager` — Intercepts file writes/deletes, presents inline diffs for user approval
+- `SecretsManager` — Secure API key storage via Obsidian localStorage
+- `AuditLog` — Persistent audit trail of all agent actions
+- `VaultManager` — Conversation persistence, loading, export (HTML/JSON/Markdown)
+- `CitationManager` — Bibliography loading, citation search, formatted bibliography generation
+- `PDFAnnotationManager` — PDF text, metadata, and highlight/comment extraction via pdfjsLib
+- `TagManager` — Vault-wide tag frequency analysis and term-matching suggestions
+- `TemplateManager` — Built-in and custom conversation starter templates
 - `obsidian-ops`: Operations and release management
 - `obsidian-ref`: Technical references and guidelines
 - `project`: Project-specific architecture and conventions

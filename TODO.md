@@ -2,7 +2,7 @@
 
 **Created:** 14 May 2026
 **Phase:** Phase 4 - Polish & Release Prep
-**Current Version:** 0.4.1-beta1
+**Current Version:** 0.5.0
 
 ## Core Features (High Priority)
 
@@ -17,6 +17,11 @@
 - [x] Reasoning display toggle
 - [x] Tool use display toggle
 - [x] Terminal access security toggle (default off)
+- [x] Citation management with bibliography generation
+- [x] PDF annotation extraction (highlights, comments, metadata)
+- [x] Tag suggestions via term-frequency matching
+- [x] Conversation starter templates (built-in + custom)
+- [x] Enhanced note context (word count, tags, frontmatter, backlinks)
 
 ## UX Improvements (Medium Priority)
 
@@ -28,6 +33,12 @@
 - [x] Implement code block syntax highlighting
 - [x] Implement rate limiting indicators
 - [x] Add slash command autocomplete with synthetic fallback
+- [x] Collapsible settings accordion UI
+- [x] Reasoning visibility quick toggle (brain icon + ⌘⌥E)
+- [x] ArrowUp to edit last message
+- [x] Sidebar global hotkeys (⌘⌥C, ⌘⌥L, ⌘⌥S, ⌘⌥E)
+- [x] Diff review keyboard shortcuts (⌘⇧A, ⌘⇧R, ⌘Enter, Esc)
+- [x] Conversation starter cards in empty state
 
 ## Completed
 
@@ -365,19 +376,19 @@ Based on analysis of both codebases, the following Zotero features could usefull
 ## Implementation Timeline
 
 ### Week 1 (May 20-26): Foundation
-- [ ] Citation Management System (Tier 1)
-- [ ] Tag Suggestions & Auto-Tagging (Tier 2)
-- [ ] Enhanced Context Extraction (Tier 1)
+- [x] Citation Management System (Tier 1)
+- [x] Tag Suggestions & Auto-Tagging (Tier 2)
+- [x] Enhanced Context Extraction (Tier 1)
 
 ### Week 2 (May 27-June 2): Advanced Features
-- [ ] PDF Annotation Management (Tier 1)
-- [ ] Conversation Templates (Tier 2)
-- [ ] Better PDF Integration (Tier 2)
+- [x] PDF Annotation Management (Tier 1)
+- [x] Conversation Templates (Tier 2)
+- [x] Better PDF Integration (Tier 2)
 
 ### Week 3 (June 3-9): Polish & Refinement
-- [ ] Preference Organization (Tier 3)
-- [ ] Approval UI Refinement (Tier 3)
-- [ ] Testing and documentation
+- [x] Preference Organization (Tier 3)
+- [x] Approval UI Refinement (Tier 3)
+- [x] Testing and documentation
 
 ---
 

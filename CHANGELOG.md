@@ -2,6 +2,29 @@
 
 All notable changes to the Obsidian Hermes plugin.
 
+## [0.5.0] - 2026-07-08
+
+### New Features
+
+- **Collapsible Settings Tab UI** — Redesigned settings tab with collapsible accordion sections (`PluginSettingsTab.ts`) styled with custom CSS (`main.scss`).
+- **Feature Settings Toggles** — Expose settings toggles to enable/disable Citations, PDF Integrations, and Auto-Tagging. Corresponding slash commands (`/cite`, `/pdf`, `/annotations`, `/tags`) are dynamically blocked when disabled.
+- **High-Efficiency Approval Shortcuts** — Registered document-level keyboard shortcuts for file change diff reviews (`PendingChangesPanel`):
+  - `⌘⇧A` / `Ctrl+Shift+A`: Approve all.
+  - `⌘⇧R` / `Ctrl+Shift+R`: Reject all.
+  - `⌘Enter` / `Ctrl+Enter`: Approve selected/expanded change.
+  - `Esc`: Reject expanded change.
+- **Tag Suggestions & Heuristics** — Dynamic keyword and frequency analysis (`TagManager`) and React suggestions modal (`TagSuggestionModal`) to suggest and update YAML frontmatter tags in notes.
+- **Conversation Templates** — Support custom templates loading with frontmatter from `hermes/templates/`. Empty chat states render starter cards that load templates directly on click.
+- **PDF Annotation & Page Text Parser** — Extracts highlighted text, comments, metadata, and page-specific text using `pdfjsLib` (`PDFAnnotationManager.ts`).
+- **ArrowUp to Edit Last Message** — Pressing `ArrowUp` inside the empty chat textarea enters edit mode on the last sent user message and autofocuses.
+- **Reasoning Visibility Quick Toggle** — Brain toggle icon in the chat header to quickly hide/show reasoning bubbles, with keyboard shortcut `⌘⌥E`.
+- **Sidebar Global Hotkeys** — Focus-aware shortcuts: `⌘⌥C` (New Chat), `⌘⌥L` (Toggle Conversations List), `⌘⌥S` (Toggle Session Settings drawer), `⌘⌥E` (Toggle Reasoning visibility).
+- **Enhanced Note Context** — New `contextEnhancer.ts` enriches note context with word count, character count, tags, YAML frontmatter, created/modified timestamps, and backlinks before sending to the agent. Used by both `AcpClient` and `HermesApiClient`.
+
+### Bug Fixes
+
+- **Slash Command Submit Stalling** — Autocomplete dropdown now closes immediately when whitespace is typed after a slash prefix, allowing smooth command execution.
+
 ## [0.4.1-beta1] - 2026-06-10
 
 ### Bug Fixes
