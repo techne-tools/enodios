@@ -24,6 +24,7 @@ All notable changes to the Obsidian Hermes plugin.
 ### Bug Fixes
 
 - **Slash Command Submit Stalling** — Autocomplete dropdown now closes immediately when whitespace is typed after a slash prefix, allowing smooth command execution.
+- **Assistant response not rendering after reasoning in ACP mode** — `AcpClient.sendPrompt()` now emits a `stop` update when the ACP `prompt()` promise resolves, matching `HermesApiClient` behavior. This flushes the stream buffer, clears the typing indicator, and reveals the final assistant message after multi-step reasoning/tool turns.
 
 ## [0.4.1-beta1] - 2026-06-10
 
