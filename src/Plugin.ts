@@ -38,14 +38,29 @@ import { CitationSuggestModal } from './Modals/CitationSuggestModal.ts';
 import { TagManager } from './TagManager.ts';
 import { TemplateManager } from './TemplateManager.ts';
 import { TagSuggestionModal } from './Modals/TagSuggestionModal.tsx';
+import { BasesManager } from './BasesManager.ts';
+import { CanvasManager } from './CanvasManager.ts';
+import { NoteComposerManager } from './NoteComposerManager.ts';
+import { NoteTemplateManager } from './NoteTemplateManager.ts';
+import { OutlineManager } from './OutlineManager.ts';
+import { SlidesManager } from './SlidesManager.ts';
+import { isPluginEnabled } from './utils/plugins.ts';
+import { CommunityPluginsManager } from './CommunityPluginsManager.ts';
 
 export class Plugin extends PluginBase<PluginTypes> {
   public acpClient!: AcpClient;
   public apiClient!: HermesApiClient;
   public auditLog!: AuditLog;
+  public basesManager!: BasesManager;
+  public canvasManager!: CanvasManager;
+  public communityPluginsManager!: CommunityPluginsManager;
   public debug!: DebugLogger;
   public fileChangeManager!: FileChangeManager;
+  public noteComposerManager!: NoteComposerManager;
+  public noteTemplateManager!: NoteTemplateManager;
+  public outlineManager!: OutlineManager;
   public secrets!: SecretsManager;
+  public slidesManager!: SlidesManager;
   public vaultManager!: VaultManager;
   public citationManager!: CitationManager;
   public pdfAnnotationManager!: PDFAnnotationManager;
@@ -103,6 +118,13 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.pdfAnnotationManager = new PDFAnnotationManager(this);
     this.tagManager = new TagManager(this);
     this.templateManager = new TemplateManager(this);
+    this.communityPluginsManager = new CommunityPluginsManager(this);
+    this.basesManager = new BasesManager(this);
+    this.canvasManager = new CanvasManager(this);
+    this.noteComposerManager = new NoteComposerManager(this);
+    this.noteTemplateManager = new NoteTemplateManager(this);
+    this.outlineManager = new OutlineManager(this);
+    this.slidesManager = new SlidesManager(this);
 
     this.statusBarItemEl = this.addStatusBarItem();
     this.statusBarItemEl.style.display = 'none';
@@ -406,6 +428,55 @@ export class Plugin extends PluginBase<PluginTypes> {
       },
       id: 'hermes-suggest-tags',
       name: 'Suggest Tags for Current Note'
+    });
+
+    // Command: Generate Slides from active note
+    this.addCommand({
+      callback: async () => {
+        if (!isPluginEnabled(this.app, 'slides')) {
+          new Notice('Slides core plugin is not enabled.');
+          return;
+        }
+        const activeFile = this.app.workspace.getActiveFile();
+        if (!activeFile) {
+          new Notice('No active note to generate slides from.');
+          return;
+        }
+        await this.openView(HERMES_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+        if (leaves.length === 0) { return; }
+        const chatView = leaves[0]!.view;
+        if (!(chatView instanceof HermesChatView)) { return; }
+        const contextItems = [{
+          id: `note-${activeFile.path}`,
+          text: activeFile.basename,
+          type: 'note' as const
+        }];
+        await chatView.sendPrompt(
+          'Generate a Slides presentation from this note. Use `---` to separate slides. Start with a title slide (`# Title`), then use `##` for each section heading.',
+          contextItems
+        );
+      },
+      id: 'hermes-generate-slides',
+      name: 'Generate Slides from active note'
+    });
+
+    // Command: Present active note with Slides
+    this.addCommand({
+      callback: async () => {
+        if (!isPluginEnabled(this.app, 'slides')) {
+          new Notice('Slides core plugin is not enabled.');
+          return;
+        }
+        const activeFile = this.app.workspace.getActiveFile();
+        if (!activeFile) {
+          new Notice('No active note to present.');
+          return;
+        }
+        await this.slidesManager.openPresentationMode(activeFile);
+      },
+      id: 'hermes-present-slides',
+      name: 'Present active note with Slides'
     });
   }
 

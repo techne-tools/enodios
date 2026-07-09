@@ -37,7 +37,8 @@ const makeMockPlugin = () => {
           tags: [
             { tag: '#inline-tag' }
           ]
-        })
+        }),
+        resolvedLinks: {}
       },
       vault: {
         getAbstractFileByPath: vi.fn(),
@@ -45,12 +46,25 @@ const makeMockPlugin = () => {
         read: vi.fn()
       }
     },
+    basesManager: {
+      formatBaseForContext: vi.fn().mockReturnValue(''),
+      parseBase: vi.fn().mockResolvedValue(null)
+    },
+    canvasManager: {
+      formatCanvasForContext: vi.fn().mockReturnValue(''),
+      parseCanvas: vi.fn().mockResolvedValue(null)
+    },
     debug: {
       error: vi.fn(),
       log: vi.fn()
+    },
+    outlineManager: {
+      formatOutlineForContext: vi.fn().mockReturnValue(''),
+      getBacklinks: vi.fn().mockReturnValue([])
     }
   } as unknown as Plugin;
 };
+
 
 describe('contextEnhancer', () => {
   describe('getEnhancedNoteContext', () => {

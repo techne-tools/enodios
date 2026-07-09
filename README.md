@@ -48,6 +48,20 @@ Scan note keyword frequencies against active vault tags to get term-matching rec
 ### 📋 Enhanced Note Context
 When you attach a note to the conversation, Hermes automatically enriches it with metadata — word count, character count, tags, YAML frontmatter, created/modified timestamps, and backlinks — giving the agent richer context for better responses.
 
+### 🌍 Community Plugin Integrations
+Hermes seamlessly hooks into the Obsidian ecosystem. If you have any of the following plugins enabled, Hermes will auto-detect them and unlock advanced slash commands and integrations:
+- **Dataview**: Run `/dataview <query>` to execute live queries.
+- **Templater**: Use `/templater insert` or `generate` to manipulate templates and run `tp.user` scripts.
+- **Omnisearch**: The default `/search` command uses Omnisearch's OCR and fuzzy-matching engine.
+- **Excalidraw**: Parse drawing text with `/excalidraw read`.
+- **Forge**: Manage metadata schemas and bulk updates with `/forge`.
+- **Lazy Loader**: Diagnose plugin startup times with `/lazyloader analyze`.
+- **Git**: Execute local `/git commit` diff parsing and `/git status`.
+- **Linter & Prettier**: Trigger programmatic linting and formatting via `/lint` and `/prettier`.
+- **Admonition**: Ask Hermes to format thoughts in custom callout blocks (`/admonition insert`).
+- **Advanced Tables**: Instruct Hermes to strictly format markdown tables for parsing (`/table generate`).
+- **make.md**: Generate spaces-compatible structures with `/makemd`.
+
 ### ⌨️ Unified Keyboard Shortcuts & QoL
 - **ArrowUp to Edit**: Press `ArrowUp` inside the empty text area to immediately edit the last sent user message.
 - **Reasoning Quick-Toggle**: Click the brain icon `🧠` in the header (or press `⌘⌥E`) to toggle thinking visibility.

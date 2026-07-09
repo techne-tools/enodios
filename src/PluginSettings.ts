@@ -28,6 +28,8 @@ export class PluginSettings {
   public enableAnnotations = true;
   public enableTags = true;
 
+  // Core Plugin Integrations
+
   // Context Behavior
   public contextEntireNote = false;
   public conversationOrganization: 'by-date' | 'by-project' | 'flat' = 'flat';
@@ -49,6 +51,10 @@ export class PluginSettings {
   public hermesBinaryPath = '';
   public mcpServersEnabled = false;
   public mcpServersList = '';
+
+  // Note Templates (Obsidian core Templates plugin)
+  /** Override path for the Obsidian Templates folder. Leave empty to auto-detect. */
+  public noteTemplatesFolder = '';
 
   // Persona Templates
   public personaTemplates: { defaultTools: string[]; id: string; name: string; systemPrompt: string }[] = [

@@ -29,6 +29,8 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
     this.renderCollapsibleSection('💬 What You See in Chat', (el) => this.renderChatDisplaySection(el));
     this.renderCollapsibleSection('📎 Automatic Context', (el) => this.renderContextSection(el));
     this.renderCollapsibleSection('🎓 Academic, Citations & Toggles', (el) => this.renderAcademicSection(el));
+    this.renderCollapsibleSection('🧩 Core Plugin Integrations', (el) => this.renderCorePluginSection(el));
+    this.renderCollapsibleSection('🌍 Community Plugin Integrations', (el) => this.renderCommunityPluginSection(el));
     this.renderCollapsibleSection('🗂️ Saving Conversations', (el) => this.renderConversationStorageSection(el));
     this.renderCollapsibleSection('🔊 Sound & Feel', (el) => this.renderFeedbackSection(el));
     this.renderCollapsibleSection('🛡️ Security', (el) => this.renderSecuritySection(el));
@@ -257,6 +259,45 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         toggle.setValue(this.plugin.settings.autoExtractPdfAnnotations);
         this.bind(toggle, 'autoExtractPdfAnnotations');
       });
+  }
+
+  // ─── Core Plugin Integrations ───
+  private renderCorePluginSection(containerEl: HTMLElement): void {
+    containerEl.createEl('p', {
+      cls: 'setting-item-description',
+      text: 'Core plugin integrations are automatically enabled when the corresponding Obsidian core plugin is enabled in your vault.'
+    });
+
+    new SettingEx(containerEl)
+      .setName('Note Templates Folder Override')
+      .setDesc('Override the auto-detected Templates folder. Leave blank to use the folder configured in Settings → Core plugins → Templates.')
+      .addText((text) => {
+        text.setPlaceholder('e.g. Templates');
+        text.setValue(this.plugin.settings.noteTemplatesFolder);
+        this.bind(text, 'noteTemplatesFolder');
+      });
+  }
+
+  // ─── Community Plugin Integrations ───
+  private renderCommunityPluginSection(containerEl: HTMLElement): void {
+    containerEl.createEl('p', {
+      cls: 'setting-item-description',
+      text: 'Hermes automatically integrates with these popular community plugins when they are enabled in your vault:'
+    });
+
+    const ul = containerEl.createEl('ul', { cls: 'hermes-settings-list' });
+    ul.createEl('li').innerHTML = '<strong>Dataview:</strong> Use <code>/dataview &lt;query&gt;</code> to run queries directly in chat.';
+    ul.createEl('li').innerHTML = '<strong>Templater:</strong> Use <code>/templater insert &lt;name&gt;</code> to insert templates into the active note.';
+    ul.createEl('li').innerHTML = '<strong>Omnisearch:</strong> The <code>/search</code> command automatically uses Omnisearch for better fuzzy matching and OCR.';
+    ul.createEl('li').innerHTML = '<strong>Excalidraw:</strong> Use <code>/excalidraw read &lt;path&gt;</code> to extract text elements from drawings.';
+    ul.createEl('li').innerHTML = '<strong>Forge:</strong> Use <code>/forge validate</code> to read schemas from <code>System/Registry</code> or <code>/forge patch</code> to generate structural updates.';
+    ul.createEl('li').innerHTML = '<strong>Lazy Loader:</strong> Use <code>/lazyloader analyze</code> to find plugins that might be slowing down startup.';
+    ul.createEl('li').innerHTML = '<strong>Git:</strong> Use <code>/git commit</code> to auto-generate commit messages based on diffs, or <code>/git status</code> to view changes.';
+    ul.createEl('li').innerHTML = '<strong>Linter:</strong> Use <code>/lint</code> to programmatically run the Obsidian Linter on the active file.';
+    ul.createEl('li').innerHTML = '<strong>Prettier:</strong> Use <code>/prettier</code> to format the active file using Prettier.';
+    ul.createEl('li').innerHTML = '<strong>Admonition:</strong> Use <code>/admonition insert &lt;type&gt;</code> to instruct Hermes to format callouts.';
+    ul.createEl('li').innerHTML = '<strong>Advanced Tables:</strong> Use <code>/table generate</code> to generate strict, aligned markdown tables.';
+    ul.createEl('li').innerHTML = '<strong>make.md:</strong> Use <code>/makemd</code> to instruct Hermes to generate spaces-compatible content.';
   }
 
   // ─── Conversation Storage ───

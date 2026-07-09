@@ -1,4 +1,5 @@
 import { TFile } from 'obsidian';
+import { isPluginEnabled } from './utils/plugins.ts';
 
 import type { Plugin } from './Plugin.ts';
 
@@ -92,28 +93,6 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     name: 'help'
   },
   {
-    description: 'Read the active Canvas mind-map to context',
-    execute: async (plugin) => {
-      const activeFile = plugin.app.workspace.getActiveFile();
-      if (activeFile?.extension !== 'canvas') {
-        return 'No active Canvas file found. Please open a .canvas file first.';
-      }
-      try {
-        const content = await plugin.app.vault.read(activeFile);
-        const canvasData = JSON.parse(content);
-
-        let summary = `Attached current Canvas mind-map (**${activeFile.basename}.canvas**).\n\n`;
-        summary += `Raw JSON structure:\n\`\`\`json\n${JSON.stringify(canvasData, null, 2)}\n\`\`\`\n\n`;
-        summary += '**Instructions for Hermes:**\nTo create or modify a Canvas, use the `write_file` tool to write valid JSON to a `.canvas` file path. Ensure you include a `nodes` array (id, type: "text"|"file"|"group", x, y, width, height) and an `edges` array (id, fromNode, fromSide, toNode, toSide).';
-
-        return summary;
-      } catch (err) {
-        return `Failed to read Canvas data: ${err instanceof Error ? err.message : String(err)}`;
-      }
-    },
-    name: 'canvas'
-  },
-  {
     description: 'Switch persona / system prompt template',
     execute: async (plugin, args) => {
       const personas = plugin.settings.personaTemplates;
@@ -123,7 +102,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         const list = personas
           .map((p) => `**${p.name}** (${p.id})${plugin.settings.activePersonaId === p.id ? ' ← active' : ''}`)
           .join('\n');
-        return `Available personas:\n\n${list}\n\nUse \`/persona \u003cid\u003e\` to switch.`;
+        return `Available personas:\n\n${list}\n\nUse \`/persona <id>\` to switch.`;
       }
 
       const match = personas.find((p) =>
@@ -148,6 +127,10 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     execute: async (plugin, args) => {
       if (!args.trim()) {
         return 'Please provide a search query. Example: `/search project goals`';
+      }
+
+      if (isPluginEnabled(plugin.app, 'omnisearch')) {
+        return plugin.communityPluginsManager.searchOmnisearch(args.trim());
       }
 
       const query = args.toLowerCase();
@@ -449,6 +432,480 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       return 'Usage:\n* `/pdf page <pdf-path> <page-number>`\n* `/pdf metadata <pdf-path>`';
     },
     name: 'pdf'
+  },
+  {
+    description: 'Show document outline, backlinks, or navigate to a heading. Usage: /outline [backlinks | go <heading>]',
+    execute: async (plugin, args) => {
+      const activeFile = plugin.app.workspace.getActiveFile();
+      if (!activeFile) {
+        return 'No active note found.';
+      }
+
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const cmd = (parts[0] ?? '').toLowerCase();
+      const rest = (parts[1] ?? '').trim();
+
+      if (cmd === 'backlinks') {
+        const backlinks = plugin.outlineManager.getBacklinks(activeFile);
+        if (backlinks.length === 0) {
+          return `No notes link to **${activeFile.basename}**.`;
+        }
+        let result = `### 🔗 Backlinks for **${activeFile.basename}**\n\n`;
+        for (const b of backlinks) {
+          result += `* [[${b.sourcePath}]] — ${b.linkCount} link${b.linkCount > 1 ? 's' : ''}\n`;
+        }
+        return result;
+      }
+
+      if (cmd === 'go') {
+        if (!rest) {
+          return 'Please specify a heading. Example: `/outline go Introduction`';
+        }
+        const found = await plugin.outlineManager.navigateToHeading(activeFile, rest);
+        return found
+          ? `Navigated to heading **${rest}** in ${activeFile.basename}.`
+          : `Heading "${rest}" not found in ${activeFile.basename}.`;
+      }
+
+      // Default: show heading outline
+      const outline = plugin.outlineManager.getOutline(activeFile);
+      if (outline.length === 0) {
+        return `**${activeFile.basename}** has no headings.`;
+      }
+      let result = `### 📋 Outline of **${activeFile.basename}**\n\n`;
+      for (const h of outline) {
+        const indent = '  '.repeat(h.level - 1);
+        result += `${indent}${'#'.repeat(h.level)} ${h.text}\n`;
+      }
+      return result;
+    },
+    name: 'outline'
+  },
+  {
+    description: 'Compose notes: split, merge, or extract. Usage: /compose split <heading> | /compose merge <p1> <p2>... -> <dest>',
+    execute: async (plugin, args) => {
+      if (!isPluginEnabled(plugin.app, 'note-composer')) {
+        return 'Note Composer plugin is not enabled.';
+      }
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const rest = (parts[1] ?? '').trim();
+
+      const activeFile = plugin.app.workspace.getActiveFile();
+
+      if (sub === 'split') {
+        if (!rest) {
+          return 'Please specify a heading to split on. Example: `/compose split Conclusion`';
+        }
+        if (!activeFile) {
+          return 'No active note to split.';
+        }
+        const result = await plugin.noteComposerManager.splitNoteAtHeading(activeFile, rest);
+        if (!result) {
+          return `Failed to split note at heading "${rest}".`;
+        }
+        return `Split **${activeFile.basename}** at heading **${rest}**.\nCreated: [[${result.created.path}]]`;
+      }
+
+      if (sub === 'merge') {
+        // Format: path1 path2 ... -> destination
+        const arrowIdx = rest.indexOf('->');
+        if (arrowIdx === -1) {
+          return 'Usage: `/compose merge <path1> <path2> ... -> <destination>`';
+        }
+        const sourcePaths = rest.slice(0, arrowIdx).trim().split(/\s+/).filter(Boolean);
+        const destPath = rest.slice(arrowIdx + 2).trim();
+        if (!destPath) {
+          return 'Please specify a destination path.';
+        }
+        const sources = sourcePaths
+          .map((p) => plugin.app.vault.getAbstractFileByPath(p))
+          .filter((f): f is TFile => f instanceof TFile);
+        if (sources.length === 0) {
+          return 'No valid source files found. Check the paths.';
+        }
+        const merged = await plugin.noteComposerManager.mergeNotes(sources, destPath);
+        if (!merged) {
+          return `Merge failed. Ensure destination "${destPath}" does not already exist.`;
+        }
+        return `Merged ${sources.length} notes into [[${merged.path}]].`;
+      }
+
+      if (sub === 'extract') {
+        return 'To extract a selection, use the command palette: "Hermes: Extract selection to new note" (requires text selected in the editor).';
+      }
+
+      return 'Usage:\n* `/compose split <heading>` — Split active note at heading\n* `/compose merge <path1> <path2> ... -> <destination>` — Merge notes\n* `/compose extract` — See command palette for selection extraction';
+    },
+    name: 'compose'
+  },
+  {
+    description: 'Work with Obsidian Bases (.base) files. Usage: /bases list | /bases read <path> | /bases create <name>',
+    execute: async (plugin, args) => {
+      if (!isPluginEnabled(plugin.app, 'bases')) {
+        return 'Bases plugin is not enabled.';
+      }
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const rest = (parts[1] ?? '').trim();
+
+      if (sub === 'list' || !sub) {
+        const bases = plugin.basesManager.listBases();
+        if (bases.length === 0) {
+          return 'No `.base` files found in your vault.';
+        }
+        let result = `### 🗃️ Bases in Vault (${bases.length})\n\n`;
+        for (const b of bases) {
+          result += `* \`${b.path}\`\n`;
+        }
+        return result;
+      }
+
+      if (sub === 'read') {
+        const path = rest;
+        if (!path) {
+          return 'Please specify a .base file path. Example: `/bases read notes.base`';
+        }
+        const file = plugin.app.vault.getAbstractFileByPath(path);
+        if (!(file instanceof TFile) || file.extension !== 'base') {
+          return `File not found or not a .base file: \`${path}\``;
+        }
+        const base = await plugin.basesManager.parseBase(file);
+        if (!base) {
+          return `Failed to parse \`${path}\`.`;
+        }
+        return plugin.basesManager.formatBaseForContext(base, file);
+      }
+
+      if (sub === 'create') {
+        const name = rest || 'new-base';
+        return (
+          `To create a Bases file named **${name}.base**, ask Hermes:\n\n` +
+          `> Create a .base file at \`${name}.base\` with a table view showing all notes tagged #project, ordered by file name.`
+        );
+      }
+
+      return 'Usage:\n* `/bases list` — List all .base files\n* `/bases read <path>` — Read a base file into context\n* `/bases create <name>` — Prompt Hermes to generate a base file';
+    },
+    name: 'bases'
+  },
+  {
+    description: 'Work with Canvas files. Usage: /canvas [list | read [path] | add-node <type> <label>]',
+    execute: async (plugin, args) => {
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const rest = (parts[1] ?? '').trim();
+
+      if (!sub || sub === 'read') {
+        // Read active or specified canvas — now with structured CanvasManager output
+        const pathArg = sub === 'read' ? rest : '';
+        const targetFile = pathArg
+          ? (plugin.app.vault.getAbstractFileByPath(pathArg) as TFile | null)
+          : plugin.app.workspace.getActiveFile();
+
+        if (!targetFile || targetFile.extension !== 'canvas') {
+          return 'No active Canvas file found. Open a .canvas file or specify a path: `/canvas read <path>`';
+        }
+        const canvas = await plugin.canvasManager.parseCanvas(targetFile);
+        if (!canvas) {
+          return `Failed to parse canvas: \`${targetFile.path}\``;
+        }
+        return plugin.canvasManager.formatCanvasForContext(canvas, targetFile);
+      }
+
+      if (sub === 'list') {
+        const canvases = plugin.canvasManager.listCanvases();
+        if (canvases.length === 0) {
+          return 'No `.canvas` files found in your vault.';
+        }
+        let result = `### 🖼️ Canvas Files (${canvases.length})\n\n`;
+        for (const c of canvases) {
+          result += `* \`${c.path}\`\n`;
+        }
+        return result;
+      }
+
+      if (sub === 'add-node') {
+        const activeFile = plugin.app.workspace.getActiveFile();
+        if (!activeFile || activeFile.extension !== 'canvas') {
+          return 'No active Canvas file. Open a .canvas file first.';
+        }
+        const argParts = rest.trim().split(/\s+(.*)/, 2);
+        const nodeType = (argParts[0] ?? 'text') as 'file' | 'group' | 'link' | 'text';
+        const label = argParts[1] ?? 'New Node';
+        const node = await plugin.canvasManager.addNodeToCanvas(activeFile, {
+          height: 200,
+          text: label,
+          type: nodeType,
+          width: 400
+        });
+        if (!node) {
+          return 'Failed to add node to canvas.';
+        }
+        return `Added ${nodeType} node "${label}" to **${activeFile.basename}** (id: ${node.id}).`;
+      }
+
+      return 'Usage:\n* `/canvas` or `/canvas read [path]` — Read canvas into context\n* `/canvas list` — List all canvas files\n* `/canvas add-node <type> <label>` — Add a node to the active canvas';
+    },
+    name: 'canvas'
+  },
+  {
+    description: 'Work with Obsidian Slides presentations. Usage: /slides [read | generate [title] | present]',
+    execute: async (plugin, args) => {
+      if (!isPluginEnabled(plugin.app, 'slides')) {
+        return 'Slides core plugin is not enabled.';
+      }
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const rest = (parts[1] ?? '').trim();
+
+      const activeFile = plugin.app.workspace.getActiveFile();
+
+      if (sub === 'read' || !sub) {
+        if (!activeFile) {
+          return 'No active note found.';
+        }
+        const slides = await plugin.slidesManager.parseSlides(activeFile);
+        if (slides.length === 0) {
+          return `**${activeFile.basename}** has no slides (no \`---\` separators found).`;
+        }
+        return plugin.slidesManager.formatSlidesForContext(slides, activeFile);
+      }
+
+      if (sub === 'generate') {
+        const title = rest || (activeFile?.basename ?? 'Presentation');
+        const contextNote = activeFile ? `\n\nContext note: **${activeFile.path}**` : '';
+        return (
+          `To generate a Slides presentation titled **"${title}"**, ask Hermes in the chat:\n\n` +
+          `> Generate a Slides presentation titled "${title}". ` +
+          `Use \`---\` to separate slides, \`# ${title}\` for the title slide, ` +
+          `and \`##\` for section headings. Save it as \`${title.toLowerCase().replace(/\s+/g, '-')}.md\`.` +
+          contextNote
+        );
+      }
+
+      if (sub === 'present') {
+        if (!activeFile) {
+          return 'No active note to present.';
+        }
+        await plugin.slidesManager.openPresentationMode(activeFile);
+        return `Launching **${activeFile.basename}** in Slides presentation mode...`;
+      }
+
+      return 'Usage:\n* `/slides read` — Summarize the active slides note\n* `/slides generate [title]` — Prompt to generate a presentation\n* `/slides present` — Launch Slides presentation mode';
+    },
+    name: 'slides'
+  },
+  {
+    description: 'Work with Obsidian note templates. Usage: /note-template [list | insert <name> | read <name>]',
+    execute: async (plugin, args) => {
+      if (!isPluginEnabled(plugin.app, 'templates')) {
+        return 'Note Templates core plugin is not enabled.';
+      }
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const rest = (parts[1] ?? '').trim();
+
+      if (sub === 'list' || !sub) {
+        const templates = plugin.noteTemplateManager.listNoteTemplates();
+        return plugin.noteTemplateManager.formatTemplatesListForContext(templates);
+      }
+
+      if (sub === 'read') {
+        if (!rest) {
+          return 'Please specify a template name. Example: `/note-template read Meeting Notes`';
+        }
+        const template = plugin.noteTemplateManager.findTemplate(rest);
+        if (!template) {
+          return `Template "${rest}" not found. Use \`/note-template list\` to see available templates.`;
+        }
+        const content = await plugin.noteTemplateManager.readTemplate(template);
+        return `### 📄 Template: ${template.basename}\n\n\`\`\`markdown\n${content}\n\`\`\``;
+      }
+
+      if (sub === 'insert') {
+        if (!rest) {
+          return 'Please specify a template name. Example: `/note-template insert Meeting Notes`';
+        }
+        const activeFile = plugin.app.workspace.getActiveFile();
+        if (!activeFile) {
+          return 'No active note to insert the template into.';
+        }
+        const template = plugin.noteTemplateManager.findTemplate(rest);
+        if (!template) {
+          return `Template "${rest}" not found. Use \`/note-template list\` to see available templates.`;
+        }
+        await plugin.noteTemplateManager.insertTemplate(template, activeFile);
+        return `Template **${template.basename}** inserted into **${activeFile.basename}**.`;
+      }
+
+      return 'Usage:\n* `/note-template list` — List all note templates\n* `/note-template read <name>` — Read a template into context\n* `/note-template insert <name>` — Insert a template into the active note';
+    },
+    name: 'note-template'
+  },
+  {
+    description: 'Execute a Dataview query. Usage: /dataview <query>',
+    execute: async (plugin, args) => {
+      if (!isPluginEnabled(plugin.app, 'dataview')) {
+        return 'Dataview plugin is not enabled.';
+      }
+      const query = args.trim();
+      if (!query) {
+        return 'Please provide a Dataview query. Example: `/dataview TABLE file.ctime FROM "Folder"`';
+      }
+      const activeFile = plugin.app.workspace.getActiveFile();
+      const sourcePath = activeFile ? activeFile.path : '';
+      return plugin.communityPluginsManager.executeDataviewQuery(query, sourcePath);
+    },
+    name: 'dataview'
+  },
+  {
+    description: 'Templater actions. Usage: /templater [insert <name> | scripts | generate]',
+    execute: async (plugin, args) => {
+      if (!isPluginEnabled(plugin.app, 'templater-obsidian')) {
+        return 'Templater plugin is not enabled.';
+      }
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const templateName = (parts[1] ?? '').trim();
+      
+      if (sub === 'insert') {
+        if (!templateName) return 'Please specify a template name. Example: `/templater insert daily`';
+        const activeFile = plugin.app.workspace.getActiveFile();
+        if (!activeFile) return 'No active note to insert the template into.';
+        return plugin.communityPluginsManager.insertTemplaterTemplate(templateName, activeFile);
+      }
+      if (sub === 'scripts') {
+        return plugin.communityPluginsManager.getTemplaterUserScripts();
+      }
+      if (sub === 'generate') {
+        return `To generate a new Templater script or template, ask Hermes:\n\n> Write a Templater template to ...`;
+      }
+      return 'Usage:\n* `/templater insert <name>`\n* `/templater scripts`\n* `/templater generate`';
+    },
+    name: 'templater'
+  },
+  {
+    description: 'Read text from an Excalidraw drawing. Usage: /excalidraw read <path>',
+    execute: async (plugin, args) => {
+      if (!isPluginEnabled(plugin.app, 'obsidian-excalidraw-plugin')) {
+        return 'Excalidraw plugin is not enabled.';
+      }
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const path = (parts[1] ?? '').trim();
+      
+      if (sub === 'read') {
+        if (!path) return 'Please specify a path. Example: `/excalidraw read drawings/map.md`';
+        return plugin.communityPluginsManager.readExcalidraw(path);
+      }
+      return 'Usage: `/excalidraw read <path>`';
+    },
+    name: 'excalidraw'
+  },
+  {
+    description: 'Forge metadata management. Usage: /forge [validate | patch <desc>]',
+    execute: async (plugin, args) => {
+      // Assuming Forge doesn't strictly have to be enabled to generate patches, but we check anyway if needed.
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const desc = (parts[1] ?? '').trim();
+      
+      if (sub === 'validate') {
+        return plugin.communityPluginsManager.getForgeSchemasContext();
+      }
+      if (sub === 'patch') {
+        if (!desc) return 'Please describe the patch. Example: `/forge patch rename tag from #wip to #active`';
+        return plugin.communityPluginsManager.generateForgePatchPrompt(desc);
+      }
+      return 'Usage:\n* `/forge validate` — Read Forge schemas into context\n* `/forge patch <description>` — Ask Hermes to generate a Forge patch';
+    },
+    name: 'forge'
+  },
+  {
+    description: 'Analyze plugin load times for Lazy Loader. Usage: /lazyloader analyze',
+    execute: async (plugin) => {
+      return plugin.communityPluginsManager.getLazyLoaderSuggestions();
+    },
+    name: 'lazyloader'
+  },
+  {
+    description: 'Git operations. Usage: /git [status | commit <message> | push]',
+    execute: async (plugin, args) => {
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const message = (parts[1] ?? '').trim();
+      
+      if (sub === 'status') {
+        return plugin.communityPluginsManager.getGitStatus();
+      }
+      if (sub === 'commit') {
+        return plugin.communityPluginsManager.getGitCommitPrompt(message);
+      }
+      if (sub === 'push') {
+        return 'To push changes, ask Hermes:\n\n> Please run `git push` to upload my latest commits.';
+      }
+      return 'Usage:\n* `/git status` — View git status\n* `/git commit [message]` — Generate a commit message based on diff\n* `/git push` — Instruct Hermes to push changes';
+    },
+    name: 'git'
+  },
+  {
+    description: 'Run the Obsidian Linter on the active file. Usage: /lint',
+    execute: async (plugin) => {
+      if (!isPluginEnabled(plugin.app, 'obsidian-linter')) {
+        return 'Linter plugin is not enabled.';
+      }
+      return plugin.communityPluginsManager.lintActiveFile();
+    },
+    name: 'lint'
+  },
+  {
+    description: 'Insert an Admonition block. Usage: /admonition insert <type>',
+    execute: async (_plugin, args) => {
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const type = (parts[1] ?? '').trim();
+      
+      if (sub === 'insert') {
+        if (!type) return 'Please specify a type. Example: `/admonition insert ad-note`';
+        return `To insert an Admonition, ask Hermes:\n\n> Please format the following thought as an \`${type}\` Admonition block: [your text]`;
+      }
+      return 'Usage: `/admonition insert <type>`';
+    },
+    name: 'admonition'
+  },
+  {
+    description: 'Advanced Tables tools. Usage: /table [generate | format]',
+    execute: async (_plugin, args) => {
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      
+      if (sub === 'generate') {
+        return 'Ask Hermes:\n\n> Generate a strict Markdown table. Ensure all columns are perfectly aligned so Advanced Tables can parse it.';
+      }
+      if (sub === 'format') {
+        return 'Ask Hermes:\n\n> Reformat the table in the active note to be perfectly aligned for Advanced Tables.';
+      }
+      return 'Usage:\n* `/table generate`\n* `/table format`';
+    },
+    name: 'table'
+  },
+  {
+    description: 'Format the active file with Prettier. Usage: /prettier',
+    execute: async (plugin) => {
+      if (!isPluginEnabled(plugin.app, 'obsidian-prettier')) {
+        return 'Prettier plugin is not enabled.';
+      }
+      return plugin.communityPluginsManager.formatWithPrettier();
+    },
+    name: 'prettier'
+  },
+  {
+    description: 'Make.md tools. Usage: /makemd',
+    execute: async () => {
+      return 'To integrate with make.md, ask Hermes:\n\n> Please structure this content using make.md Contexts or Spaces format.';
+    },
+    name: 'makemd'
   }
 ];
 

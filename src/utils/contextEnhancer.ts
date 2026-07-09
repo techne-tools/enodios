@@ -2,9 +2,29 @@ import { TFile } from 'obsidian';
 import type { Plugin } from '../Plugin.ts';
 
 /**
- * Generates an enhanced note note context string including word count, tags, and YAML frontmatter.
+ * Generates an enhanced note context string including word count, tags, YAML frontmatter,
+ * document outline, and backlinks. For `.canvas` files, produces a structured summary.
+ * For `.base` files, produces a YAML view summary.
  */
 export async function getEnhancedNoteContext(plugin: Plugin, file: TFile): Promise<string> {
+  // Delegate .canvas files to CanvasManager
+  if (file.extension === 'canvas') {
+    const canvas = await plugin.canvasManager.parseCanvas(file);
+    if (canvas) {
+      return plugin.canvasManager.formatCanvasForContext(canvas, file);
+    }
+    return `[Unable to parse canvas: ${file.path}]`;
+  }
+
+  // Delegate .base files to BasesManager
+  if (file.extension === 'base') {
+    const base = await plugin.basesManager.parseBase(file);
+    if (base) {
+      return plugin.basesManager.formatBaseForContext(base, file);
+    }
+    return `[Unable to parse base: ${file.path}]`;
+  }
+
   try {
     const content = await plugin.app.vault.read(file);
     const cache = plugin.app.metadataCache.getFileCache(file);
@@ -35,6 +55,14 @@ export async function getEnhancedNoteContext(plugin: Plugin, file: TFile): Promi
       ? JSON.stringify(cache.frontmatter, null, 2)
       : 'None';
 
+    // Outline (headings tree + backlinks)
+    const outlineBlock = plugin.outlineManager.formatOutlineForContext(file);
+    const backlinks = plugin.outlineManager.getBacklinks(file);
+    const backlinksStr =
+      backlinks.length > 0
+        ? backlinks.map((b) => `[[${b.sourcePath}]] (${b.linkCount})`).join(', ')
+        : 'None';
+
     const metadataBlock = [
       '--- Note Metadata ---',
       `Path: ${file.path}`,
@@ -44,12 +72,13 @@ export async function getEnhancedNoteContext(plugin: Plugin, file: TFile): Promi
       `Word Count: ${wordCount}`,
       `Character Count: ${charCount}`,
       `Tags: ${tags}`,
+      `Backlinks: ${backlinksStr}`,
       `Frontmatter: ${frontmatterStr}`,
       '---------------------',
       ''
     ].join('\n');
 
-    return metadataBlock + content;
+    return metadataBlock + outlineBlock + content;
   } catch (err) {
     plugin.debug.error(`Failed to generate enhanced context for ${file.path}`, err);
     return `[Error loading note content for ${file.path}]`;
