@@ -107,7 +107,7 @@ export class BasesManager {
     lines.push(
       "",
       "To create or modify a .base file, write valid YAML with `views`, `filters`, `formulas`, and `properties` keys.",
-      "------------------------------",
+      "------------------------------"
     );
 
     return lines.join("\n");

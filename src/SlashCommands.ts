@@ -37,7 +37,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     execute: async (_plugin) => {
       return null;
     },
-    name: "clear",
+    name: "clear"
   },
   {
     description: "Display a summary of the currently attached context items.",
@@ -83,7 +83,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
       return list;
     },
-    name: "context",
+    name: "context"
   },
   {
     description: "Show available slash commands",
@@ -94,7 +94,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         .join("\n");
       return `Available commands:\n\n${list}`;
     },
-    name: "help",
+    name: "help"
   },
   {
     description: "Switch persona / system prompt template",
@@ -106,7 +106,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         const list = personas
           .map(
             (p) =>
-              `**${p.name}** (${p.id})${plugin.settings.activePersonaId === p.id ? " ← active" : ""}`,
+              `**${p.name}** (${p.id})${plugin.settings.activePersonaId === p.id ? " ← active" : ""}`
           )
           .join("\n");
         return `Available personas:\n\n${list}\n\nUse \`/persona <id>\` to switch.`;
@@ -114,7 +114,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       const match = personas.find(
         (p) =>
-          p.id.toLowerCase() === query || p.name.toLowerCase().includes(query),
+          p.id.toLowerCase() === query || p.name.toLowerCase().includes(query)
       );
 
       if (!match) {
@@ -127,7 +127,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return `Switched to **${match.name}**. ${match.systemPrompt ? "System prompt updated." : "No system prompt set for this persona."}`;
     },
-    name: "persona",
+    name: "persona"
   },
   {
     description: "Search the vault and append results to context (Local RAG)",
@@ -194,7 +194,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return result;
     },
-    name: "search",
+    name: "search"
   },
   {
     description:
@@ -245,7 +245,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         const style = plugin.settings.citationStyle;
         const bib = plugin.citationManager.generateBibliographyForContent(
           content,
-          style,
+          style
         );
         if (!bib) {
           return "No citations found in this file to generate references for. Ensure citations use `[@citation-key]` format.";
@@ -256,7 +256,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
           /\n\n## References[\s\S]*$/i,
           /\n\n# References[\s\S]*$/i,
           /\n\n## Bibliography[\s\S]*$/i,
-          /\n\n# Bibliography[\s\S]*$/i,
+          /\n\n# Bibliography[\s\S]*$/i
         ];
 
         let replaced = false;
@@ -278,7 +278,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return "Usage:\n* `/cite style [apa|mla|chicago|ieee]`\n* `/cite search [query]`\n* `/cite bib`";
     },
-    name: "cite",
+    name: "cite"
   },
   {
     description:
@@ -301,14 +301,14 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
           await plugin.pdfAnnotationManager.extractAnnotations(file);
         const md = plugin.pdfAnnotationManager.formatAnnotationsMarkdown(
           annots,
-          file.basename,
+          file.basename
         );
         return md;
       } catch (err) {
         return `Failed to extract annotations: ${err instanceof Error ? err.message : String(err)}`;
       }
     },
-    name: "annotations",
+    name: "annotations"
   },
   {
     description:
@@ -350,7 +350,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return "Usage:\n* `/tags suggest` — Suggest tags for the current note\n* `/tags apply <tag1> <tag2> ...` — Apply tags to the current note";
     },
-    name: "tags",
+    name: "tags"
   },
   {
     description:
@@ -375,14 +375,14 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         }
         const list = await plugin.templateManager.loadTemplates();
         const found = list.find(
-          (t) => t.name.toLowerCase() === name.toLowerCase(),
+          (t) => t.name.toLowerCase() === name.toLowerCase()
         );
         if (!found) {
           return `Template "${name}" not found. Type \`/template list\` to see available templates.`;
         }
 
         const event = new CustomEvent("hermes-load-template", {
-          detail: found.prompt,
+          detail: found.prompt
         });
         window.dispatchEvent(event);
 
@@ -414,7 +414,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return "Usage:\n* `/template list` — List all templates\n* `/template load <name>` — Load a template prompt\n* `/template save <name>` — Save the last user prompt as a template";
     },
-    name: "template",
+    name: "template"
   },
   {
     description:
@@ -445,7 +445,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         try {
           const text = await plugin.pdfAnnotationManager.extractPageText(
             file,
-            pageNum,
+            pageNum
           );
           return `### 📄 Extracted Text from ${file.basename} (Page ${pageNum})\n\n${text}`;
         } catch (err) {
@@ -468,7 +468,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return "Usage:\n* `/pdf page <pdf-path> <page-number>`\n* `/pdf metadata <pdf-path>`";
     },
-    name: "pdf",
+    name: "pdf"
   },
   {
     description:
@@ -985,7 +985,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       return "To integrate with make.md, ask Hermes:\n\n> Please structure this content using make.md Contexts or Spaces format.";
     },
     name: "makemd"
-  },
+  }
 ];
 
 let customCommands: SlashCommand[] = [];

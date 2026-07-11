@@ -11,7 +11,7 @@ interface DataviewQueryResult {
 interface DataviewApi {
   queryMarkdown(
     query: string,
-    sourcePath: string,
+    sourcePath: string
   ): Promise<DataviewQueryResult>;
 }
 
@@ -55,7 +55,7 @@ interface ObsidianAppWithPlugins {
 interface TemplaterApi {
   parse_template(
     context: { run_mode: number; target_file: TFile },
-    content: string,
+    content: string
   ): Promise<string>;
 }
 
@@ -84,7 +84,7 @@ export class CommunityPluginsManager {
   // --- Dataview ---
   public async executeDataviewQuery(
     query: string,
-    sourcePath: string,
+    sourcePath: string
   ): Promise<string> {
     const dv = window.DataviewAPI;
     if (!dv) {
@@ -104,7 +104,7 @@ export class CommunityPluginsManager {
   // --- Templater ---
   public async insertTemplaterTemplate(
     templateName: string,
-    activeFile: TFile,
+    activeFile: TFile
   ): Promise<string> {
     const templaterPlugin = this.getCommunityPlugin("templater-obsidian") as
       | TemplaterPluginInstance
@@ -128,13 +128,13 @@ export class CommunityPluginsManager {
       const content = await this.plugin.app.vault.read(templateFile);
       const parsedContent = await templaterPlugin.templater.parse_template(
         { target_file: activeFile, run_mode: 4 },
-        content,
+        content
       );
 
       const currentContent = await this.plugin.app.vault.read(activeFile);
       await this.plugin.app.vault.modify(
         activeFile,
-        `${currentContent}\n${parsedContent}`,
+        `${currentContent}\n${parsedContent}`
       );
 
       return `Inserted template **${templateName}** into **${activeFile.basename}**.`;
@@ -173,7 +173,7 @@ export class CommunityPluginsManager {
   // --- Excalidraw ---
   public async readExcalidraw(path: string): Promise<string> {
     const excalidrawPlugin = this.getCommunityPlugin(
-      "obsidian-excalidraw-plugin",
+      "obsidian-excalidraw-plugin"
     );
     if (!excalidrawPlugin) {
       return "Excalidraw plugin is not accessible.";
@@ -194,7 +194,7 @@ export class CommunityPluginsManager {
       const excalidrawData = JSON.parse(match[1]) as ExcalidrawFileData;
       const elements = excalidrawData.elements || [];
       const textElements = elements.filter(
-        (element) => element.type === "text" && Boolean(element.text),
+        (element) => element.type === "text" && Boolean(element.text)
       );
 
       if (textElements.length === 0) {
@@ -227,7 +227,7 @@ export class CommunityPluginsManager {
       .getFiles()
       .filter(
         (file) =>
-          file.path.startsWith(scriptsFolder) && file.extension === "js",
+          file.path.startsWith(scriptsFolder) && file.extension === "js"
       );
     if (files.length === 0) return `No user scripts found in ${scriptsFolder}.`;
 
@@ -248,7 +248,7 @@ export class CommunityPluginsManager {
       .getFiles()
       .filter(
         (file) =>
-          file.path.includes("System/Registry") && file.extension === "md",
+          file.path.includes("System/Registry") && file.extension === "md"
       );
     return `### 🛠️ Forge Registry\n\nFound ${files.length} schema files in \`System/Registry\`. Tell Hermes to use the \`read_file\` tool on them to understand your vault's structural rules.`;
   }
@@ -267,10 +267,10 @@ export class CommunityPluginsManager {
       "omnisearch",
       "obsidian-git",
       "obsidian-linter",
-      "table-editor-obsidian",
+      "table-editor-obsidian"
     ];
     const activeHeavy = Object.keys(plugins).filter((id) =>
-      heavyPlugins.includes(id),
+      heavyPlugins.includes(id)
     );
 
     if (activeHeavy.length === 0) {
@@ -295,7 +295,7 @@ export class CommunityPluginsManager {
       if (!basePath) return "Unable to determine vault path for git execution.";
       const status = execSync("git status -s", {
         cwd: basePath,
-        encoding: "utf-8",
+        encoding: "utf-8"
       });
       return status
         ? `### 📦 Git Status\n\n\`\`\`text\n${status}\n\`\`\``
@@ -314,7 +314,7 @@ export class CommunityPluginsManager {
       const diff = execSync("git diff", { cwd: basePath, encoding: "utf-8" });
       const cachedDiff = execSync("git diff --cached", {
         cwd: basePath,
-        encoding: "utf-8",
+        encoding: "utf-8"
       });
       const fullDiff = `${cachedDiff}\n${diff}`.trim();
 
