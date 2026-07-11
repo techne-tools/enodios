@@ -1,6 +1,6 @@
-import { Notice, TFile } from 'obsidian';
+import { Notice, TFile } from "obsidian";
 
-import type { Plugin } from './Plugin.ts';
+import type { Plugin } from "./Plugin.ts";
 
 export interface Slide {
   /** 0-indexed slide number */
@@ -54,8 +54,8 @@ export class SlidesManager {
   public parseContent(content: string): Slide[] {
     // Strip leading frontmatter block
     let body = content;
-    if (body.startsWith('---\n')) {
-      const closingIdx = body.indexOf('\n---\n', 4);
+    if (body.startsWith("---\n")) {
+      const closingIdx = body.indexOf("\n---\n", 4);
       if (closingIdx !== -1) {
         body = body.slice(closingIdx + 5);
       }
@@ -72,7 +72,7 @@ export class SlidesManager {
           charCount: trimmed.length,
           content: trimmed,
           index: idx,
-          title: titleMatch ? titleMatch[1]! : null
+          title: titleMatch ? titleMatch[1]! : null,
         };
       })
       .filter((s) => s.content.length > 0);
@@ -84,7 +84,7 @@ export class SlidesManager {
    */
   public async generateSlidesFromNotes(
     sources: TFile[],
-    title: string
+    title: string,
   ): Promise<string> {
     const sections: string[] = [`# ${title}`];
 
@@ -92,8 +92,8 @@ export class SlidesManager {
       const content = await this.plugin.app.vault.read(file);
       // Strip frontmatter
       let body = content;
-      if (body.startsWith('---\n')) {
-        const closingIdx = body.indexOf('\n---\n', 4);
+      if (body.startsWith("---\n")) {
+        const closingIdx = body.indexOf("\n---\n", 4);
         if (closingIdx !== -1) {
           body = body.slice(closingIdx + 5);
         }
@@ -106,7 +106,7 @@ export class SlidesManager {
       sections.push(slideContent);
     }
 
-    return sections.join('\n\n---\n\n') + '\n';
+    return sections.join("\n\n---\n\n") + "\n";
   }
 
   /**
@@ -117,18 +117,18 @@ export class SlidesManager {
     const lines = [
       `--- Slides: ${file.basename} ---`,
       `Total slides: ${slides.length} (${totalChars} total characters)`,
-      ''
+      "",
     ];
 
     for (const slide of slides) {
-      const title = slide.title ?? '(no title)';
+      const title = slide.title ?? "(no title)";
       lines.push(
-        `  Slide ${slide.index + 1}: "${title}" — ${slide.charCount} chars`
+        `  Slide ${slide.index + 1}: "${title}" — ${slide.charCount} chars`,
       );
     }
 
-    lines.push('', '------------------------------');
-    return lines.join('\n');
+    lines.push("", "------------------------------");
+    return lines.join("\n");
   }
 
   /**
@@ -140,9 +140,9 @@ export class SlidesManager {
     const { app } = this.plugin;
 
     // Reveal the file first in a markdown leaf
-    const leaves = app.workspace.getLeavesOfType('markdown');
+    const leaves = app.workspace.getLeavesOfType("markdown");
     const targetLeaf = leaves.find(
-      (l) => (l.view as { file?: TFile }).file?.path === file.path
+      (l) => (l.view as { file?: TFile }).file?.path === file.path,
     );
 
     if (!targetLeaf) {
@@ -153,17 +153,19 @@ export class SlidesManager {
     }
 
     // Small delay to let the view render before triggering presentation mode
-    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 150);
+    });
 
     // Try triggering Obsidian's built-in Slides command
     const commandsApp = app as unknown as {
       commands?: { executeCommandById(id: string): boolean };
     };
-    const executed = commandsApp.commands?.executeCommandById('slides:start');
+    const executed = commandsApp.commands?.executeCommandById("slides:start");
 
     if (!executed) {
       new Notice(
-        'Slides core plugin does not appear to be enabled. Enable it in Settings → Core plugins → Slides.'
+        "Slides core plugin does not appear to be enabled. Enable it in Settings → Core plugins → Slides.",
       );
     }
   }

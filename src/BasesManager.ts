@@ -1,17 +1,17 @@
-import { Notice, TFile } from 'obsidian';
+import { Notice, TFile, stringifyYaml } from "obsidian";
 
-import type { Plugin } from './Plugin.ts';
+import type { Plugin } from "./Plugin.ts";
 
 /**
  * Parsed representation of an Obsidian Bases (.base) YAML file.
  */
 export interface BaseView {
-  type: 'cards' | 'list' | 'map' | 'table';
+  type: "cards" | "list" | "map" | "table";
   name?: string;
   limit?: number;
   order?: string[];
   filters?: unknown;
-  groupBy?: { property: string; direction?: 'ASC' | 'DESC' };
+  groupBy?: { property: string; direction?: "ASC" | "DESC" };
   summaries?: Record<string, string>;
 }
 
@@ -56,7 +56,7 @@ export class BasesManager {
   public listBases(): TFile[] {
     return this.plugin.app.vault
       .getFiles()
-      .filter((f) => f.extension === 'base');
+      .filter((f) => f.extension === "base");
   }
 
   /**
@@ -64,13 +64,13 @@ export class BasesManager {
    * Returns null on read/parse error.
    */
   public async parseBase(file: TFile): Promise<BaseFile | null> {
-    if (file.extension !== 'base') {
+    if (file.extension !== "base") {
       return null;
     }
     try {
       const raw = await this.plugin.app.vault.read(file);
       // Use Obsidian's built-in YAML parser (available globally in plugin context)
-      const { parseYaml } = await import('obsidian');
+      const { parseYaml } = await import("obsidian");
       return parseYaml(raw) as BaseFile;
     } catch (err) {
       this.plugin.debug.error(`Failed to parse base file: ${file.path}`, err);
@@ -85,19 +85,19 @@ export class BasesManager {
     const lines: string[] = [`--- Base: ${file.basename} ---`];
 
     if (base.formulas && Object.keys(base.formulas).length > 0) {
-      lines.push(`Formulas: ${Object.keys(base.formulas).join(', ')}`);
+      lines.push(`Formulas: ${Object.keys(base.formulas).join(", ")}`);
     }
 
     if (base.views && base.views.length > 0) {
       lines.push(`Views (${base.views.length}):`);
       for (const view of base.views) {
-        const name = view.name ?? '(unnamed)';
-        const cols = view.order ? ` — columns: ${view.order.join(', ')}` : '';
-        const limit = view.limit !== undefined ? ` — limit: ${view.limit}` : '';
+        const name = view.name ?? "(unnamed)";
+        const cols = view.order ? ` — columns: ${view.order.join(", ")}` : "";
+        const limit = view.limit !== undefined ? ` — limit: ${view.limit}` : "";
         lines.push(`  [${view.type}] ${name}${cols}${limit}`);
       }
     } else {
-      lines.push('Views: none defined');
+      lines.push("Views: none defined");
     }
 
     if (base.filters) {
@@ -105,12 +105,12 @@ export class BasesManager {
     }
 
     lines.push(
-      '',
-      'To create or modify a .base file, write valid YAML with `views`, `filters`, `formulas`, and `properties` keys.',
-      '------------------------------'
+      "",
+      "To create or modify a .base file, write valid YAML with `views`, `filters`, `formulas`, and `properties` keys.",
+      "------------------------------",
     );
 
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   /**
@@ -118,7 +118,6 @@ export class BasesManager {
    * Pure function — does not write to the vault.
    */
   public generateBase(config: Omit<BaseFile, never>): string {
-    const { stringifyYaml } = require('obsidian') as typeof import('obsidian');
     return stringifyYaml(config);
   }
 
