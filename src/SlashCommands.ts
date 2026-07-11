@@ -501,7 +501,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         }
         const found = await plugin.outlineManager.navigateToHeading(
           activeFile,
-          rest,
+          rest
         );
         return found
           ? `Navigated to heading **${rest}** in ${activeFile.basename}.`
@@ -520,7 +520,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
       return result;
     },
-    name: "outline",
+    name: "outline"
   },
   {
     description:
@@ -544,7 +544,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         }
         const result = await plugin.noteComposerManager.splitNoteAtHeading(
           activeFile,
-          rest,
+          rest
         );
         if (!result) {
           return `Failed to split note at heading "${rest}".`;
@@ -575,7 +575,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         }
         const merged = await plugin.noteComposerManager.mergeNotes(
           sources,
-          destPath,
+          destPath
         );
         if (!merged) {
           return `Merge failed. Ensure destination "${destPath}" does not already exist.`;
@@ -589,7 +589,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return "Usage:\n* `/compose split <heading>` — Split active note at heading\n* `/compose merge <path1> <path2> ... -> <destination>` — Merge notes\n* `/compose extract` — See command palette for selection extraction";
     },
-    name: "compose",
+    name: "compose"
   },
   {
     description:
@@ -640,7 +640,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return "Usage:\n* `/bases list` — List all .base files\n* `/bases read <path>` — Read a base file into context\n* `/bases create <name>` — Prompt Hermes to generate a base file";
     },
-    name: "bases",
+    name: "bases"
   },
   {
     description:
@@ -695,7 +695,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
           height: 200,
           text: label,
           type: nodeType,
-          width: 400,
+          width: 400
         });
         if (!node) {
           return "Failed to add node to canvas.";
@@ -705,7 +705,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return "Usage:\n* `/canvas` or `/canvas read [path]` — Read canvas into context\n* `/canvas list` — List all canvas files\n* `/canvas add-node <type> <label>` — Add a node to the active canvas";
     },
-    name: "canvas",
+    name: "canvas"
   },
   {
     description:
@@ -755,7 +755,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return "Usage:\n* `/slides read` — Summarize the active slides note\n* `/slides generate [title]` — Prompt to generate a presentation\n* `/slides present` — Launch Slides presentation mode";
     },
-    name: "slides",
+    name: "slides"
   },
   {
     description:
@@ -771,7 +771,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       if (sub === "list" || !sub) {
         const templates = plugin.noteTemplateManager.listNoteTemplates();
         return plugin.noteTemplateManager.formatTemplatesListForContext(
-          templates,
+          templates
         );
       }
 
@@ -805,7 +805,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       return "Usage:\n* `/note-template list` — List all note templates\n* `/note-template read <name>` — Read a template into context\n* `/note-template insert <name>` — Insert a template into the active note";
     },
-    name: "note-template",
+    name: "note-template"
   },
   {
     description: "Execute a Dataview query. Usage: /dataview <query>",
@@ -821,10 +821,10 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       const sourcePath = activeFile ? activeFile.path : "";
       return plugin.communityPluginsManager.executeDataviewQuery(
         query,
-        sourcePath,
+        sourcePath
       );
     },
-    name: "dataview",
+    name: "dataview"
   },
   {
     description:
@@ -844,7 +844,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         if (!activeFile) return "No active note to insert the template into.";
         return plugin.communityPluginsManager.insertTemplaterTemplate(
           templateName,
-          activeFile,
+          activeFile
         );
       }
       if (sub === "scripts") {
@@ -855,7 +855,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
       return "Usage:\n* `/templater insert <name>`\n* `/templater scripts`\n* `/templater generate`";
     },
-    name: "templater",
+    name: "templater"
   },
   {
     description:
@@ -875,7 +875,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
       return "Usage: `/excalidraw read <path>`";
     },
-    name: "excalidraw",
+    name: "excalidraw"
   },
   {
     description:
@@ -896,7 +896,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
       return "Usage:\n* `/forge validate` — Read Forge schemas into context\n* `/forge patch <description>` — Ask Hermes to generate a Forge patch";
     },
-    name: "forge",
+    name: "forge"
   },
   {
     description:
@@ -904,7 +904,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     execute: async (plugin) => {
       return plugin.communityPluginsManager.getLazyLoaderSuggestions();
     },
-    name: "lazyloader",
+    name: "lazyloader"
   },
   {
     description:
@@ -925,7 +925,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
       return "Usage:\n* `/git status` — View git status\n* `/git commit [message]` — Generate a commit message based on diff\n* `/git push` — Instruct Hermes to push changes";
     },
-    name: "git",
+    name: "git"
   },
   {
     description: "Run the Obsidian Linter on the active file. Usage: /lint",
@@ -935,7 +935,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
       return plugin.communityPluginsManager.lintActiveFile();
     },
-    name: "lint",
+    name: "lint"
   },
   {
     description: "Insert an Admonition block. Usage: /admonition insert <type>",
@@ -951,7 +951,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
       return "Usage: `/admonition insert <type>`";
     },
-    name: "admonition",
+    name: "admonition"
   },
   {
     description: "Advanced Tables tools. Usage: /table [generate | format]",
@@ -967,7 +967,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
       return "Usage:\n* `/table generate`\n* `/table format`";
     },
-    name: "table",
+    name: "table"
   },
   {
     description: "Format the active file with Prettier. Usage: /prettier",
@@ -977,14 +977,14 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
       return plugin.communityPluginsManager.formatWithPrettier();
     },
-    name: "prettier",
+    name: "prettier"
   },
   {
     description: "Make.md tools. Usage: /makemd",
     execute: async () => {
       return "To integrate with make.md, ask Hermes:\n\n> Please structure this content using make.md Contexts or Spaces format.";
     },
-    name: "makemd",
+    name: "makemd"
   },
 ];
 
@@ -1029,7 +1029,7 @@ export function getSlashCommands(): SlashCommand[] {
  * Kept for API compatibility.
  */
 export async function getToolSlashCommands(
-  _plugin: Plugin,
+  _plugin: Plugin
 ): Promise<SlashCommand[]> {
   return cachedToolCommands;
 }
@@ -1040,7 +1040,7 @@ export async function getToolSlashCommands(
  * Returns the command and remaining args, or null if not a slash command.
  */
 export function parseSlashCommand(
-  message: string,
+  message: string
 ): { args: string; command: SlashCommand } | null {
   const trimmed = message.trim();
   if (!trimmed.startsWith("/")) {
@@ -1054,7 +1054,7 @@ export function parseSlashCommand(
   const allCommands = [
     ...BUILT_IN_COMMANDS,
     ...customCommands,
-    ...cachedToolCommands,
+    ...cachedToolCommands
   ];
   const command = allCommands.find((cmd) => cmd.name === name);
   if (!command) {

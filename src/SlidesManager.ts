@@ -72,7 +72,7 @@ export class SlidesManager {
           charCount: trimmed.length,
           content: trimmed,
           index: idx,
-          title: titleMatch ? titleMatch[1]! : null,
+          title: titleMatch ? titleMatch[1]! : null
         };
       })
       .filter((s) => s.content.length > 0);
@@ -84,7 +84,7 @@ export class SlidesManager {
    */
   public async generateSlidesFromNotes(
     sources: TFile[],
-    title: string,
+    title: string
   ): Promise<string> {
     const sections: string[] = [`# ${title}`];
 
@@ -117,13 +117,13 @@ export class SlidesManager {
     const lines = [
       `--- Slides: ${file.basename} ---`,
       `Total slides: ${slides.length} (${totalChars} total characters)`,
-      "",
+      ""
     ];
 
     for (const slide of slides) {
       const title = slide.title ?? "(no title)";
       lines.push(
-        `  Slide ${slide.index + 1}: "${title}" — ${slide.charCount} chars`,
+        `  Slide ${slide.index + 1}: "${title}" — ${slide.charCount} chars`
       );
     }
 
@@ -142,7 +142,7 @@ export class SlidesManager {
     // Reveal the file first in a markdown leaf
     const leaves = app.workspace.getLeavesOfType("markdown");
     const targetLeaf = leaves.find(
-      (l) => (l.view as { file?: TFile }).file?.path === file.path,
+      (l) => (l.view as { file?: TFile }).file?.path === file.path
     );
 
     if (!targetLeaf) {
@@ -165,7 +165,7 @@ export class SlidesManager {
 
     if (!executed) {
       new Notice(
-        "Slides core plugin does not appear to be enabled. Enable it in Settings → Core plugins → Slides.",
+        "Slides core plugin does not appear to be enabled. Enable it in Settings → Core plugins → Slides."
       );
     }
   }
