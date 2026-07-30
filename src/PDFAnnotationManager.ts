@@ -99,7 +99,7 @@ export class PDFAnnotationManager {
               if (Math.abs(a.y - b.y) > tolerance) {
                 return b.y - a.y; // top to bottom
               }
-              return a.x - a.x; // left to right
+              return a.x - b.x; // left to right
             });
 
             text = overlapping.map((it: { x: number; y: number; width: number; height: number; str: string }) => it.str).join(' ').replace(/\s+/g, ' ').trim();

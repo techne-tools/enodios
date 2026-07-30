@@ -45,6 +45,9 @@ function createMockPlugin(overrides?: Partial<Plugin>): Plugin {
       metadataCache: {
         getFileCache: vi.fn().mockReturnValue(null),
       },
+      fileManager: {
+        renameFile: vi.fn(),
+      },
     },
     settings: {
       chatSaveFolder: 'hermes',
@@ -259,6 +262,60 @@ How are you?
       const result = await vaultManager.updateConversation('hermes/missing.md', [], 'Title');
 
       expect(result).toBe(false);
+    });
+
+    it('should rename file when orgMode is by-project and newPath differs from current path', async () => {
+      const { TFile, TFolder } = await import('obsidian');
+      plugin.settings.conversationOrganization = 'by-project';
+
+      const initialFile = new TFile('hermes/general/my-chat-2023-11-14-1700000000000.md');
+      initialFile.stat = { ctime: 1700000000000, mtime: 1700000000000 };
+
+      const movedFile = new TFile('hermes/project-beta/my-chat-2023-11-14-1700000000000.md');
+
+      const messages: ChatMessage[] = [
+        { content: 'Working on #project-beta feature', role: 'user', timestamp: Date.now() },
+      ];
+
+      plugin.app.vault.getAbstractFileByPath = vi.fn((path: string) => {
+        if (path === 'hermes/general/my-chat-2023-11-14-1700000000000.md') return initialFile;
+        if (path === 'hermes/project-beta/my-chat-2023-11-14-1700000000000.md') return movedFile;
+        if (path === 'hermes/project-beta') return new TFolder('hermes/project-beta');
+        return null;
+      });
+      plugin.app.vault.createFolder = vi.fn().mockResolvedValue(new TFolder('hermes/project-beta'));
+      plugin.app.vault.modify = vi.fn().mockResolvedValue(undefined);
+      plugin.app.fileManager.renameFile = vi.fn().mockResolvedValue(undefined);
+
+      const result = await vaultManager.updateConversation('hermes/general/my-chat-2023-11-14-1700000000000.md', messages, 'My Chat');
+
+      expect(result).toBe(true);
+      expect(plugin.app.fileManager.renameFile).toHaveBeenCalledWith(
+        initialFile,
+        'hermes/project-beta/my-chat-2023-11-14-1700000000000.md'
+      );
+      expect(plugin.app.vault.modify).toHaveBeenCalledWith(movedFile, expect.stringContaining('My Chat'));
+    });
+
+    it('should not rename file when newPath matches current path', async () => {
+      const { TFile } = await import('obsidian');
+      plugin.settings.conversationOrganization = 'by-project';
+
+      const initialFile = new TFile('hermes/general/my-chat-2023-11-14-1700000000000.md');
+      initialFile.stat = { ctime: 1700000000000, mtime: 1700000000000 };
+
+      const messages: ChatMessage[] = [
+        { content: 'No project tag here', role: 'user', timestamp: Date.now() },
+      ];
+
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(initialFile);
+      plugin.app.vault.modify = vi.fn().mockResolvedValue(undefined);
+
+      const result = await vaultManager.updateConversation('hermes/general/my-chat-2023-11-14-1700000000000.md', messages, 'My Chat');
+
+      expect(result).toBe(true);
+      expect(plugin.app.fileManager.renameFile).not.toHaveBeenCalled();
+      expect(plugin.app.vault.modify).toHaveBeenCalledWith(initialFile, expect.stringContaining('My Chat'));
     });
   });
 

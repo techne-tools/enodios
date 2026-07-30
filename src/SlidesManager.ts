@@ -52,8 +52,9 @@ export class SlidesManager {
    * Parses raw markdown content into slides. Pure function for testability.
    */
   public parseContent(content: string): Slide[] {
+    const normalized = content.replace(/\r\n/g, '\n');
     // Strip leading frontmatter block
-    let body = content;
+    let body = normalized;
     if (body.startsWith("---\n")) {
       const closingIdx = body.indexOf("\n---\n", 4);
       if (closingIdx !== -1) {
@@ -79,8 +80,8 @@ export class SlidesManager {
   }
 
   /**
-   * Generates a Slides markdown document from an array of source notes.
-   * Each note becomes its own slide section; the document opens with a title slide.
+   * @param sources - TFile array in the order they should appear in the output.
+   * @param title - The title of the presentation.
    */
   public async generateSlidesFromNotes(
     sources: TFile[],
@@ -90,8 +91,9 @@ export class SlidesManager {
 
     for (const file of sources) {
       const content = await this.plugin.app.vault.read(file);
+      const normalized = content.replace(/\r\n/g, '\n');
       // Strip frontmatter
-      let body = content;
+      let body = normalized;
       if (body.startsWith("---\n")) {
         const closingIdx = body.indexOf("\n---\n", 4);
         if (closingIdx !== -1) {

@@ -80,6 +80,9 @@ export class HermesApiClient implements ChatClient {
    * No-op for API client — connection is stateless.
    */
   public async connect(): Promise<void> {
+    if (!this.isReady()) {
+      return;
+    }
     if (this.isConnecting) {
       return;
     }

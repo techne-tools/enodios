@@ -314,15 +314,33 @@ export class VaultManager {
    * Update an existing conversation file.
    */
   public async updateConversation(filePath: string, messages: ChatMessage[], title?: string, allowedTools: null | string[] = null): Promise<boolean> {
-    const file = this.vault.getAbstractFileByPath(filePath);
-    if (!(file instanceof TFile)) {
+    const abstractFile = this.vault.getAbstractFileByPath(filePath);
+    if (!(abstractFile instanceof TFile)) {
       console.warn(`[Hermes] updateConversation: file not found or not a TFile: ${filePath}`);
       return false;
     }
+    let file: TFile = abstractFile;
 
     try {
       const conversationTitle = title || 'Conversation';
       const content = this.messagesToMarkdown(messages, conversationTitle, allowedTools);
+
+      const orgMode = this.plugin.settings.conversationOrganization ?? 'flat';
+      if (orgMode === 'by-project') {
+        const newPath = this.generateFilePath(conversationTitle, file.stat.ctime, messages);
+        if (newPath !== file.path) {
+          const folderPath = newPath.split('/').slice(0, -1).join('/');
+          if (folderPath) {
+            await this.ensureFolderExists(folderPath);
+          }
+          await this.plugin.app.fileManager.renameFile(file, newPath);
+          const movedFile = this.vault.getAbstractFileByPath(newPath);
+          if (movedFile instanceof TFile) {
+            file = movedFile;
+          }
+        }
+      }
+
       await this.vault.modify(file, content);
       return true;
     } catch (error) {
@@ -362,7 +380,7 @@ export class VaultManager {
     // Support folder organization modes
     const orgMode = this.plugin.settings.conversationOrganization ?? 'flat';
     const validModes = ['flat', 'by-date', 'by-project'] as const;
-    const validatedMode = validModes.includes(orgMode as any) ? orgMode : 'flat';
+    const validatedMode = (validModes as readonly string[]).includes(orgMode) ? orgMode : 'flat';
 
     if (validatedMode === 'by-date') {
       return `${folder}/${yearMonth}/${safeTitle}-${dateStr}-${timestamp}.md`;
