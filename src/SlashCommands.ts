@@ -921,9 +921,9 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         return plugin.communityPluginsManager.getGitCommitPrompt(message);
       }
       if (sub === "push") {
-        return "To push changes, ask Hermes:\n\n> Please run `git push` to upload my latest commits.";
+        return plugin.communityPluginsManager.runGitPush();
       }
-      return "Usage:\n* `/git status` — View git status\n* `/git commit [message]` — Generate a commit message based on diff\n* `/git push` — Instruct Hermes to push changes";
+      return "Usage:\n* `/git status` — View git status\n* `/git commit [message]` — Generate a commit message based on diff\n* `/git push` — Run git push";
     },
     name: "git"
   },
@@ -939,15 +939,16 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
   {
     description: "Insert an Admonition block. Usage: /admonition insert <type>",
-    execute: async (_plugin, args) => {
-      const parts = args.trim().split(/\s+(.*)/, 2);
+    execute: async (plugin, args) => {
+      const parts = args.trim().split(/\s+/);
       const sub = (parts[0] ?? "").toLowerCase();
-      const type = (parts[1] ?? "").trim();
+      const type = parts[1] ?? "";
 
       if (sub === "insert") {
         if (!type)
-          return "Please specify a type. Example: `/admonition insert ad-note`";
-        return `To insert an Admonition, ask Hermes:\n\n> Please format the following thought as an \`${type}\` Admonition block: [your text]`;
+          return "Please specify a type. Example: `/admonition insert note`";
+        const title = parts.slice(2).join(" ").trim();
+        return plugin.communityPluginsManager.insertAdmonition(type, title);
       }
       return "Usage: `/admonition insert <type>`";
     },

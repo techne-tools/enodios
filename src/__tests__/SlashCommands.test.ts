@@ -276,4 +276,37 @@ describe('SlashCommands', () => {
       expect(result).not.toContain('\nLine 2');
     });
   });
+
+  describe('git & admonition commands', () => {
+    let mockPlugin: Plugin;
+
+    beforeEach(() => {
+      mockPlugin = {
+        communityPluginsManager: {
+          runGitPush: vi.fn().mockReturnValue('Git push result'),
+          insertAdmonition: vi.fn().mockReturnValue('Admonition inserted')
+        }
+      } as unknown as Plugin;
+    });
+
+    it('should delegate /git push to communityPluginsManager.runGitPush', async () => {
+      const gitCmd = getSlashCommands().find((c) => c.name === 'git')!;
+      const result = await gitCmd.execute(mockPlugin, 'push');
+      expect(mockPlugin.communityPluginsManager.runGitPush).toHaveBeenCalled();
+      expect(result).toBe('Git push result');
+    });
+
+    it('should require a type for /admonition insert', async () => {
+      const admCmd = getSlashCommands().find((c) => c.name === 'admonition')!;
+      const result = await admCmd.execute(mockPlugin, 'insert');
+      expect(result).toBe('Please specify a type. Example: `/admonition insert note`');
+    });
+
+    it('should delegate /admonition insert to communityPluginsManager.insertAdmonition', async () => {
+      const admCmd = getSlashCommands().find((c) => c.name === 'admonition')!;
+      const result = await admCmd.execute(mockPlugin, 'insert note My Title');
+      expect(mockPlugin.communityPluginsManager.insertAdmonition).toHaveBeenCalledWith('note', 'My Title');
+      expect(result).toBe('Admonition inserted');
+    });
+  });
 });

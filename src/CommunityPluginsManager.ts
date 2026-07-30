@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { TFile } from "obsidian";
+import { MarkdownView, TFile } from "obsidian";
 import type { Plugin } from "./Plugin.ts";
 
 interface DataviewQueryResult {
@@ -334,6 +334,34 @@ export class CommunityPluginsManager {
     } catch (e) {
       return `Git diff failed: ${e instanceof Error ? e.message : String(e)}`;
     }
+  }
+
+  public runGitPush(): string {
+    try {
+      const adapter = this.plugin.app.vault.adapter as PathCapableAdapter;
+      const basePath = adapter.getBasePath ? adapter.getBasePath() : "";
+      if (!basePath) return "Unable to determine vault path for git execution.";
+      const output = execSync("git push", {
+        cwd: basePath,
+        encoding: "utf-8"
+      });
+      return `### 🚀 Git Push\n\n\`\`\`text\n${output || "Success (no output)"}\n\`\`\``;
+    } catch (e) {
+      return `Git push failed: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
+  // --- Admonitions ---
+  public insertAdmonition(type: string, title?: string): string {
+    const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView) {
+      return "No active note editor found. Open a note first.";
+    }
+    const editor = activeView.editor;
+    const header = title ? ` [!${type}] ${title}` : ` [!${type}]`;
+    const block = `> ${header}\n> \n`;
+    editor.replaceSelection(block);
+    return `Inserted **${type}** Admonition at cursor in **${activeView.file?.basename}**.`;
   }
 
   // --- Linter ---
