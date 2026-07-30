@@ -187,6 +187,36 @@ Hello! How can I help?
       expect(result?.messages[1]?.content).toBe('Hello! How can I help?');
     });
 
+    it('should parse messages containing horizontal rules correctly without discarding content', async () => {
+      const { TFile } = await import('obsidian');
+      const mockContent = `---
+id: conv-123
+title: Test Chat
+createdAt: 1700000000000
+updatedAt: 1700000001000
+type: hermes-conversation
+---
+
+## **You** — 11/14/2023, 12:00:00 PM
+
+Hello there
+
+---
+
+How are you?
+`;
+
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(new TFile('hermes/test.md'));
+      plugin.app.vault.read = vi.fn().mockResolvedValue(mockContent);
+
+      const result = await vaultManager.loadConversation('hermes/test.md');
+
+      expect(result).not.toBeNull();
+      expect(result?.messages).toHaveLength(1);
+      expect(result?.messages[0]?.role).toBe('user');
+      expect(result?.messages[0]?.content).toBe("Hello there\n\n---\n\nHow are you?");
+    });
+
     it('should return null for non-existent file', async () => {
       plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(null);
 
@@ -371,6 +401,106 @@ Hello! How can I help?
       const result = await vaultManager.updateNote('missing.md', 'content');
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('conversation organization and tag resolution', () => {
+    it('should save conversation under by-date folder structure when configured', async () => {
+      const { TFolder } = await import('obsidian');
+      plugin.settings.conversationOrganization = 'by-date';
+      const messages: ChatMessage[] = [
+        { id: 'msg-1', content: 'Hello', role: 'user', timestamp: 1700000000000 },
+      ];
+
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(new TFolder('hermes'));
+      plugin.app.vault.create = vi.fn().mockResolvedValue({ path: 'hermes/2023-11/test-2023-11-14-1700000000000.md' });
+
+      const result = await vaultManager.saveConversation(messages, 'Test Chat');
+
+      expect(result).not.toBeNull();
+      const callArgs = plugin.app.vault.create.mock.calls[0];
+      const filePath = callArgs?.[0] as string;
+      expect(filePath).toMatch(/^hermes\/\d{4}-\d{2}\/test-chat-/);
+    });
+
+    it('should resolve project folder from active file frontmatter tags', async () => {
+      const { TFolder, TFile } = await import('obsidian');
+      plugin.settings.conversationOrganization = 'by-project';
+      const mockActiveFile = new TFile('notes/active.md');
+      (plugin.app.workspace.getActiveFile as any).mockReturnValue(mockActiveFile);
+      (plugin.app.metadataCache.getFileCache as any).mockReturnValue({
+        frontmatter: { tags: ['#Project-Alpha/Feature'] },
+      });
+
+      const messages: ChatMessage[] = [
+        { id: 'msg-1', content: 'Hello', role: 'user', timestamp: Date.now() },
+      ];
+
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(new TFolder('hermes'));
+      plugin.app.vault.create = vi.fn().mockResolvedValue({ path: 'hermes/project-alpha/feature/test.md' });
+
+      await vaultManager.saveConversation(messages, 'Test');
+
+      const filePath = plugin.app.vault.create.mock.calls[0]?.[0] as string;
+      expect(filePath).toMatch(/^hermes\/project-alpha\/feature\/test-/);
+    });
+
+    it('should resolve project folder from active file cache tags if frontmatter is missing', async () => {
+      const { TFolder, TFile } = await import('obsidian');
+      plugin.settings.conversationOrganization = 'by-project';
+      const mockActiveFile = new TFile('notes/active.md');
+      (plugin.app.workspace.getActiveFile as any).mockReturnValue(mockActiveFile);
+      (plugin.app.metadataCache.getFileCache as any).mockReturnValue({
+        tags: [{ tag: '#Deep_Learning' }],
+      });
+
+      const messages: ChatMessage[] = [
+        { id: 'msg-1', content: 'Hello', role: 'user', timestamp: Date.now() },
+      ];
+
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(new TFolder('hermes'));
+      plugin.app.vault.create = vi.fn().mockResolvedValue({ path: 'hermes/deep_learning/test.md' });
+
+      await vaultManager.saveConversation(messages, 'Test');
+
+      const filePath = plugin.app.vault.create.mock.calls[0]?.[0] as string;
+      expect(filePath).toMatch(/^hermes\/deep_learning\/test-/);
+    });
+
+    it('should resolve project folder from message content tags when no active file tag exists', async () => {
+      const { TFolder } = await import('obsidian');
+      plugin.settings.conversationOrganization = 'by-project';
+      (plugin.app.workspace.getActiveFile as any).mockReturnValue(null);
+
+      const messages: ChatMessage[] = [
+        { id: 'msg-1', content: 'Let us work on #backend-refactor today!', role: 'user', timestamp: Date.now() },
+      ];
+
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(new TFolder('hermes'));
+      plugin.app.vault.create = vi.fn().mockResolvedValue({ path: 'hermes/backend-refactor/test.md' });
+
+      await vaultManager.saveConversation(messages, 'Test');
+
+      const filePath = plugin.app.vault.create.mock.calls[0]?.[0] as string;
+      expect(filePath).toMatch(/^hermes\/backend-refactor\/test-/);
+    });
+
+    it('should fallback to general folder when no tag is found anywhere', async () => {
+      const { TFolder } = await import('obsidian');
+      plugin.settings.conversationOrganization = 'by-project';
+      (plugin.app.workspace.getActiveFile as any).mockReturnValue(null);
+
+      const messages: ChatMessage[] = [
+        { id: 'msg-1', content: 'No tags in this conversation', role: 'user', timestamp: Date.now() },
+      ];
+
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(new TFolder('hermes'));
+      plugin.app.vault.create = vi.fn().mockResolvedValue({ path: 'hermes/general/test.md' });
+
+      await vaultManager.saveConversation(messages, 'Test');
+
+      const filePath = plugin.app.vault.create.mock.calls[0]?.[0] as string;
+      expect(filePath).toMatch(/^hermes\/general\/test-/);
     });
   });
 });

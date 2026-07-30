@@ -285,7 +285,7 @@ export class VaultManager {
 
     try {
       const conversationTitle = title || 'Conversation';
-      const filePath = this.generateFilePath(conversationTitle, Date.now());
+      const filePath = this.generateFilePath(conversationTitle, Date.now(), messages);
       const content = this.messagesToMarkdown(messages, conversationTitle, allowedTools);
 
       // Ensure the full folder path (including date subfolders) exists before creating the file
@@ -353,7 +353,7 @@ export class VaultManager {
   /**
    * Generate a unique file path for a conversation.
    */
-  private generateFilePath(title: string, timestamp: number): string {
+  private generateFilePath(title: string, timestamp: number, messages?: ChatMessage[]): string {
     const folder = this.getSaveFolder();
     const safeTitle = this.sanitizeFilename(title) || 'conversation';
     const dateStr = new Date(timestamp).toISOString().split('T')[0] ?? '';
@@ -362,13 +362,55 @@ export class VaultManager {
     // Support folder organization modes
     const orgMode = this.plugin.settings.conversationOrganization ?? 'flat';
     const validModes = ['flat', 'by-date', 'by-project'] as const;
-    const validatedMode = validModes.includes(orgMode) ? orgMode : 'flat';
+    const validatedMode = validModes.includes(orgMode as any) ? orgMode : 'flat';
 
     if (validatedMode === 'by-date') {
       return `${folder}/${yearMonth}/${safeTitle}-${dateStr}-${timestamp}.md`;
     }
 
+    if (validatedMode === 'by-project') {
+      const projectDir = this.getProjectFolder(messages);
+      return `${folder}/${projectDir}/${safeTitle}-${dateStr}-${timestamp}.md`;
+    }
+
     return `${folder}/${safeTitle}-${dateStr}-${timestamp}.md`;
+  }
+
+  private getProjectFolder(messages?: ChatMessage[]): string {
+    const activeFile = this.plugin.app.workspace.getActiveFile();
+    if (activeFile) {
+      const cache = this.plugin.app.metadataCache.getFileCache(activeFile);
+      const rawTags = cache?.frontmatter?.['tags'] || cache?.frontmatter?.['tag'];
+      if (rawTags) {
+        const tags = Array.isArray(rawTags) ? rawTags.map(String) : String(rawTags).split(/,\s*/);
+        const tag = tags.find((t) => t.trim());
+        if (tag) return this.cleanTagForFolder(tag);
+      }
+      if (cache?.tags && cache.tags.length > 0) {
+        const tag = cache.tags[0]?.tag;
+        if (tag) return this.cleanTagForFolder(tag);
+      }
+    }
+
+    if (messages && messages.length > 0) {
+      for (const msg of messages) {
+        const match = /#([a-zA-Z0-9_\-\/]+)/.exec(msg.content);
+        if (match?.[1]) {
+          return this.cleanTagForFolder(match[1]);
+        }
+      }
+    }
+
+    return 'general';
+  }
+
+  private cleanTagForFolder(tag: string): string {
+    return tag
+      .replace(/^#/, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9_\-\/]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .trim();
   }
 
   /**
@@ -404,8 +446,9 @@ export class VaultManager {
    * Parse markdown content back into messages.
    */
   private markdownToMessages(content: string): ChatMessage[] {
+    const normalized = content.replace(/\r\n/g, '\n');
     const messages: ChatMessage[] = [];
-    const sections = content.split(/\n---\n/);
+    const sections = normalized.split(/\n---\n/);
 
     for (const section of sections) {
       const trimmed = section.trim();
@@ -416,7 +459,13 @@ export class VaultManager {
 
       // Parse header: ## **Role** — time
       const headerMatch = MESSAGE_HEADER_REGEX.exec(trimmed);
-      if (!headerMatch) { continue; }
+      if (!headerMatch) {
+        if (messages.length > 0) {
+          const prevMsg = messages[messages.length - 1]!;
+          prevMsg.content = (prevMsg.content + '\n\n---\n\n' + trimmed).trim();
+        }
+        continue;
+      }
 
       const roleText = headerMatch[1]?.toLowerCase() ?? '';
       const role = roleText === 'you' ? 'user' : roleText === 'hermes' ? 'assistant' : 'system';
