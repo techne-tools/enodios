@@ -358,10 +358,10 @@ export class CommunityPluginsManager {
       return "No active note editor found. Open a note first.";
     }
     const editor = activeView.editor;
-    const header = title ? ` [!${type}] ${title}` : ` [!${type}]`;
+    const header = title ? `[!${type}] ${title}` : `[!${type}]`;
     const block = `> ${header}\n> \n`;
     editor.replaceSelection(block);
-    return `Inserted **${type}** Admonition at cursor in **${activeView.file?.basename}**.`;
+    return `Inserted **${type}** Admonition at cursor in **${activeView.file?.basename ?? "active note"}**.`;
   }
 
   // --- Linter ---
@@ -389,6 +389,47 @@ export class CommunityPluginsManager {
       return `Triggered Prettier formatting on **${activeFile.basename}**.`;
     }
     return "Unable to execute Obsidian commands programmatically.";
+  }
+
+  // --- Tables ---
+  public generateTable(colsStr?: string, rowsStr?: string): string {
+    const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView) {
+      return "No active note editor found. Open a note first.";
+    }
+    const parsedCols = parseInt(colsStr || "3", 10);
+    const parsedRows = parseInt(rowsStr || "2", 10);
+    const cols = isNaN(parsedCols) ? 3 : parsedCols;
+    const rows = isNaN(parsedRows) ? 2 : parsedRows;
+
+    if (cols < 1 || rows < 1) {
+      return "Columns and rows must be at least 1.";
+    }
+
+    const headerRow = "|" + Array(cols).fill(" Column ").join("|") + "|";
+    const separatorRow = "|" + Array(cols).fill(" --- ").join("|") + "|";
+    const dataRow = "|" + Array(cols).fill("   ").join("|") + "|";
+    const dataRows = Array(rows).fill(dataRow).join("\n");
+
+    const table = `${headerRow}\n${separatorRow}\n${dataRows}\n`;
+    activeView.editor.replaceSelection(table);
+    return `Generated a ${cols}x${rows} table at cursor in **${activeView.file?.basename ?? "active note"}**.`;
+  }
+
+  public formatTable(): string {
+    const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView) {
+      return "No active note editor found. Open a note first.";
+    }
+
+    const commands = (this.plugin.app as ObsidianAppWithCommands).commands;
+    if (commands && commands.executeCommandById) {
+      const executed = commands.executeCommandById("table-editor-obsidian:format-table");
+      if (executed !== false) {
+        return `Triggered Advanced Tables formatting in **${activeView.file?.basename}**.`;
+      }
+    }
+    return "Failed to trigger Advanced Tables formatting. Make sure the plugin is enabled and your cursor is inside a table.";
   }
 
   private getCommunityPlugin(pluginId: string): unknown {

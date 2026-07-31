@@ -309,4 +309,37 @@ describe('SlashCommands', () => {
       expect(result).toBe('Admonition inserted');
     });
   });
+
+  describe('table command', () => {
+    let mockPlugin: Plugin;
+
+    beforeEach(() => {
+      mockPlugin = {
+        communityPluginsManager: {
+          generateTable: vi.fn().mockReturnValue('Table generated'),
+          formatTable: vi.fn().mockReturnValue('Table formatted')
+        }
+      } as unknown as Plugin;
+    });
+
+    it('should delegate /table generate to communityPluginsManager.generateTable', async () => {
+      const tableCmd = getSlashCommands().find((c) => c.name === 'table')!;
+      const result = await tableCmd.execute(mockPlugin, 'generate 4 5');
+      expect(mockPlugin.communityPluginsManager.generateTable).toHaveBeenCalledWith('4', '5');
+      expect(result).toBe('Table generated');
+    });
+
+    it('should delegate /table format to communityPluginsManager.formatTable', async () => {
+      const tableCmd = getSlashCommands().find((c) => c.name === 'table')!;
+      const result = await tableCmd.execute(mockPlugin, 'format');
+      expect(mockPlugin.communityPluginsManager.formatTable).toHaveBeenCalled();
+      expect(result).toBe('Table formatted');
+    });
+
+    it('should return usage string when subcommand is unrecognized', async () => {
+      const tableCmd = getSlashCommands().find((c) => c.name === 'table')!;
+      const result = await tableCmd.execute(mockPlugin, '');
+      expect(result).toBe('Usage:\n* `/table generate`\n* `/table format`');
+    });
+  });
 });

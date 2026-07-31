@@ -956,15 +956,16 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
   {
     description: "Advanced Tables tools. Usage: /table [generate | format]",
-    execute: async (_plugin, args) => {
+    execute: async (plugin, args) => {
       const parts = args.trim().split(/\s+(.*)/, 2);
       const sub = (parts[0] ?? "").toLowerCase();
 
       if (sub === "generate") {
-        return "Ask Hermes:\n\n> Generate a strict Markdown table. Ensure all columns are perfectly aligned so Advanced Tables can parse it.";
+        const subArgs = parts.slice(1).join(" ").trim().split(/\s+/);
+        return plugin.communityPluginsManager.generateTable(subArgs[0], subArgs[1]);
       }
       if (sub === "format") {
-        return "Ask Hermes:\n\n> Reformat the table in the active note to be perfectly aligned for Advanced Tables.";
+        return plugin.communityPluginsManager.formatTable();
       }
       return "Usage:\n* `/table generate`\n* `/table format`";
     },
