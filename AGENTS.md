@@ -51,3 +51,18 @@ Usage notes:
 <!-- SKILLS_TABLE_END -->
 
 </skills_system>
+
+## Recommended Antigravity Customizations
+
+To optimize development, the following Antigravity plugins and Model Context Protocol (MCP) servers are recommended to be enabled globally or locally:
+
+### 1. Global/Workspace Plugins
+* **`conductor`**: Used for orchestrating Spec-Driven Development (SDD), tracking task progress, and planning new feature tracks.
+* **`nanobanana`**: Used for technical flowcharts, UI mockups, and graphic assets.
+* **`gemini-cli-security`**: Used for auditing security boundaries, testing permission sandbox policies, and dependency verification.
+* **`abc`**: Used for clipboards and cross-session communication.
+* **`superpowers`**: Used for structured debugging (`systematic-debugging`), plan-writing, and branch release checklist gates.
+
+### 2. Model Context Protocol (MCP) Servers
+* **`zotero-dev`**: Allows direct integration with local Zotero libraries to test and query bibliography/citation tools.
+* **`tavily`**: Used for automated web queries and developer documentation lookups.
