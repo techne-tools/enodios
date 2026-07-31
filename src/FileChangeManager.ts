@@ -374,6 +374,26 @@ export class FileChangeManager {
   }
 
   /**
+   * Handle active-leaf-change events by restoring inline diff decorations if the
+   * active note has a pending file change.
+   */
+  public handleActiveLeafChange(): void {
+    const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView || !activeView.file) { return; }
+
+    const change = this.changes.find(
+      (c) => c.path === activeView.file!.path && c.status === 'pending'
+    );
+    if (change) {
+      // @ts-expect-error - Accessing internal CodeMirror 6 view
+      const cmView = activeView.editor.cm as EditorView;
+      if (cmView) {
+        setTimeout(() => this.triggerInlineDiff(change, cmView), 100);
+      }
+    }
+  }
+
+  /**
    * Trigger inline diff rendering in the provided editor view.
    */
   private triggerInlineDiff(change: PendingFileChange, view: EditorView): void {

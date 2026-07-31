@@ -276,4 +276,30 @@ describe('FileChangeManager', () => {
       expect(change.newContent).toBe('line 1\nline 2');
     });
   });
+
+  describe('handleActiveLeafChange', () => {
+    it('should trigger inline diff if active view has a pending change', async () => {
+      const { TFile, MarkdownView } = await import('obsidian');
+      const file = new TFile('active.md');
+      
+      const mockCm = {
+        dispatch: vi.fn()
+      };
+      
+      const mockMarkdownView = new MarkdownView();
+      mockMarkdownView.file = file as any;
+      mockMarkdownView.editor = { cm: mockCm as any } as any;
+
+      plugin.app.workspace.getActiveViewOfType = vi.fn().mockReturnValue(mockMarkdownView);
+
+      const change = await manager.registerChange('active.md', 'content');
+      
+      vi.useFakeTimers();
+      manager.handleActiveLeafChange();
+      vi.advanceTimersByTime(100);
+      vi.useRealTimers();
+
+      expect(mockCm.dispatch).toHaveBeenCalled();
+    });
+  });
 });

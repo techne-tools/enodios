@@ -1899,7 +1899,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
       </div>
 
       {/* Pending changes and permissions panels outside scrollable area */}
-      {fileChanges.length > 0 && (
+      {fileChanges.length > 0 && settings.showPendingChangesInChat && (
         <PendingChangesPanel
           changes={fileChanges}
           onApprove={(id, contentOverride) => void plugin.fileChangeManager.approveChange(id, contentOverride)}

@@ -90,4 +90,6 @@ export class PluginSettings {
   public showTokenCount = true;
 
   public showToolUse = false;
+
+  public showPendingChangesInChat = false;
 }

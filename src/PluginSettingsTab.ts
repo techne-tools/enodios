@@ -81,6 +81,14 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         toggle.setValue(this.plugin.settings.showTokenCount);
         this.bind(toggle, 'showTokenCount');
       });
+
+    new SettingEx(containerEl)
+      .setName('Show Pending Changes in Chat')
+      .setDesc('Show the pending file changes panel in the chat view. When disabled, you can review and approve/reject edits exclusively using the inline diff view in the note editor.')
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.showPendingChangesInChat);
+        this.bind(toggle, 'showPendingChangesInChat');
+      });
   }
 
   // ─── Connection ───

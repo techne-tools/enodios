@@ -153,6 +153,12 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.registerEditorExtension(ghostTextExtension);
     this.registerEditorExtension(inlineDiffExtension);
 
+    this.registerEvent(
+      this.app.workspace.on('active-leaf-change', () => {
+        this.fileChangeManager.handleActiveLeafChange();
+      })
+    );
+
     // Add ribbon icon for Hermes chat
     const ribbonIconEl = this.addRibbonIcon('message-square', 'Open Hermes Chat', () => {
       this.openView(HERMES_CHAT_VIEW_TYPE).catch((err) => {
