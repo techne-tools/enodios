@@ -342,4 +342,41 @@ describe('SlashCommands', () => {
       expect(result).toBe('Usage:\n* `/table generate`\n* `/table format`');
     });
   });
+
+  describe('bases command', () => {
+    let mockPlugin: Plugin;
+
+    beforeEach(() => {
+      mockPlugin = {
+        app: {
+          internalPlugins: {
+            plugins: {
+              bases: { enabled: true }
+            }
+          },
+          workspace: {}
+        },
+        basesManager: {
+          createBase: vi.fn().mockResolvedValue('Created and opened Bases file: `my-base.base`'),
+          formatBaseForContext: vi.fn().mockReturnValue('formatted base'),
+          listBases: vi.fn().mockReturnValue([]),
+          parseBase: vi.fn().mockResolvedValue({})
+        }
+      } as unknown as Plugin;
+    });
+
+    it('should delegate /bases create to basesManager.createBase', async () => {
+      const basesCmd = getSlashCommands().find((c) => c.name === 'bases')!;
+      const result = await basesCmd.execute(mockPlugin, 'create custom-name');
+      expect(mockPlugin.basesManager.createBase).toHaveBeenCalledWith('custom-name');
+      expect(result).toBe('Created and opened Bases file: `my-base.base`');
+    });
+
+    it('should default name to new-base when no name provided to /bases create', async () => {
+      const basesCmd = getSlashCommands().find((c) => c.name === 'bases')!;
+      await basesCmd.execute(mockPlugin, 'create');
+      expect(mockPlugin.basesManager.createBase).toHaveBeenCalledWith('new-base');
+    });
+  });
 });
+

@@ -139,4 +139,33 @@ export class BasesManager {
       return null;
     }
   }
+
+  /**
+   * Creates a new .base file with default configuration and opens it.
+   */
+  public async createBase(name: string): Promise<string> {
+    const safeName = name.trim().replace(/\.base$/, "") || "new-base";
+    const path = `${safeName}.base`;
+
+    const config: BaseFile = {
+      views: [
+        {
+          limit: 50,
+          name: "All Notes",
+          type: "table"
+        }
+      ]
+    };
+
+    const file = await this.saveBase(path, config);
+    if (!file) {
+      return `Failed to create Bases file: \`${path}\``;
+    }
+
+    const leaf = this.plugin.app.workspace.getLeaf(false);
+    await leaf.openFile(file);
+
+    return `Created and opened Bases file: \`${path}\``;
+  }
 }
+

@@ -632,13 +632,10 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
 
       if (sub === "create") {
         const name = rest || "new-base";
-        return (
-          `To create a Bases file named **${name}.base**, ask Hermes:\n\n` +
-          `> Create a .base file at \`${name}.base\` with a table view showing all notes tagged #project, ordered by file name.`
-        );
+        return plugin.basesManager.createBase(name);
       }
 
-      return "Usage:\n* `/bases list` — List all .base files\n* `/bases read <path>` — Read a base file into context\n* `/bases create <name>` — Prompt Hermes to generate a base file";
+      return "Usage:\n* `/bases list` — List all .base files\n* `/bases read <path>` — Read a base file into context\n* `/bases create <name>` — Create a new base file";
     },
     name: "bases"
   },

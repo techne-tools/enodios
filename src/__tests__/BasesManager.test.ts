@@ -22,11 +22,16 @@ const makeMockPlugin = () =>
   ({
     app: {
       vault: {
-        create: vi.fn().mockResolvedValue({ path: 'test.base' }),
+        create: vi.fn().mockImplementation((path: string, _content: string) => Promise.resolve(makeFile(path))),
         getAbstractFileByPath: vi.fn().mockReturnValue(null),
         getFiles: vi.fn().mockReturnValue([]),
         modify: vi.fn().mockResolvedValue(undefined),
         read: vi.fn().mockResolvedValue('')
+      },
+      workspace: {
+        getLeaf: vi.fn().mockReturnValue({
+          openFile: vi.fn().mockResolvedValue(undefined)
+        })
       }
     },
     debug: { error: vi.fn() }
@@ -39,6 +44,55 @@ const makeFile = (path: string) => ({
 } as any);
 
 describe('BasesManager', () => {
+  describe('createBase', () => {
+    it('should create a new .base file with default config and open it', async () => {
+      const plugin = makeMockPlugin();
+      const manager = new BasesManager(plugin);
+      const result = await manager.createBase('my-projects');
+
+      expect(plugin.app.vault.create).toHaveBeenCalledWith(
+        'my-projects.base',
+        expect.stringContaining('All Notes')
+      );
+      const leaf = plugin.app.workspace.getLeaf(false);
+      expect(leaf.openFile).toHaveBeenCalledWith(expect.objectContaining({ path: 'my-projects.base' }));
+      expect(result).toBe('Created and opened Bases file: `my-projects.base`');
+    });
+
+    it('should strip .base extension if already provided in name', async () => {
+      const plugin = makeMockPlugin();
+      const manager = new BasesManager(plugin);
+      const result = await manager.createBase('dashboard.base');
+
+      expect(plugin.app.vault.create).toHaveBeenCalledWith(
+        'dashboard.base',
+        expect.any(String)
+      );
+      expect(result).toBe('Created and opened Bases file: `dashboard.base`');
+    });
+
+    it('should fallback to new-base when name is empty or whitespace', async () => {
+      const plugin = makeMockPlugin();
+      const manager = new BasesManager(plugin);
+      const result = await manager.createBase('   ');
+
+      expect(plugin.app.vault.create).toHaveBeenCalledWith(
+        'new-base.base',
+        expect.any(String)
+      );
+      expect(result).toBe('Created and opened Bases file: `new-base.base`');
+    });
+
+    it('should return error message if saveBase fails', async () => {
+      const plugin = makeMockPlugin();
+      (plugin.app.vault.create as any).mockRejectedValue(new Error('Write failed'));
+      const manager = new BasesManager(plugin);
+      const result = await manager.createBase('failed-base');
+
+      expect(result).toBe('Failed to create Bases file: `failed-base.base`');
+    });
+  });
+
   describe('listBases', () => {
     it('should return only .base files', () => {
       const plugin = makeMockPlugin();
