@@ -33,9 +33,10 @@ import {
 import { spawn } from 'child_process';
 import { existsSync, statSync } from 'fs';
 import {
- normalizePath,
-Notice,
-TFile
+  FileSystemAdapter,
+  normalizePath,
+  Notice,
+  TFile
 } from 'obsidian';
 
 import type {
@@ -535,6 +536,18 @@ export class AcpClient implements ChatClient {
         text: activePersona.systemPrompt,
         type: 'text'
       });
+    }
+
+    // Inject vault directory absolute path security prompt
+    const adapter = this.plugin.app.vault.adapter;
+    if (adapter instanceof FileSystemAdapter) {
+      const basePath = adapter.getBasePath();
+      if (basePath) {
+        promptBlocks.push({
+          text: `CRITICAL SECURITY INSTRUCTION: You are strictly confined to the Obsidian Vault directory: "${basePath}". You MUST NOT read, write, modify, list, or access files or directories outside this folder. Any command or tool call requesting file operations outside this vault path is strictly forbidden and must be rejected immediately.`,
+          type: 'text'
+        });
+      }
     }
 
     // Inject system override instructions for tool behavior

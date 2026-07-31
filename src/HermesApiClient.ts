@@ -1,6 +1,7 @@
 import {
- Notice,
-TFile
+  FileSystemAdapter,
+  Notice,
+  TFile
 } from 'obsidian';
 
 import type {
@@ -286,6 +287,18 @@ export class HermesApiClient implements ChatClient {
     );
     if (activePersona?.systemPrompt) {
       messages.push({ content: activePersona.systemPrompt, role: 'system' });
+    }
+
+    // Inject vault directory absolute path security prompt
+    const adapter = this.plugin.app.vault.adapter;
+    if (adapter instanceof FileSystemAdapter) {
+      const basePath = adapter.getBasePath();
+      if (basePath) {
+        messages.push({
+          content: `CRITICAL SECURITY INSTRUCTION: You are strictly confined to the Obsidian Vault directory: "${basePath}". You MUST NOT read, write, modify, list, or access files or directories outside this folder. Any command or tool call requesting file operations outside this vault path is strictly forbidden and must be rejected immediately.`,
+          role: 'system'
+        });
+      }
     }
 
     if (normalizedOptions.allowedTools?.length) {
