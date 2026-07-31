@@ -1852,8 +1852,9 @@
 
 /* CodeMirror 6 Ghost Text */
 .hermes-ghost-text {
-  color: var(--text-faint);
-  font-style: italic;
+  color: var(--text-faint) !important;
+  font-style: italic !important;
+  opacity: 0.65 !important;
 }
 
 .hermes-ghost-text[data-alternatives]::after {

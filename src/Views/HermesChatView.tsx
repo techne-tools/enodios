@@ -1187,15 +1187,38 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     }, 0);
   }, [input, contextItems, autocompleteQuery]);
 
+  const resolveActiveFile = useCallback((): TFile | null => {
+    const file = plugin.app.workspace.getActiveFile();
+    if (file) return file;
+
+    // Fallback: check most recent leaf
+    const mostRecent = plugin.app.workspace.getMostRecentLeaf();
+    if (mostRecent?.view instanceof MarkdownView && mostRecent.view.file) {
+      return mostRecent.view.file;
+    }
+
+    // Fallback 2: first open markdown leaf
+    const markdownLeaves = plugin.app.workspace.getLeavesOfType('markdown');
+    for (const leaf of markdownLeaves) {
+      if (leaf.view instanceof MarkdownView && leaf.view.file) {
+        return leaf.view.file;
+      }
+    }
+    return null;
+  }, [plugin]);
+
   const handleContextClick = useCallback(async (): Promise<void> => {
-    const activeFile = plugin.app.workspace.getActiveFile();
+    const activeFile = resolveActiveFile();
     let selectedText = '';
 
     const allViews = plugin.app.workspace.getLeavesOfType('markdown');
     for (const leaf of allViews) {
       if (leaf.view instanceof MarkdownView) {
-        selectedText = leaf.view.editor.getSelection();
-        break;
+        const sel = leaf.view.editor.getSelection();
+        if (sel) {
+          selectedText = sel;
+          break;
+        }
       }
     }
 
@@ -1275,14 +1298,14 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
         type: 'note'
       }]);
     }
-  }, [plugin, settings, contextItems]);
+  }, [plugin, settings, contextItems, resolveActiveFile]);
 
   const removeContextItem = useCallback((id: string): void => {
     setContextItems((prev) => prev.filter((item) => item.id !== id));
   }, []);
 
   const handleAttachFiles = useCallback(async (files: FileList): Promise<void> => {
-    const activeFile = plugin.app.workspace.getActiveFile();
+    const activeFile = resolveActiveFile();
     const targetFolder = activeFile?.parent?.path ?? '';
     const copied: string[] = [];
 
@@ -1359,7 +1382,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     if (copied.length > 0) {
       new Notice(`Copied ${copied.length} file(s) to vault`);
     }
-  }, [plugin, settings, contextItems]);
+  }, [plugin, settings, contextItems, resolveActiveFile]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -1466,7 +1489,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
 
   // Fetch autocomplete suggestions
   useEffect(() => {
-    if (autocompleteQuery.length === 0) {
+    if (!isAutocompleteOpen) {
       setAutocompleteSuggestions([]);
       return;
     }
@@ -1501,10 +1524,12 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     const files = vault.getMarkdownFiles();
     const queryLower = autocompleteQuery.toLowerCase();
 
-    const matches = files.filter((file) =>
-      file.path.toLowerCase().includes(queryLower)
-      || file.basename.toLowerCase().includes(queryLower)
-    );
+    const matches = queryLower === ''
+      ? files
+      : files.filter((file) =>
+          file.path.toLowerCase().includes(queryLower)
+          || file.basename.toLowerCase().includes(queryLower)
+        );
 
     const recentFiles = matches
       .map((file) => ({ file, mtime: file.stat.mtime }))
@@ -1541,7 +1566,7 @@ export function HermesChatViewComponent({ view }: HermesChatViewComponentProps):
     }
 
     setAutocompleteSuggestions(suggestions.slice(0, 5));
-  }, [autocompleteQuery, plugin]);
+  }, [autocompleteQuery, isAutocompleteOpen, plugin]);
 
   // Close autocomplete on bracket close
   useEffect(() => {

@@ -168,4 +168,3 @@ export class BasesManager {
     return `Created and opened Bases file: \`${path}\``;
   }
 }
-
