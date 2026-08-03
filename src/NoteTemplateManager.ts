@@ -1,4 +1,7 @@
-import { Notice, TFile } from 'obsidian';
+import {
+  Notice,
+  TFile
+} from 'obsidian';
 
 import type { Plugin } from './Plugin.ts';
 

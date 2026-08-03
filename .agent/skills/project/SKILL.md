@@ -25,6 +25,9 @@ Load this skill when:
   - `src/`: Core plugin code and client logic.
   - `src/Modals/`: Modal dialogs (CitationSuggestModal, TagSuggestionModal).
   - `src/Views/`: HermesChatView implementation.
+  - `src/Views/Components/`: Reusable components for HermesChatView (ChatHeader, AuditLogPanel, ChatMessageItem, MessageList).
+  - `src/Views/Hooks/`: Custom React hooks for HermesChatView (useSlashCommands, useAutocomplete).
+  - `src/__tests__/`: Unit tests for components and hooks.
   - `src/styles/`: SCSS styling and CodeMirror 6 inline diff/ghost text extensions.
   - `src/utils/`: Utility modules (contextEnhancer, blockReferences, uuid).
   - `src/__tests__/`: Vitest-based unit testing suite.

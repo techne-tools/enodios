@@ -68,7 +68,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     new SettingEx(containerEl)
       .setName('Show Tool Use')
-      .setDesc('Show a notice when the agent reads a file, searches your vault, or runs a command. Helpful for understanding what it is doing behind the scenes.')
+      .setDesc(
+        'Show a notice when the agent reads a file, searches your vault, or runs a command. Helpful for understanding what it is doing behind the scenes.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.showToolUse);
         this.bind(toggle, 'showToolUse');
@@ -84,7 +86,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     new SettingEx(containerEl)
       .setName('Show Pending Changes in Chat')
-      .setDesc('Show the pending file changes panel in the chat view. When disabled, you can review and approve/reject edits exclusively using the inline diff view in the note editor.')
+      .setDesc(
+        'Show the pending file changes panel in the chat view. When disabled, you can review and approve/reject edits exclusively using the inline diff view in the note editor.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.showPendingChangesInChat);
         this.bind(toggle, 'showPendingChangesInChat');
@@ -95,7 +99,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderConnectionSection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
       .setName('Connection Mode')
-      .setDesc('Choose how Hermes talks to your AI agent. "Local" runs on your computer (fastest, private). "Remote" connects to a server (good for teams or powerful GPUs).')
+      .setDesc(
+        'Choose how Hermes talks to your AI agent. "Local" runs on your computer (fastest, private). "Remote" connects to a server (good for teams or powerful GPUs).'
+      )
       .addDropdown((dropdown) => {
         dropdown.addOption('acp', 'Local — runs on this computer');
         dropdown.addOption('api', 'Remote — connects to a server');
@@ -130,7 +136,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
       new SettingEx(containerEl)
         .setName('⚠️ Enable External Tool Servers (MCP)')
-        .setDesc('MCP servers are external programs that Hermes can call. They bypass file-approval and permission checks, and can execute arbitrary code with your user privileges. Only enable if you fully trust every server you add below.')
+        .setDesc(
+          'MCP servers are external programs that Hermes can call. They bypass file-approval and permission checks, and can execute arbitrary code with your user privileges. Only enable if you fully trust every server you add below.'
+        )
         .addToggle((toggle) => {
           toggle.setValue(this.plugin.settings.mcpServersEnabled);
           this.bind(toggle, 'mcpServersEnabled', {
@@ -206,7 +214,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderContextSection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
       .setName('Auto-Add Open Note')
-      .setDesc('When you switch to a different note, automatically include it in the conversation context. This saves you from clicking the @ button every time.')
+      .setDesc(
+        'When you switch to a different note, automatically include it in the conversation context. This saves you from clicking the @ button every time.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.contextEntireNote);
         this.bind(toggle, 'contextEntireNote');
@@ -296,11 +306,14 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
     const ul = containerEl.createEl('ul', { cls: 'hermes-settings-list' });
     ul.createEl('li').innerHTML = '<strong>Dataview:</strong> Use <code>/dataview &lt;query&gt;</code> to run queries directly in chat.';
     ul.createEl('li').innerHTML = '<strong>Templater:</strong> Use <code>/templater insert &lt;name&gt;</code> to insert templates into the active note.';
-    ul.createEl('li').innerHTML = '<strong>Omnisearch:</strong> The <code>/search</code> command automatically uses Omnisearch for better fuzzy matching and OCR.';
+    ul.createEl('li').innerHTML =
+      '<strong>Omnisearch:</strong> The <code>/search</code> command automatically uses Omnisearch for better fuzzy matching and OCR.';
     ul.createEl('li').innerHTML = '<strong>Excalidraw:</strong> Use <code>/excalidraw read &lt;path&gt;</code> to extract text elements from drawings.';
-    ul.createEl('li').innerHTML = '<strong>Forge:</strong> Use <code>/forge validate</code> to read schemas from <code>System/Registry</code> or <code>/forge patch</code> to generate structural updates.';
+    ul.createEl('li').innerHTML =
+      '<strong>Forge:</strong> Use <code>/forge validate</code> to read schemas from <code>System/Registry</code> or <code>/forge patch</code> to generate structural updates.';
     ul.createEl('li').innerHTML = '<strong>Lazy Loader:</strong> Use <code>/lazyloader analyze</code> to find plugins that might be slowing down startup.';
-    ul.createEl('li').innerHTML = '<strong>Git:</strong> Use <code>/git commit</code> to auto-generate commit messages based on diffs, or <code>/git status</code> to view changes.';
+    ul.createEl('li').innerHTML =
+      '<strong>Git:</strong> Use <code>/git commit</code> to auto-generate commit messages based on diffs, or <code>/git status</code> to view changes.';
     ul.createEl('li').innerHTML = '<strong>Linter:</strong> Use <code>/lint</code> to programmatically run the Obsidian Linter on the active file.';
     ul.createEl('li').innerHTML = '<strong>Prettier:</strong> Use <code>/prettier</code> to format the active file using Prettier.';
     ul.createEl('li').innerHTML = '<strong>Admonition:</strong> Use <code>/admonition insert &lt;type&gt;</code> to instruct Hermes to format callouts.';
@@ -335,7 +348,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderDebugSection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
       .setName('Debug Mode')
-      .setDesc('Write detailed technical logs to the browser console. Turn this on when something is broken and you need to report a bug. You can view the console with Cmd+Option+I (Mac) or Ctrl+Shift+I (Windows/Linux).')
+      .setDesc(
+        'Write detailed technical logs to the browser console. Turn this on when something is broken and you need to report a bug. You can view the console with Cmd+Option+I (Mac) or Ctrl+Shift+I (Windows/Linux).'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.enableDebugMode);
         this.bind(toggle, 'enableDebugMode');
@@ -394,7 +409,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderSecuritySection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
       .setName('Allow Terminal Commands')
-      .setDesc('⚠️ DANGER: This lets the agent run shell commands on your computer — things like deleting files, installing software, or accessing the internet. These commands bypass the file-change approval system. ONLY enable this if you completely trust the agent and understand the risks.')
+      .setDesc(
+        '⚠️ DANGER: This lets the agent run shell commands on your computer — things like deleting files, installing software, or accessing the internet. These commands bypass the file-change approval system. ONLY enable this if you completely trust the agent and understand the risks.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.allowTerminal);
         this.bind(toggle, 'allowTerminal');

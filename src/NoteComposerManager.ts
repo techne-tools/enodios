@@ -1,4 +1,7 @@
-import { Notice, TFile } from 'obsidian';
+import {
+  Notice,
+  TFile
+} from 'obsidian';
 
 import type { Plugin } from './Plugin.ts';
 
@@ -123,8 +126,7 @@ export class NoteComposerManager {
       return null;
     }
 
-    const existingDest =
-      this.plugin.app.vault.getAbstractFileByPath(destinationPath);
+    const existingDest = this.plugin.app.vault.getAbstractFileByPath(destinationPath);
     if (existingDest instanceof TFile) {
       new Notice(`Destination note already exists: ${destinationPath}`);
       return null;
@@ -185,10 +187,9 @@ export class NoteComposerManager {
 
     const extracted = content.slice(fromChar, toChar);
     const newBasename = newPath.split('/').pop()?.replace(/\.md$/, '') ?? 'Extracted';
-    const remaining =
-      content.slice(0, fromChar) +
-      `![[${newBasename}]]` +
-      content.slice(toChar);
+    const remaining = content.slice(0, fromChar)
+      + `![[${newBasename}]]`
+      + content.slice(toChar);
 
     const created = await this.plugin.app.vault.create(newPath, extracted.trim() + '\n');
     await this.plugin.app.vault.modify(file, remaining);

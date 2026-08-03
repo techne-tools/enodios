@@ -1,6 +1,9 @@
-import { Notice, TFile } from "obsidian";
+import {
+  Notice,
+  TFile
+} from 'obsidian';
 
-import type { Plugin } from "./Plugin.ts";
+import type { Plugin } from './Plugin.ts';
 
 export interface Slide {
   /** 0-indexed slide number */
@@ -55,8 +58,8 @@ export class SlidesManager {
     const normalized = content.replace(/\r\n/g, '\n');
     // Strip leading frontmatter block
     let body = normalized;
-    if (body.startsWith("---\n")) {
-      const closingIdx = body.indexOf("\n---\n", 4);
+    if (body.startsWith('---\n')) {
+      const closingIdx = body.indexOf('\n---\n', 4);
       if (closingIdx !== -1) {
         body = body.slice(closingIdx + 5);
       }
@@ -94,8 +97,8 @@ export class SlidesManager {
       const normalized = content.replace(/\r\n/g, '\n');
       // Strip frontmatter
       let body = normalized;
-      if (body.startsWith("---\n")) {
-        const closingIdx = body.indexOf("\n---\n", 4);
+      if (body.startsWith('---\n')) {
+        const closingIdx = body.indexOf('\n---\n', 4);
         if (closingIdx !== -1) {
           body = body.slice(closingIdx + 5);
         }
@@ -108,7 +111,7 @@ export class SlidesManager {
       sections.push(slideContent);
     }
 
-    return sections.join("\n\n---\n\n") + "\n";
+    return sections.join('\n\n---\n\n') + '\n';
   }
 
   /**
@@ -119,18 +122,18 @@ export class SlidesManager {
     const lines = [
       `--- Slides: ${file.basename} ---`,
       `Total slides: ${slides.length} (${totalChars} total characters)`,
-      ""
+      ''
     ];
 
     for (const slide of slides) {
-      const title = slide.title ?? "(no title)";
+      const title = slide.title ?? '(no title)';
       lines.push(
         `  Slide ${slide.index + 1}: "${title}" — ${slide.charCount} chars`
       );
     }
 
-    lines.push("", "------------------------------");
-    return lines.join("\n");
+    lines.push('', '------------------------------');
+    return lines.join('\n');
   }
 
   /**
@@ -142,7 +145,7 @@ export class SlidesManager {
     const { app } = this.plugin;
 
     // Reveal the file first in a markdown leaf
-    const leaves = app.workspace.getLeavesOfType("markdown");
+    const leaves = app.workspace.getLeavesOfType('markdown');
     const targetLeaf = leaves.find(
       (l) => (l.view as { file?: TFile }).file?.path === file.path
     );
@@ -163,11 +166,11 @@ export class SlidesManager {
     const commandsApp = app as unknown as {
       commands?: { executeCommandById(id: string): boolean };
     };
-    const executed = commandsApp.commands?.executeCommandById("slides:start");
+    const executed = commandsApp.commands?.executeCommandById('slides:start');
 
     if (!executed) {
       new Notice(
-        "Slides core plugin does not appear to be enabled. Enable it in Settings → Core plugins → Slides."
+        'Slides core plugin does not appear to be enabled. Enable it in Settings → Core plugins → Slides.'
       );
     }
   }

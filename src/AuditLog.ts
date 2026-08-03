@@ -1,4 +1,7 @@
-import { Notice, TFile } from 'obsidian';
+import {
+  Notice,
+  TFile
+} from 'obsidian';
 
 import type { Plugin } from './Plugin.ts';
 
@@ -64,7 +67,7 @@ export class AuditLog {
    * entries are kept in the queue and a user-visible notice is shown.
    */
   public async flush(): Promise<void> {
-    if (this.writeQueue.length === 0) { return; }
+    if (this.writeQueue.length === 0) return;
 
     const entries = [...this.writeQueue];
     let attempts = 0;
@@ -116,7 +119,7 @@ export class AuditLog {
   public async getRecentEntries(count = 50): Promise<AuditEntry[]> {
     try {
       const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
-      if (!(file instanceof TFile)) { return []; }
+      if (!(file instanceof TFile)) return [];
 
       const content = await this.plugin.app.vault.read(file);
       return this.parseEntries(content).slice(-count);
@@ -158,7 +161,8 @@ export class AuditLog {
     try {
       const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
       if (file instanceof TFile) {
-        const header = '---\ntype: hermes-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n';
+        const header =
+          '---\ntype: hermes-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n';
         await this.plugin.app.vault.modify(file, header);
       }
     } catch (error) {
@@ -239,7 +243,7 @@ export class AuditLog {
 
   private async ensureLogFile(): Promise<void> {
     const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
-    if (file instanceof TFile) { return; }
+    if (file instanceof TFile) return;
 
     // Ensure parent folder exists
     const parts = this.logFilePath.split('/');
@@ -248,7 +252,8 @@ export class AuditLog {
       await this.plugin.vaultManager.ensureFolderExists(parentPath);
     }
 
-    const header = '---\ntype: hermes-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n';
+    const header =
+      '---\ntype: hermes-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n';
     await this.plugin.app.vault.create(this.logFilePath, header);
   }
 
@@ -309,7 +314,7 @@ export class AuditLog {
   private trimToMaxEntries(content: string): string {
     const lines = content.split('\n');
     const entryLines = lines.filter((l) => l.startsWith('- '));
-    if (entryLines.length <= this.maxEntries) { return content; }
+    if (entryLines.length <= this.maxEntries) return content;
 
     const excess = entryLines.length - this.maxEntries;
     let skipped = 0;

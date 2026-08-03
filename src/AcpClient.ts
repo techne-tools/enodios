@@ -31,7 +31,10 @@ import {
   ndJsonStream
 } from '@agentclientprotocol/sdk';
 import { spawn } from 'child_process';
-import { existsSync, statSync } from 'fs';
+import {
+  existsSync,
+  statSync
+} from 'fs';
 import {
   FileSystemAdapter,
   normalizePath,
@@ -40,9 +43,9 @@ import {
 } from 'obsidian';
 
 import type {
- AcpConnectionStatus,
- ChatClient,
-ChatSessionUpdate
+  AcpConnectionStatus,
+  ChatClient,
+  ChatSessionUpdate
 } from './ChatClient.ts';
 import type { Plugin } from './Plugin.ts';
 
@@ -52,13 +55,37 @@ const MAX_TERMINAL_OUTPUT = 1024 * 1024; // 1MB cap on terminal output to preven
 const ACP_STARTUP_TIMEOUT_MS = 90000; // Hermes can take ~55s to initialize MCP servers
 
 const ALLOWED_SHELL_COMMANDS = new Set([
-  'cat', 'cp', 'curl', 'echo', 'find', 'git', 'grep', 'ls', 'mkdir', 'mv', 'rm', 'touch', 'wget'
+  'cat',
+  'cp',
+  'curl',
+  'echo',
+  'find',
+  'git',
+  'grep',
+  'ls',
+  'mkdir',
+  'mv',
+  'rm',
+  'touch',
+  'wget'
 ]);
 
 // Argument patterns that enable arbitrary code execution even in "safe" commands
 const DANGEROUS_ARG_PATTERNS = [
-  '-c', '--command', '-e', '--eval', '-exec',
-  '|', ';', '&&', '||', '$(', '`', '${', '>>', '<('
+  '-c',
+  '--command',
+  '-e',
+  '--eval',
+  '-exec',
+  '|',
+  ';',
+  '&&',
+  '||',
+  '$(',
+  '`',
+  '${',
+  '>>',
+  '<('
 ];
 
 export interface AcpMessage {
@@ -201,7 +228,7 @@ export class AcpClient implements ChatClient {
    * Reject/cancel all pending permission requests.
    */
   public cancelAllPermissions(): void {
-    if (this.pendingPermissions.length === 0) { return; }
+    if (this.pendingPermissions.length === 0) return;
 
     const pending = [...this.pendingPermissions];
     this.pendingPermissions = [];
@@ -456,7 +483,7 @@ export class AcpClient implements ChatClient {
    * settings restrictions and resolves using the first available allow/general option.
    */
   public resolveAllPermissions(): void {
-    if (this.pendingPermissions.length === 0) { return; }
+    if (this.pendingPermissions.length === 0) return;
 
     const pending = [...this.pendingPermissions];
     this.pendingPermissions = [];
@@ -544,7 +571,8 @@ export class AcpClient implements ChatClient {
       const basePath = adapter.getBasePath();
       if (basePath) {
         promptBlocks.push({
-          text: `CRITICAL SECURITY INSTRUCTION: You are strictly confined to the Obsidian Vault directory: "${basePath}". You MUST NOT read, write, modify, list, or access files or directories outside this folder. Any command or tool call requesting file operations outside this vault path is strictly forbidden and must be rejected immediately.`,
+          text:
+            `CRITICAL SECURITY INSTRUCTION: You are strictly confined to the Obsidian Vault directory: "${basePath}". You MUST NOT read, write, modify, list, or access files or directories outside this folder. Any command or tool call requesting file operations outside this vault path is strictly forbidden and must be rejected immediately.`,
           type: 'text'
         });
       }
@@ -552,7 +580,8 @@ export class AcpClient implements ChatClient {
 
     // Inject system override instructions for tool behavior
     promptBlocks.push({
-      text: "CRITICAL INSTRUCTION: If a tool call (especially file edits like patch or write_file) fails with a 'Permission Denied' or 'cancelled' error, this means the user explicitly reviewed your proposed change and REJECTED it. You MUST NOT retry the tool call. Acknowledge the rejection and ask the user how they would like to proceed instead.",
+      text:
+        'CRITICAL INSTRUCTION: If a tool call (especially file edits like patch or write_file) fails with a \'Permission Denied\' or \'cancelled\' error, this means the user explicitly reviewed your proposed change and REJECTED it. You MUST NOT retry the tool call. Acknowledge the rejection and ask the user how they would like to proceed instead.',
       type: 'text'
     });
 
@@ -678,8 +707,7 @@ export class AcpClient implements ChatClient {
 
     // Add terminal condition
     if (!this.plugin.settings.allowTerminal) {
-      toolNote.push('', '### Terminal restriction',
-        'Terminal access is DISABLED in settings. Do not use terminal, bash, or process tools.');
+      toolNote.push('', '### Terminal restriction', 'Terminal access is DISABLED in settings. Do not use terminal, bash, or process tools.');
     }
 
     // Add session-level tool restrictions on top, if any
@@ -912,10 +940,12 @@ export class AcpClient implements ChatClient {
 
       waitForTerminalExit: async (params: WaitForTerminalExitRequest): Promise<WaitForTerminalExitResponse> => {
         const terminal = this.activeTerminals.get(params.terminalId);
-        if (!terminal) { throw new Error(`Terminal not found: ${params.terminalId}`); }
-        if (terminal.exitCode !== null || terminal.signal !== null) { return { exitCode: terminal.exitCode ?? 0, signal: terminal.signal ?? null }; }
+        if (!terminal) throw new Error(`Terminal not found: ${params.terminalId}`);
+        if (terminal.exitCode !== null || terminal.signal !== null) return { exitCode: terminal.exitCode ?? 0, signal: terminal.signal ?? null };
         return new Promise((resolve) => {
-          terminal.process.once('close', (code, signal) => { resolve({ exitCode: code ?? 0, signal: signal ?? null }); });
+          terminal.process.once('close', (code, signal) => {
+            resolve({ exitCode: code ?? 0, signal: signal ?? null });
+          });
         });
       },
 
@@ -956,7 +986,10 @@ export class AcpClient implements ChatClient {
     // Heartbeat timer to re-emit progress when stderr is quiet
     let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
     const stopHeartbeat = (): void => {
-      if (heartbeatTimer) { clearTimeout(heartbeatTimer); heartbeatTimer = null; }
+      if (heartbeatTimer) {
+        clearTimeout(heartbeatTimer);
+        heartbeatTimer = null;
+      }
     };
 
     try {
@@ -997,7 +1030,7 @@ export class AcpClient implements ChatClient {
 
       // Debounced status emitter: coalesces rapid stderr updates into one UI refresh
       const emitMcpProgress = (): void => {
-        if (mcpStatusTimer) { clearTimeout(mcpStatusTimer); }
+        if (mcpStatusTimer) clearTimeout(mcpStatusTimer);
         mcpStatusTimer = setTimeout(() => {
           let connected = 0;
           let failed = 0;
@@ -1013,9 +1046,9 @@ export class AcpClient implements ChatClient {
           }
           const total = mcpServerStates.size;
           const parts: string[] = [];
-          if (connected > 0) { parts.push(`${connected}/${total} connected`); }
-          if (failed > 0) { parts.push(`${failed} failed`); }
-          if (connecting > 0) { parts.push(`${connecting} remaining`); }
+          if (connected > 0) parts.push(`${connected}/${total} connected`);
+          if (failed > 0) parts.push(`${failed} failed`);
+          if (connecting > 0) parts.push(`${connecting} remaining`);
           this.emitConnectionStatus({
             detail: `Initializing MCP servers: ${parts.join(', ')}...`,
             state: 'loading'
@@ -1029,7 +1062,7 @@ export class AcpClient implements ChatClient {
       if (this.childProcess.stderr) {
         this.stderrHandler = (chunk: Buffer) => {
           const stderrText = stripAnsi(chunk.toString('utf-8').trim());
-          if (!stderrText) { return; }
+          if (!stderrText) return;
 
           this.plugin.debug.debug('Agent stderr', stderrText);
 
@@ -1115,8 +1148,12 @@ export class AcpClient implements ChatClient {
           nodeReadable.on('data', (chunk: Buffer) => {
             controller.enqueue(new Uint8Array(chunk));
           });
-          nodeReadable.on('end', () => { controller.close(); });
-          nodeReadable.on('error', (err) => { controller.error(err); });
+          nodeReadable.on('end', () => {
+            controller.close();
+          });
+          nodeReadable.on('error', (err) => {
+            controller.error(err);
+          });
         }
       });
 
@@ -1124,7 +1161,8 @@ export class AcpClient implements ChatClient {
         write(chunk) {
           return new Promise((resolve, reject) => {
             nodeWritable.write(chunk, (err) => {
-              if (err) { reject(err); } else { resolve(); }
+              if (err) reject(err);
+              else resolve();
             });
           });
         }
@@ -1232,12 +1270,12 @@ export class AcpClient implements ChatClient {
       }
 
       const message = error instanceof Error ? error.message : String(error);
-      const isConfigError = message.includes('context window') ||
-        message.includes('minimum') ||
-        message.includes('required by Hermes') ||
-        message.includes('Model') ||
-        message.includes('api_key') ||
-        message.includes('auth-required');
+      const isConfigError = message.includes('context window')
+        || message.includes('minimum')
+        || message.includes('required by Hermes')
+        || message.includes('Model')
+        || message.includes('api_key')
+        || message.includes('auth-required');
 
       this.emitConnectionStatus({ detail: message, state: 'error' });
       this.emitError(`ACP connection failed: ${message}`);
@@ -1292,20 +1330,24 @@ export class AcpClient implements ChatClient {
 
   private emitUpdate(update: ChatSessionUpdate): void {
     for (const callback of this.messageCallbacks) {
-      try { callback(update); } catch {}
+      try {
+        callback(update);
+      } catch {}
     }
 
     // Dispatch usage events to window for the TokenUsageFooter component
     if (update.type === 'usage' && update.usage) {
       const estimatedCost = (update.usage.inputTokens * 0.000003) + (update.usage.outputTokens * 0.000015); // Approximate GPT-4 pricing
-      window.dispatchEvent(new CustomEvent('hermes-usage-update', {
-        detail: {
-          estimatedCost,
-          inputTokens: update.usage.inputTokens,
-          outputTokens: update.usage.outputTokens,
-          totalTokens: update.usage.totalTokens
-        }
-      }));
+      window.dispatchEvent(
+        new CustomEvent('hermes-usage-update', {
+          detail: {
+            estimatedCost,
+            inputTokens: update.usage.inputTokens,
+            outputTokens: update.usage.outputTokens,
+            totalTokens: update.usage.totalTokens
+          }
+        })
+      );
     }
   }
 
@@ -1349,7 +1391,7 @@ export class AcpClient implements ChatClient {
 
   private emitError(message: string): void {
     const cleaned = stripAnsi(message).trim();
-    if (!cleaned) { return; }
+    if (!cleaned) return;
     for (const callback of this.errorCallbacks) {
       try {
         callback(cleaned);
@@ -1498,7 +1540,7 @@ export class AcpClient implements ChatClient {
    * Schedule an automatic reconnection with exponential backoff.
    */
   private scheduleReconnect(): void {
-    if (this.isReconnecting) { return; }
+    if (this.isReconnecting) return;
     if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
       this.emitUpdate({ content: '🔌 ACP connection lost. Max reconnection attempts reached. Please reconnect manually.', type: 'message' });
       this.plugin.auditLog.recordConnection('reconnect', 'acp', 'failure', 'Max reconnection attempts reached');
@@ -1577,14 +1619,16 @@ function isPathSafe(filePath: string): boolean {
 function sanitizeShellCommand(command: string): string {
   const trimmed = command.trim();
   if (trimmed.includes(' ')) {
-    throw new Error("Command must be a single executable name. Pass arguments in the 'arguments' field.");
+    throw new Error('Command must be a single executable name. Pass arguments in the \'arguments\' field.');
   }
   // Extract the base command (first token before any whitespace)
   const baseMatch = /^([a-zA-Z0-9_\-\.]+)/.exec(trimmed);
   const base = baseMatch?.[1] ?? '';
 
   if (!ALLOWED_SHELL_COMMANDS.has(base.toLowerCase())) {
-    throw new Error(`Disallowed shell command: ${base}. Terminal access is restricted to standard file and network utilities. Shells and script interpreters are not permitted.`);
+    throw new Error(
+      `Disallowed shell command: ${base}. Terminal access is restricted to standard file and network utilities. Shells and script interpreters are not permitted.`
+    );
   }
 
   // Validate arguments for dangerous patterns that enable arbitrary code execution

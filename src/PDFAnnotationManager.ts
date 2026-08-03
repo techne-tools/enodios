@@ -5,9 +5,9 @@ export interface AnnotationData {
   id: string;
   page: number;
   type: string;
-  text: string;      // The text that was highlighted/underlined
-  comment?: string | undefined;  // The user's note/comment on the annotation
-  color?: string | undefined;    // Hex color string or name
+  text: string; // The text that was highlighted/underlined
+  comment?: string | undefined; // The user's note/comment on the annotation
+  color?: string | undefined; // Hex color string or name
 }
 
 /**
@@ -87,20 +87,25 @@ export class PDFAnnotationManager {
               const itemMaxY = item.y + item.height;
 
               return (
-                itemMinX < rect[2]! + tolerance &&
-                itemMaxX > rect[0]! - tolerance &&
-                itemMinY < rect[3]! + tolerance &&
-                itemMaxY > rect[1]! - tolerance
+                itemMinX < rect[2]! + tolerance
+                && itemMaxX > rect[0]! - tolerance
+                && itemMinY < rect[3]! + tolerance
+                && itemMaxY > rect[1]! - tolerance
               );
             });
 
             // Sort text items: vertical position descending, then horizontal ascending
-            overlapping.sort((a: { x: number; y: number; width: number; height: number; str: string }, b: { x: number; y: number; width: number; height: number; str: string }) => {
-              if (Math.abs(a.y - b.y) > tolerance) {
-                return b.y - a.y; // top to bottom
+            overlapping.sort(
+              (
+                a: { x: number; y: number; width: number; height: number; str: string },
+                b: { x: number; y: number; width: number; height: number; str: string }
+              ) => {
+                if (Math.abs(a.y - b.y) > tolerance) {
+                  return b.y - a.y; // top to bottom
+                }
+                return a.x - b.x; // left to right
               }
-              return a.x - b.x; // left to right
-            });
+            );
 
             text = overlapping.map((it: { x: number; y: number; width: number; height: number; str: string }) => it.str).join(' ').replace(/\s+/g, ' ').trim();
           }
@@ -174,7 +179,7 @@ export class PDFAnnotationManager {
     if (r < 100 && g < 150 && b > 200) return 'Blue';
     if (r > 200 && g < 100 && b < 100) return 'Red';
     if (r > 200 && g < 100 && b > 200) return 'Magenta';
-    if (r > 200 && g > 120 && b < 50)  return 'Orange';
+    if (r > 200 && g > 120 && b < 50) return 'Orange';
 
     // Hex fallback
     const toHex = (c: number) => {

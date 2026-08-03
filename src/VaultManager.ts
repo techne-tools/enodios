@@ -1,10 +1,10 @@
 import type { Vault } from 'obsidian';
 
 import {
- normalizePath,
-Notice,
-TFile,
-TFolder
+  normalizePath,
+  Notice,
+  TFile,
+  TFolder
 } from 'obsidian';
 
 import type { Plugin } from './Plugin.ts';
@@ -65,7 +65,7 @@ export class VaultManager {
    * Create a new note in the vault.
    */
   public async createNote(filePath: string, content: string): Promise<null | TFile> {
-    if (!this.isPathSafe(filePath)) { return null; }
+    if (!this.isPathSafe(filePath)) return null;
 
     try {
       // Ensure parent folder exists
@@ -87,7 +87,7 @@ export class VaultManager {
    */
   public async deleteConversation(filePath: string): Promise<boolean> {
     const file = this.vault.getAbstractFileByPath(filePath);
-    if (!(file instanceof TFile)) { return false; }
+    if (!(file instanceof TFile)) return false;
 
     try {
       await this.vault.trash(file, true);
@@ -101,10 +101,10 @@ export class VaultManager {
    * Delete a note from the vault.
    */
   public async deleteNote(filePath: string): Promise<boolean> {
-    if (!this.isPathSafe(filePath)) { return false; }
+    if (!this.isPathSafe(filePath)) return false;
 
     const file = this.vault.getAbstractFileByPath(filePath);
-    if (!(file instanceof TFile)) { return false; }
+    if (!(file instanceof TFile)) return false;
 
     try {
       await this.vault.trash(file, true);
@@ -123,7 +123,7 @@ export class VaultManager {
     let currentFolder: null | TFolder = null;
 
     for (const part of parts) {
-      if (!part) { continue; }
+      if (!part) continue;
       currentPath = currentPath === '' ? part : `${currentPath}/${part}`;
       const existing = this.vault.getAbstractFileByPath(currentPath);
 
@@ -221,7 +221,7 @@ export class VaultManager {
    */
   public async loadConversation(filePath: string): Promise<{ allowedTools?: string[]; messages: ChatMessage[]; title: string } | null> {
     const file = this.vault.getAbstractFileByPath(filePath);
-    if (!(file instanceof TFile)) { return null; }
+    if (!(file instanceof TFile)) return null;
 
     try {
       const content = await this.vault.read(file);
@@ -264,10 +264,10 @@ export class VaultManager {
    * Read a note from the vault.
    */
   public async readNote(filePath: string): Promise<null | string> {
-    if (!this.isPathSafe(filePath)) { return null; }
+    if (!this.isPathSafe(filePath)) return null;
 
     const file = this.vault.getAbstractFileByPath(filePath);
-    if (!(file instanceof TFile)) { return null; }
+    if (!(file instanceof TFile)) return null;
 
     try {
       return await this.vault.read(file);
@@ -281,7 +281,7 @@ export class VaultManager {
    * Returns the file path if successful.
    */
   public async saveConversation(messages: ChatMessage[], title?: string, allowedTools: null | string[] = null): Promise<null | string> {
-    if (messages.length === 0) { return null; }
+    if (messages.length === 0) return null;
 
     try {
       const conversationTitle = title || 'Conversation';
@@ -355,10 +355,10 @@ export class VaultManager {
    * Update an existing note in the vault.
    */
   public async updateNote(filePath: string, content: string): Promise<boolean> {
-    if (!this.isPathSafe(filePath)) { return false; }
+    if (!this.isPathSafe(filePath)) return false;
 
     const file = this.vault.getAbstractFileByPath(filePath);
-    if (!(file instanceof TFile)) { return false; }
+    if (!(file instanceof TFile)) return false;
 
     try {
       await this.vault.modify(file, content);
@@ -470,10 +470,10 @@ export class VaultManager {
 
     for (const section of sections) {
       const trimmed = section.trim();
-      if (!trimmed) { continue; }
+      if (!trimmed) continue;
 
       // Skip frontmatter
-      if (trimmed.startsWith('---')) { continue; }
+      if (trimmed.startsWith('---')) continue;
 
       // Parse header: ## **Role** — time
       const headerMatch = MESSAGE_HEADER_REGEX.exec(trimmed);

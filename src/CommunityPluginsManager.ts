@@ -1,6 +1,9 @@
-import { execSync } from "child_process";
-import { MarkdownView, TFile } from "obsidian";
-import type { Plugin } from "./Plugin.ts";
+import { execSync } from 'child_process';
+import {
+  MarkdownView,
+  TFile
+} from 'obsidian';
+import type { Plugin } from './Plugin.ts';
 
 interface DataviewQueryResult {
   error?: string;
@@ -88,13 +91,13 @@ export class CommunityPluginsManager {
   ): Promise<string> {
     const dv = window.DataviewAPI;
     if (!dv) {
-      return "DataviewAPI is not available on the window object.";
+      return 'DataviewAPI is not available on the window object.';
     }
 
     try {
       const result = await dv.queryMarkdown(query, sourcePath);
       return result.successful
-        ? (result.value ?? "No results.")
+        ? (result.value ?? 'No results.')
         : `Dataview query error: ${result.error}`;
     } catch (err) {
       return `Dataview execution failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -106,20 +109,19 @@ export class CommunityPluginsManager {
     templateName: string,
     activeFile: TFile
   ): Promise<string> {
-    const templaterPlugin = this.getCommunityPlugin("templater-obsidian") as
+    const templaterPlugin = this.getCommunityPlugin('templater-obsidian') as
       | TemplaterPluginInstance
       | undefined;
     if (!templaterPlugin || !templaterPlugin.templater) {
-      return "Templater API is not accessible.";
+      return 'Templater API is not accessible.';
     }
 
     try {
-      const templatesFolder = templaterPlugin.settings?.templates_folder || "";
+      const templatesFolder = templaterPlugin.settings?.templates_folder || '';
       const templatePath = templatesFolder
         ? `${templatesFolder}/${templateName}.md`
         : `${templateName}.md`;
-      const templateFile =
-        this.plugin.app.vault.getAbstractFileByPath(templatePath);
+      const templateFile = this.plugin.app.vault.getAbstractFileByPath(templatePath);
 
       if (!(templateFile instanceof TFile)) {
         return `Template file not found at path: ${templatePath}`;
@@ -147,7 +149,7 @@ export class CommunityPluginsManager {
   public async searchOmnisearch(query: string): Promise<string> {
     const omnisearch = window.omnisearch;
     if (!omnisearch) {
-      return "Omnisearch API is not available.";
+      return 'Omnisearch API is not available.';
     }
 
     try {
@@ -173,10 +175,10 @@ export class CommunityPluginsManager {
   // --- Excalidraw ---
   public async readExcalidraw(path: string): Promise<string> {
     const excalidrawPlugin = this.getCommunityPlugin(
-      "obsidian-excalidraw-plugin"
+      'obsidian-excalidraw-plugin'
     );
     if (!excalidrawPlugin) {
-      return "Excalidraw plugin is not accessible.";
+      return 'Excalidraw plugin is not accessible.';
     }
 
     const file = this.plugin.app.vault.getAbstractFileByPath(path);
@@ -188,13 +190,13 @@ export class CommunityPluginsManager {
       const content = await this.plugin.app.vault.read(file);
       const match = content.match(/```json\n([\s\S]*?)\n```/);
       if (!match || !match[1]) {
-        return "Could not find Excalidraw JSON data in this file. Note: Excalidraw files must be parsed from their internal JSON state.";
+        return 'Could not find Excalidraw JSON data in this file. Note: Excalidraw files must be parsed from their internal JSON state.';
       }
 
       const excalidrawData = JSON.parse(match[1]) as ExcalidrawFileData;
       const elements = excalidrawData.elements || [];
       const textElements = elements.filter(
-        (element) => element.type === "text" && Boolean(element.text)
+        (element) => element.type === 'text' && Boolean(element.text)
       );
 
       if (textElements.length === 0) {
@@ -214,20 +216,20 @@ export class CommunityPluginsManager {
 
   // --- Templater (Deep) ---
   public async getTemplaterUserScripts(): Promise<string> {
-    const templaterPlugin = this.getCommunityPlugin("templater-obsidian") as
+    const templaterPlugin = this.getCommunityPlugin('templater-obsidian') as
       | TemplaterPluginInstance
       | undefined;
-    if (!templaterPlugin) return "Templater plugin is not accessible.";
+    if (!templaterPlugin) return 'Templater plugin is not accessible.';
 
     const scriptsFolder = templaterPlugin.settings?.user_scripts_folder;
-    if (!scriptsFolder)
-      return "No user scripts folder configured in Templater settings.";
+    if (!scriptsFolder) {
+      return 'No user scripts folder configured in Templater settings.';
+    }
 
     const files = this.plugin.app.vault
       .getFiles()
       .filter(
-        (file) =>
-          file.path.startsWith(scriptsFolder) && file.extension === "js"
+        (file) => file.path.startsWith(scriptsFolder) && file.extension === 'js'
       );
     if (files.length === 0) return `No user scripts found in ${scriptsFolder}.`;
 
@@ -247,8 +249,7 @@ export class CommunityPluginsManager {
     const files = this.plugin.app.vault
       .getFiles()
       .filter(
-        (file) =>
-          file.path.includes("System/Registry") && file.extension === "md"
+        (file) => file.path.includes('System/Registry') && file.extension === 'md'
       );
     return `### 🛠️ Forge Registry\n\nFound ${files.length} schema files in \`System/Registry\`. Tell Hermes to use the \`read_file\` tool on them to understand your vault's structural rules.`;
   }
@@ -257,24 +258,22 @@ export class CommunityPluginsManager {
   public getLazyLoaderSuggestions(): string {
     const plugins = (this.plugin.app as ObsidianAppWithPlugins).plugins
       ?.plugins;
-    if (!plugins) return "Unable to read active plugins.";
+    if (!plugins) return 'Unable to read active plugins.';
 
     // Some plugins measure load times on app.plugins.plugins, but if not we can use heuristics
     const heavyPlugins = [
-      "dataview",
-      "obsidian-excalidraw-plugin",
-      "templater-obsidian",
-      "omnisearch",
-      "obsidian-git",
-      "obsidian-linter",
-      "table-editor-obsidian"
+      'dataview',
+      'obsidian-excalidraw-plugin',
+      'templater-obsidian',
+      'omnisearch',
+      'obsidian-git',
+      'obsidian-linter',
+      'table-editor-obsidian'
     ];
-    const activeHeavy = Object.keys(plugins).filter((id) =>
-      heavyPlugins.includes(id)
-    );
+    const activeHeavy = Object.keys(plugins).filter((id) => heavyPlugins.includes(id));
 
     if (activeHeavy.length === 0) {
-      return "No particularly heavy plugins were detected that need lazy loading.";
+      return 'No particularly heavy plugins were detected that need lazy loading.';
     }
 
     let result = `### 🐢 Lazy Loader Suggestions\n\n`;
@@ -291,15 +290,15 @@ export class CommunityPluginsManager {
   public getGitStatus(): string {
     try {
       const adapter = this.plugin.app.vault.adapter as PathCapableAdapter;
-      const basePath = adapter.getBasePath ? adapter.getBasePath() : "";
-      if (!basePath) return "Unable to determine vault path for git execution.";
-      const status = execSync("git status -s", {
+      const basePath = adapter.getBasePath ? adapter.getBasePath() : '';
+      if (!basePath) return 'Unable to determine vault path for git execution.';
+      const status = execSync('git status -s', {
         cwd: basePath,
-        encoding: "utf-8"
+        encoding: 'utf-8'
       });
       return status
         ? `### 📦 Git Status\n\n\`\`\`text\n${status}\n\`\`\``
-        : "Git working tree is clean.";
+        : 'Git working tree is clean.';
     } catch (e) {
       return `Git status failed: ${e instanceof Error ? e.message : String(e)}`;
     }
@@ -308,23 +307,22 @@ export class CommunityPluginsManager {
   public getGitCommitPrompt(message?: string): string {
     try {
       const adapter = this.plugin.app.vault.adapter as PathCapableAdapter;
-      const basePath = adapter.getBasePath ? adapter.getBasePath() : "";
-      if (!basePath) return "Unable to determine vault path for git execution.";
+      const basePath = adapter.getBasePath ? adapter.getBasePath() : '';
+      if (!basePath) return 'Unable to determine vault path for git execution.';
 
-      const diff = execSync("git diff", { cwd: basePath, encoding: "utf-8" });
-      const cachedDiff = execSync("git diff --cached", {
+      const diff = execSync('git diff', { cwd: basePath, encoding: 'utf-8' });
+      const cachedDiff = execSync('git diff --cached', {
         cwd: basePath,
-        encoding: "utf-8"
+        encoding: 'utf-8'
       });
       const fullDiff = `${cachedDiff}\n${diff}`.trim();
 
-      if (!fullDiff) return "No changes detected. The working tree is clean.";
+      if (!fullDiff) return 'No changes detected. The working tree is clean.';
 
       // Limit diff size to avoid blowing up context
-      const truncatedDiff =
-        fullDiff.length > 3000
-          ? `${fullDiff.substring(0, 3000)}\n... (diff truncated)`
-          : fullDiff;
+      const truncatedDiff = fullDiff.length > 3000
+        ? `${fullDiff.substring(0, 3000)}\n... (diff truncated)`
+        : fullDiff;
 
       let prompt = `Please review the following git diff and generate a concise commit message.\n\n\`\`\`diff\n${truncatedDiff}\n\`\`\``;
       if (message) {
@@ -339,13 +337,13 @@ export class CommunityPluginsManager {
   public runGitPush(): string {
     try {
       const adapter = this.plugin.app.vault.adapter as PathCapableAdapter;
-      const basePath = adapter.getBasePath ? adapter.getBasePath() : "";
-      if (!basePath) return "Unable to determine vault path for git execution.";
-      const output = execSync("git push", {
+      const basePath = adapter.getBasePath ? adapter.getBasePath() : '';
+      if (!basePath) return 'Unable to determine vault path for git execution.';
+      const output = execSync('git push', {
         cwd: basePath,
-        encoding: "utf-8"
+        encoding: 'utf-8'
       });
-      return `### 🚀 Git Push\n\n\`\`\`text\n${output || "Success (no output)"}\n\`\`\``;
+      return `### 🚀 Git Push\n\n\`\`\`text\n${output || 'Success (no output)'}\n\`\`\``;
     } catch (e) {
       return `Git push failed: ${e instanceof Error ? e.message : String(e)}`;
     }
@@ -355,81 +353,81 @@ export class CommunityPluginsManager {
   public insertAdmonition(type: string, title?: string): string {
     const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
     if (!activeView) {
-      return "No active note editor found. Open a note first.";
+      return 'No active note editor found. Open a note first.';
     }
     const editor = activeView.editor;
     const header = title ? `[!${type}] ${title}` : `[!${type}]`;
     const block = `> ${header}\n> \n`;
     editor.replaceSelection(block);
-    return `Inserted **${type}** Admonition at cursor in **${activeView.file?.basename ?? "active note"}**.`;
+    return `Inserted **${type}** Admonition at cursor in **${activeView.file?.basename ?? 'active note'}**.`;
   }
 
   // --- Linter ---
   public lintActiveFile(): string {
     const activeFile = this.plugin.app.workspace.getActiveFile();
-    if (!activeFile) return "No active file to lint.";
+    if (!activeFile) return 'No active file to lint.';
 
     const commands = (this.plugin.app as ObsidianAppWithCommands).commands;
     if (commands && commands.executeCommandById) {
-      commands.executeCommandById("obsidian-linter:lint-file");
+      commands.executeCommandById('obsidian-linter:lint-file');
       return `Triggered Linter on **${activeFile.basename}**.`;
     }
-    return "Unable to execute Obsidian commands programmatically.";
+    return 'Unable to execute Obsidian commands programmatically.';
   }
 
   // --- Prettier ---
   public formatWithPrettier(): string {
     const activeFile = this.plugin.app.workspace.getActiveFile();
-    if (!activeFile) return "No active file to format.";
+    if (!activeFile) return 'No active file to format.';
 
     const commands = (this.plugin.app as ObsidianAppWithCommands).commands;
     if (commands && commands.executeCommandById) {
       // Common command IDs for obsidian-prettier
-      commands.executeCommandById("obsidian-prettier:format");
+      commands.executeCommandById('obsidian-prettier:format');
       return `Triggered Prettier formatting on **${activeFile.basename}**.`;
     }
-    return "Unable to execute Obsidian commands programmatically.";
+    return 'Unable to execute Obsidian commands programmatically.';
   }
 
   // --- Tables ---
   public generateTable(colsStr?: string, rowsStr?: string): string {
     const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
     if (!activeView) {
-      return "No active note editor found. Open a note first.";
+      return 'No active note editor found. Open a note first.';
     }
-    const parsedCols = parseInt(colsStr || "3", 10);
-    const parsedRows = parseInt(rowsStr || "2", 10);
+    const parsedCols = parseInt(colsStr || '3', 10);
+    const parsedRows = parseInt(rowsStr || '2', 10);
     const cols = isNaN(parsedCols) ? 3 : parsedCols;
     const rows = isNaN(parsedRows) ? 2 : parsedRows;
 
     if (cols < 1 || rows < 1) {
-      return "Columns and rows must be at least 1.";
+      return 'Columns and rows must be at least 1.';
     }
 
-    const headerRow = "|" + Array(cols).fill(" Column ").join("|") + "|";
-    const separatorRow = "|" + Array(cols).fill(" --- ").join("|") + "|";
-    const dataRow = "|" + Array(cols).fill("   ").join("|") + "|";
-    const dataRows = Array(rows).fill(dataRow).join("\n");
+    const headerRow = '|' + Array(cols).fill(' Column ').join('|') + '|';
+    const separatorRow = '|' + Array(cols).fill(' --- ').join('|') + '|';
+    const dataRow = '|' + Array(cols).fill('   ').join('|') + '|';
+    const dataRows = Array(rows).fill(dataRow).join('\n');
 
     const table = `${headerRow}\n${separatorRow}\n${dataRows}\n`;
     activeView.editor.replaceSelection(table);
-    return `Generated a ${cols}x${rows} table at cursor in **${activeView.file?.basename ?? "active note"}**.`;
+    return `Generated a ${cols}x${rows} table at cursor in **${activeView.file?.basename ?? 'active note'}**.`;
   }
 
   public formatTable(): string {
     const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
     if (!activeView) {
-      return "No active note editor found. Open a note first.";
+      return 'No active note editor found. Open a note first.';
     }
 
     const commands = (this.plugin.app as ObsidianAppWithCommands).commands;
     if (commands && commands.executeCommandById) {
-      const executed = commands.executeCommandById("table-editor-obsidian:format-table");
+      const executed = commands.executeCommandById('table-editor-obsidian:format-table');
       if (executed !== false) {
         return `Triggered Advanced Tables formatting in **${activeView.file?.basename}**.`;
       }
     }
-    return "Failed to trigger Advanced Tables formatting. Make sure the plugin is enabled and your cursor is inside a table.";
+    return 'Failed to trigger Advanced Tables formatting. Make sure the plugin is enabled and your cursor is inside a table.';
   }
 
   private getCommunityPlugin(pluginId: string): unknown {

@@ -1,51 +1,49 @@
 import type { ExtractPluginSettingsWrapper } from 'obsidian-dev-utils/obsidian/Plugin/PluginTypesBase';
 import type { ReadonlyDeep } from 'type-fest';
 
-import { Notice } from 'obsidian';
 import { EditorView } from '@codemirror/view';
+import { Notice } from 'obsidian';
 import { PluginBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginBase';
 
 import type {
- ChatClient,
- ChatSessionUpdate
+  ChatClient,
+  ChatSessionUpdate
 } from './ChatClient.ts';
 import type { PluginTypes } from './PluginTypes.ts';
 
 import { AcpClient } from './AcpClient.ts';
 import { AuditLog } from './AuditLog.ts';
+import { BasesManager } from './BasesManager.ts';
+import { CanvasManager } from './CanvasManager.ts';
+import { CitationManager } from './CitationManager.ts';
+import { CommunityPluginsManager } from './CommunityPluginsManager.ts';
 import { DebugLogger } from './DebugLogger.ts';
 import { FileChangeManager } from './FileChangeManager.ts';
 import { HermesApiClient } from './HermesApiClient.ts';
+import { CitationSuggestModal } from './Modals/CitationSuggestModal.ts';
+import { TagSuggestionModal } from './Modals/TagSuggestionModal.tsx';
+import { NoteComposerManager } from './NoteComposerManager.ts';
+import { NoteTemplateManager } from './NoteTemplateManager.ts';
+import { OutlineManager } from './OutlineManager.ts';
+import { PDFAnnotationManager } from './PDFAnnotationManager.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
 import { PluginSettingsTab } from './PluginSettingsTab.ts';
 import { SecretsManager } from './SecretsManager.ts';
 import { clearAllCommands } from './SlashCommands.ts';
+import { SlidesManager } from './SlidesManager.ts';
 import {
- ghostTextExtension,
-setGhostTextEffect
+  ghostTextExtension,
+  setGhostTextEffect
 } from './styles/GhostTextExtension.ts';
-import {
- inlineDiffExtension
-} from './styles/InlineDiffExtension.ts';
+import { inlineDiffExtension } from './styles/InlineDiffExtension.ts';
+import { TagManager } from './TagManager.ts';
+import { TemplateManager } from './TemplateManager.ts';
+import { isPluginEnabled } from './utils/plugins.ts';
 import { VaultManager } from './VaultManager.ts';
 import {
   HERMES_CHAT_VIEW_TYPE,
   HermesChatView
 } from './Views/HermesChatView.tsx';
-import { CitationManager } from './CitationManager.ts';
-import { PDFAnnotationManager } from './PDFAnnotationManager.ts';
-import { CitationSuggestModal } from './Modals/CitationSuggestModal.ts';
-import { TagManager } from './TagManager.ts';
-import { TemplateManager } from './TemplateManager.ts';
-import { TagSuggestionModal } from './Modals/TagSuggestionModal.tsx';
-import { BasesManager } from './BasesManager.ts';
-import { CanvasManager } from './CanvasManager.ts';
-import { NoteComposerManager } from './NoteComposerManager.ts';
-import { NoteTemplateManager } from './NoteTemplateManager.ts';
-import { OutlineManager } from './OutlineManager.ts';
-import { SlidesManager } from './SlidesManager.ts';
-import { isPluginEnabled } from './utils/plugins.ts';
-import { CommunityPluginsManager } from './CommunityPluginsManager.ts';
 
 export class Plugin extends PluginBase<PluginTypes> {
   public acpClient!: AcpClient;
@@ -233,7 +231,7 @@ export class Plugin extends PluginBase<PluginTypes> {
       editorCallback: async (editor) => {
         // @ts-expect-error - Accessing internal CodeMirror 6 view from Obsidian's Editor wrapper
         const cmView = editor.cm;
-        if (!cmView) { return; }
+        if (!cmView) return;
 
         // Store the active editor view for use by FileChangeManager
         this.activeEditorView = cmView;
@@ -248,7 +246,8 @@ export class Plugin extends PluginBase<PluginTypes> {
           const prefix = doc.slice(Math.max(0, pos - 1000), pos);
           const suffix = doc.slice(pos, pos + 1000);
 
-          const systemPrompt = 'You are an inline auto-completion assistant. Continue the text naturally based on the prefix and suffix context. Do NOT repeat the prefix. ONLY output the exact text that should be inserted at the cursor position. Keep it concise.';
+          const systemPrompt =
+            'You are an inline auto-completion assistant. Continue the text naturally based on the prefix and suffix context. Do NOT repeat the prefix. ONLY output the exact text that should be inserted at the cursor position. Keep it concise.';
           const userText = `<PREFIX>\n${prefix}\n</PREFIX>\n<SUFFIX>\n${suffix}\n</SUFFIX>`;
 
           const completions = await this.apiClient.getInlineCompletions(systemPrompt, userText);
@@ -289,7 +288,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Command Palette: Ask Hermes about selection
     this.addCommand({
       editorCallback: async (editor, _view) => {
-        if (!checkRateLimit()) { return; }
+        if (!checkRateLimit()) return;
         const selection = editor.getSelection();
         if (!selection.trim()) {
           new Notice('No text selected. Select some text first.');
@@ -298,10 +297,10 @@ export class Plugin extends PluginBase<PluginTypes> {
 
         await this.openView(HERMES_CHAT_VIEW_TYPE);
         const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
-        if (leaves.length === 0) { return; }
+        if (leaves.length === 0) return;
 
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) { return; }
+        if (!(chatView instanceof HermesChatView)) return;
 
         const contextItems = [{
           id: `selection-${Date.now()}`,
@@ -318,7 +317,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Command Palette: Summarize current note
     this.addCommand({
       callback: async () => {
-        if (!checkRateLimit()) { return; }
+        if (!checkRateLimit()) return;
         const activeFile = this.app.workspace.getActiveFile();
         if (!activeFile) {
           new Notice('No active note to summarize.');
@@ -327,10 +326,10 @@ export class Plugin extends PluginBase<PluginTypes> {
 
         await this.openView(HERMES_CHAT_VIEW_TYPE);
         const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
-        if (leaves.length === 0) { return; }
+        if (leaves.length === 0) return;
 
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) { return; }
+        if (!(chatView instanceof HermesChatView)) return;
 
         const contextItems = [{
           id: `note-${activeFile.path}`,
@@ -347,7 +346,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Command Palette: Generate tags for current note
     this.addCommand({
       callback: async () => {
-        if (!checkRateLimit()) { return; }
+        if (!checkRateLimit()) return;
         const activeFile = this.app.workspace.getActiveFile();
         if (!activeFile) {
           new Notice('No active note to generate tags for.');
@@ -356,10 +355,10 @@ export class Plugin extends PluginBase<PluginTypes> {
 
         await this.openView(HERMES_CHAT_VIEW_TYPE);
         const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
-        if (leaves.length === 0) { return; }
+        if (leaves.length === 0) return;
 
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) { return; }
+        if (!(chatView instanceof HermesChatView)) return;
 
         const contextItems = [{
           id: `note-${activeFile.path}`,
@@ -450,9 +449,9 @@ export class Plugin extends PluginBase<PluginTypes> {
         }
         await this.openView(HERMES_CHAT_VIEW_TYPE);
         const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
-        if (leaves.length === 0) { return; }
+        if (leaves.length === 0) return;
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) { return; }
+        if (!(chatView instanceof HermesChatView)) return;
         const contextItems = [{
           id: `note-${activeFile.path}`,
           text: activeFile.basename,

@@ -1,4 +1,7 @@
-import { MarkdownView, TFile } from 'obsidian';
+import {
+  MarkdownView,
+  TFile
+} from 'obsidian';
 
 import type { Plugin } from './Plugin.ts';
 

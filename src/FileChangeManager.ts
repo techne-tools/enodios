@@ -100,19 +100,19 @@ export class FileChangeManager {
    * Approve all pending changes.
    */
   public async approveAll(): Promise<void> {
-    if (this.isApprovingAll) { return; }
+    if (this.isApprovingAll) return;
     this.isApprovingAll = true;
 
     try {
       // Snapshot pending changes atomically at the start
       const pending = this.getPendingChanges();
-      if (pending.length === 0) { return; }
+      if (pending.length === 0) return;
 
       let successCount = 0;
       for (const change of pending) {
         // Atomically check-and-set: skip if already being processed or no longer pending
-        if (this.processingPaths.has(change.path)) { continue; }
-        if (change.status !== 'pending') { continue; }
+        if (this.processingPaths.has(change.path)) continue;
+        if (change.status !== 'pending') continue;
 
         this.processingPaths.add(change.path);
 
@@ -379,7 +379,7 @@ export class FileChangeManager {
    */
   public handleActiveLeafChange(): void {
     const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!activeView || !activeView.file) { return; }
+    if (!activeView || !activeView.file) return;
 
     const change = this.changes.find(
       (c) => c.path === activeView.file!.path && c.status === 'pending'
@@ -426,7 +426,7 @@ export class FileChangeManager {
    */
   private async refreshPendingDiffsForPath(path: string): Promise<void> {
     const pendingOnPath = this.changes.filter((c) => c.path === path && c.status === 'pending');
-    if (pendingOnPath.length === 0) { return; }
+    if (pendingOnPath.length === 0) return;
 
     // Read the current file content from disk (or empty if deleted)
     let currentContent = '';
@@ -450,7 +450,7 @@ export class FileChangeManager {
    */
   public async rejectAll(): Promise<void> {
     const pending = this.getPendingChanges();
-    if (pending.length === 0) { return; }
+    if (pending.length === 0) return;
 
     for (const change of pending) {
       change.status = 'rejected';

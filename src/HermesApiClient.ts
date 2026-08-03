@@ -4,14 +4,14 @@ import {
   TFile
 } from 'obsidian';
 
+import type { PromptContextItem } from './AcpClient.ts';
 import type {
- AcpConnectionStatus,
- ChatClient,
-ChatSessionUpdate
+  AcpConnectionStatus,
+  ChatClient,
+  ChatSessionUpdate
 } from './ChatClient.ts';
 import type { Plugin } from './Plugin.ts';
 import type { SecretsManager } from './SecretsManager.ts';
-import type { PromptContextItem } from './AcpClient.ts';
 
 export interface HermesApiMessage {
   content: string;
@@ -157,13 +157,13 @@ export class HermesApiClient implements ChatClient {
         signal: abortController.signal
       });
 
-      if (!response.ok) { return null; }
+      if (!response.ok) return null;
 
       const data = await response.json() as {
         choices?: { message?: { content?: string } }[];
       };
 
-      if (!data.choices || data.choices.length === 0) { return null; }
+      if (!data.choices || data.choices.length === 0) return null;
 
       const completions = data.choices
         .map((choice) => choice.message?.content?.trim())
@@ -295,19 +295,32 @@ export class HermesApiClient implements ChatClient {
       const basePath = adapter.getBasePath();
       if (basePath) {
         messages.push({
-          content: `CRITICAL SECURITY INSTRUCTION: You are strictly confined to the Obsidian Vault directory: "${basePath}". You MUST NOT read, write, modify, list, or access files or directories outside this folder. Any command or tool call requesting file operations outside this vault path is strictly forbidden and must be rejected immediately.`,
+          content:
+            `CRITICAL SECURITY INSTRUCTION: You are strictly confined to the Obsidian Vault directory: "${basePath}". You MUST NOT read, write, modify, list, or access files or directories outside this folder. Any command or tool call requesting file operations outside this vault path is strictly forbidden and must be rejected immediately.`,
           role: 'system'
         });
       }
     }
 
     if (normalizedOptions.allowedTools?.length) {
-      messages.push({ content: `System Instruction: You are restricted to ONLY using the following tools in this session: ${normalizedOptions.allowedTools.join(', ')}. Do not attempt to use any other tools.`, role: 'system' });
-    } else if (normalizedOptions.allowedTools !== null && this.plugin.settings.personaTemplates.find((p) => p.id === this.plugin.settings.activePersonaId)?.defaultTools) {
+      messages.push({
+        content: `System Instruction: You are restricted to ONLY using the following tools in this session: ${
+          normalizedOptions.allowedTools.join(', ')
+        }. Do not attempt to use any other tools.`,
+        role: 'system'
+      });
+    } else if (
+      normalizedOptions.allowedTools !== null && this.plugin.settings.personaTemplates.find((p) => p.id === this.plugin.settings.activePersonaId)?.defaultTools
+    ) {
       // Apply persona default tool restrictions when no explicit session override is set
       const defaultTools = this.plugin.settings.personaTemplates.find((p) => p.id === this.plugin.settings.activePersonaId)?.defaultTools;
       if (defaultTools && defaultTools.length > 0) {
-        messages.push({ content: `System Instruction: You are restricted to ONLY using the following tools in this session: ${defaultTools.join(', ')}. Do not attempt to use any other tools.`, role: 'system' });
+        messages.push({
+          content: `System Instruction: You are restricted to ONLY using the following tools in this session: ${
+            defaultTools.join(', ')
+          }. Do not attempt to use any other tools.`,
+          role: 'system'
+        });
       }
     }
 
@@ -607,7 +620,7 @@ export class HermesApiClient implements ChatClient {
    * Schedule an automatic reconnection with exponential backoff.
    */
   private scheduleReconnect(): void {
-    if (this.isReconnecting) { return; }
+    if (this.isReconnecting) return;
     if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
       this.emit({ content: '🔌 API connection lost. Max reconnection attempts reached. Please reconnect manually.', type: 'message' });
       this.plugin.auditLog.recordConnection('reconnect', 'api', 'failure', 'Max reconnection attempts reached');

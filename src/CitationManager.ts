@@ -77,10 +77,10 @@ export class CitationManager {
     if (!term) return this.bibliographyCache.slice(0, 10);
 
     return this.bibliographyCache.filter((item) =>
-      item.key.toLowerCase().includes(term) ||
-      item.title.toLowerCase().includes(term) ||
-      item.author.toLowerCase().includes(term) ||
-      item.year.includes(term)
+      item.key.toLowerCase().includes(term)
+      || item.title.toLowerCase().includes(term)
+      || item.author.toLowerCase().includes(term)
+      || item.year.includes(term)
     );
   }
 
@@ -253,7 +253,11 @@ export class CitationManager {
       const author = fields['author'] ? this.cleanBibTeXString(fields['author']) : '';
       const title = fields['title'] ? this.cleanBibTeXString(fields['title']) : '';
       const year = fields['year'] ? this.cleanBibTeXString(fields['year']) : '';
-      const journal = fields['journal'] ? this.cleanBibTeXString(fields['journal']) : fields['journaltitle'] ? this.cleanBibTeXString(fields['journaltitle']) : undefined;
+      const journal = fields['journal']
+        ? this.cleanBibTeXString(fields['journal'])
+        : fields['journaltitle']
+        ? this.cleanBibTeXString(fields['journaltitle'])
+        : undefined;
       const publisher = fields['publisher'] ? this.cleanBibTeXString(fields['publisher']) : undefined;
       const booktitle = fields['booktitle'] ? this.cleanBibTeXString(fields['booktitle']) : undefined;
       const volume = fields['volume'] ? this.cleanBibTeXString(fields['volume']) : undefined;
@@ -412,21 +416,21 @@ export class CitationManager {
       if (authors.length === 0) return 'Unknown Author';
       if (styleName === 'apa') {
         const formatted = authors.map((a) => {
-            const init = a.first ? a.first.split(/\s+/).map((n) => (n[0] || '') + '.').join(' ') : '';
+          const init = a.first ? a.first.split(/\s+/).map((n) => (n[0] || '') + '.').join(' ') : '';
           return `${a.last}, ${init}`;
         });
         if (formatted.length === 1) return formatted[0]!;
         if (formatted.length === 2) return `${formatted[0]!}, & ${formatted[1]!}`;
         return `${formatted.slice(0, -1).join(', ')}, & ${formatted[formatted.length - 1]!}`;
       }
-        // MLA / Chicago / IEEE style full authors
-        const formatted = authors.map((a, i) => {
-          if (i === 0) return `${a.last}, ${a.first}`;
-          return `${a.first} ${a.last}`;
-        });
-        if (formatted.length === 1) return formatted[0]!;
-        if (formatted.length === 2) return `${formatted[0]!} and ${formatted[1]!}`;
-        return `${formatted.slice(0, -1).join(', ')}, and ${formatted[formatted.length - 1]!}`;
+      // MLA / Chicago / IEEE style full authors
+      const formatted = authors.map((a, i) => {
+        if (i === 0) return `${a.last}, ${a.first}`;
+        return `${a.first} ${a.last}`;
+      });
+      if (formatted.length === 1) return formatted[0]!;
+      if (formatted.length === 2) return `${formatted[0]!} and ${formatted[1]!}`;
+      return `${formatted.slice(0, -1).join(', ')}, and ${formatted[formatted.length - 1]!}`;
     };
 
     switch (style.toLowerCase()) {

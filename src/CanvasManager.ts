@@ -1,4 +1,7 @@
-import { Notice, TFile } from 'obsidian';
+import {
+  Notice,
+  TFile
+} from 'obsidian';
 
 import type { Plugin } from './Plugin.ts';
 
@@ -119,12 +122,11 @@ export class CanvasManager {
     if (canvas.nodes.length > 0) {
       lines.push('Nodes:');
       for (const node of canvas.nodes) {
-        const label =
-          node.text?.slice(0, 80) ??
-          node.label ??
-          node.file ??
-          node.url ??
-          '(unlabeled)';
+        const label = node.text?.slice(0, 80)
+          ?? node.label
+          ?? node.file
+          ?? node.url
+          ?? '(unlabeled)';
         lines.push(`  [${node.type}] id=${node.id} — ${label}`);
       }
       lines.push('');
@@ -193,8 +195,6 @@ export class CanvasManager {
 
   /** Generates a 16-character hex node ID matching Obsidian's own format. */
   private generateNodeId(): string {
-    return Array.from({ length: 16 }, () =>
-      Math.floor(Math.random() * 16).toString(16)
-    ).join('');
+    return Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
   }
 }

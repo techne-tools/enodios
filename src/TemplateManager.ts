@@ -20,28 +20,32 @@ export class TemplateManager {
     {
       id: 'lit-review',
       name: 'Literature Review',
-      prompt: 'Act as an academic researcher. Analyze the attached note(s)/paper(s), summarize their key methodology, primary claims, and any theoretical frameworks used. Contrast this with other known works and highlight gaps or future work directions.',
+      prompt:
+        'Act as an academic researcher. Analyze the attached note(s)/paper(s), summarize their key methodology, primary claims, and any theoretical frameworks used. Contrast this with other known works and highlight gaps or future work directions.',
       icon: '📚',
       description: 'Summarize papers and extract methodologies.'
     },
     {
       id: 'writing-coach',
       name: 'Writing Coach',
-      prompt: 'Act as a professional editor and writing coach. Review the attached text for flow, grammar, structural coherence, and tone. Provide constructive criticism and suggest 3 concrete improvements.',
+      prompt:
+        'Act as a professional editor and writing coach. Review the attached text for flow, grammar, structural coherence, and tone. Provide constructive criticism and suggest 3 concrete improvements.',
       icon: '✍️',
       description: 'Improve flow, structure, and grammar.'
     },
     {
       id: 'code-assistant',
       name: 'Code Assistant',
-      prompt: 'Act as an expert software engineer. Explain the attached code block or file, document it with clear comments, and refactor it for performance, readability, and best practices. Explain the changes you make.',
+      prompt:
+        'Act as an expert software engineer. Explain the attached code block or file, document it with clear comments, and refactor it for performance, readability, and best practices. Explain the changes you make.',
       icon: '💻',
       description: 'Explain, document, or refactor code.'
     },
     {
       id: 'study-companion',
       name: 'Study Companion',
-      prompt: 'Act as an educational tutor. Based on the attached study notes, generate 5 challenging flashcard-style Q&A pairs and 1 conceptual summary paragraph to help me review the core ideas.',
+      prompt:
+        'Act as an educational tutor. Based on the attached study notes, generate 5 challenging flashcard-style Q&A pairs and 1 conceptual summary paragraph to help me review the core ideas.',
       icon: '🧠',
       description: 'Create flashcards and conceptual summaries.'
     }
