@@ -47,7 +47,7 @@ export interface GhostTextStateValue {
 
 /**
  * Custom CodeMirror 6 Widget to render ghost text inline with alternatives indicator.
- * Uses CSS class 'hermes-ghost-text' for translucent styling.
+ * Uses CSS class 'enodios-ghost-text' for translucent styling.
  */
 class GhostTextWidget extends WidgetType {
   constructor(public readonly text: string, public readonly currentIndex: number, public readonly total: number) {
@@ -60,7 +60,7 @@ class GhostTextWidget extends WidgetType {
 
   toDOM(): HTMLElement {
     const span = document.createElement('span');
-    span.className = 'hermes-ghost-text';
+    span.className = 'enodios-ghost-text';
     span.textContent = this.text;
     if (this.total > 1) {
       span.setAttribute('data-alternatives', `${this.currentIndex + 1}/${this.total}`);

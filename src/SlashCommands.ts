@@ -42,7 +42,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   {
     description: 'Display a summary of the currently attached context items.',
     execute: async (plugin) => {
-      const leaves = plugin.app.workspace.getLeavesOfType('hermes-chat-view');
+      const leaves = plugin.app.workspace.getLeavesOfType('enodios-chat-view');
       if (leaves.length === 0) {
         return 'No active chat view found.';
       }
@@ -374,7 +374,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
           return `Template "${name}" not found. Type \`/template list\` to see available templates.`;
         }
 
-        const event = new CustomEvent('hermes-load-template', {
+        const event = new CustomEvent('enodios-load-template', {
           detail: found.prompt
         });
         window.dispatchEvent(event);
@@ -387,7 +387,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
           return 'Please specify a name for the template. Example: `/template save my-coach`';
         }
 
-        const leaves = plugin.app.workspace.getLeavesOfType('hermes-chat-view');
+        const leaves = plugin.app.workspace.getLeavesOfType('enodios-chat-view');
         if (leaves.length === 0) {
           return 'No active chat view found.';
         }

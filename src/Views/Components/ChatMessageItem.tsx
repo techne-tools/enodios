@@ -8,13 +8,13 @@ import {
 
 } from "react";
 import type { ReactElement } from "react";
-import type { ChatMessage, HermesChatView } from "../HermesChatView.tsx";
+import type { ChatMessage, EnodiosChatView } from "../EnodiosChatView.tsx";
 
 // Re-importing or redefining necessary interfaces/types
 export interface ChatMessageItemProps {
   message: ChatMessage;
   onEdit?: (messageId: string, newContent: string) => void;
-  view: HermesChatView;
+  view: EnodiosChatView;
   isEditing?: boolean;
   onStartEdit?: () => void;
   onCancelEdit?: () => void;
@@ -38,7 +38,7 @@ function HelixSpinner({
   }, [isRunning]);
 
   return (
-    <span className={`hermes-tool-helix ${isRunning ? "" : "stopped"}`}>
+    <span className={`enodios-tool-helix ${isRunning ? "" : "stopped"}`}>
       {HELIX_FRAMES[frame]}
     </span>
   );
@@ -119,8 +119,8 @@ export const ChatMessageItem = memo(
           ? "running..."
           : "completed";
       return (
-        <div className="hermes-message hermes-tool hermes-tool-backgrounded">
-          <span className="hermes-backgrounded-tool-indicator">
+        <div className="enodios-message enodios-tool enodios-tool-backgrounded">
+          <span className="enodios-backgrounded-tool-indicator">
             {statusIcon} {message.toolName} {statusText}
           </span>
         </div>
@@ -135,13 +135,13 @@ export const ChatMessageItem = memo(
 
       return (
         <div
-          className={`hermes-message hermes-${message.role} ${isExpanded ? `hermes-${message.role}-expanded` : `hermes-${message.role}-collapsed`}`}
+          className={`enodios-message enodios-${message.role} ${isExpanded ? `enodios-${message.role}-expanded` : `enodios-${message.role}-collapsed`}`}
         >
-          <div className="hermes-message-header">
-            <span className="hermes-role">{roleLabel}</span>
-            <span className="hermes-message-meta">
+          <div className="enodios-message-header">
+            <span className="enodios-role">{roleLabel}</span>
+            <span className="enodios-message-meta">
               <button
-                className="hermes-icon-btn hermes-msg-action-btn"
+                className="enodios-icon-btn enodios-msg-action-btn"
                 draggable
                 onClick={handleCopy}
                 onDragStart={(e) => {
@@ -184,7 +184,7 @@ export const ChatMessageItem = memo(
                 )}
               </button>
               <button
-                className="hermes-icon-btn hermes-msg-action-btn"
+                className="enodios-icon-btn enodios-msg-action-btn"
                 onClick={toggleExpand}
                 title={isExpanded ? "Collapse reasoning" : "Expand reasoning"}
                 type="button"
@@ -221,13 +221,13 @@ export const ChatMessageItem = memo(
                   </svg>
                 )}
               </button>
-              <span className="hermes-timestamp">
+              <span className="enodios-timestamp">
                 {new Date(message.timestamp).toLocaleTimeString()}
               </span>
             </span>
           </div>
           {isExpanded && (
-            <div className="hermes-message-content">
+            <div className="enodios-message-content">
               <MarkdownContent content={message.content} view={view} />
             </div>
           )}
@@ -237,12 +237,12 @@ export const ChatMessageItem = memo(
 
     if (message.role === "terminal") {
       return (
-        <div className={`hermes-message hermes-${message.role}`}>
-          <div className="hermes-message-header">
-            <span className="hermes-role">{roleLabel}</span>
-            <span className="hermes-message-meta">
+        <div className={`enodios-message enodios-${message.role}`}>
+          <div className="enodios-message-header">
+            <span className="enodios-role">{roleLabel}</span>
+            <span className="enodios-message-meta">
               <button
-                className="hermes-icon-btn hermes-msg-action-btn"
+                className="enodios-icon-btn enodios-msg-action-btn"
                 draggable
                 onClick={handleCopy}
                 onDragStart={(e) => {
@@ -284,15 +284,15 @@ export const ChatMessageItem = memo(
                   </svg>
                 )}
               </button>
-              <span className="hermes-timestamp">
+              <span className="enodios-timestamp">
                 {new Date(message.timestamp).toLocaleTimeString()}
               </span>
             </span>
           </div>
-          <div className="hermes-terminal-content">{message.content}</div>
+          <div className="enodios-terminal-content">{message.content}</div>
           {!message.isExited && (
             <button
-              className="hermes-abort-btn"
+              className="enodios-abort-btn"
               onClick={() => {
                 view.abortTerminal(message.terminalId!);
               }}
@@ -308,23 +308,23 @@ export const ChatMessageItem = memo(
 
     if (activeEditing) {
       return (
-        <div className={`hermes-message hermes-${message.role}`}>
-          <div className="hermes-message-header">
-            <span className="hermes-role">{roleLabel}</span>
+        <div className={`enodios-message enodios-${message.role}`}>
+          <div className="enodios-message-header">
+            <span className="enodios-role">{roleLabel}</span>
           </div>
-          <div className="hermes-message-content">
+          <div className="enodios-message-content">
             <textarea
               autoFocus={true}
-              className="hermes-edit-input"
+              className="enodios-edit-input"
               onChange={(e) => {
                 setEditValue(e.target.value);
               }}
               rows={Math.max(3, editValue.split("\n").length)}
               value={editValue}
             />
-            <div className="hermes-edit-actions">
+            <div className="enodios-edit-actions">
               <button
-                className="hermes-btn-approve"
+                className="enodios-btn-approve"
                 onClick={() => {
                   setEditing(false);
                   onEdit?.(message.id, editValue);
@@ -334,7 +334,7 @@ export const ChatMessageItem = memo(
                 Save & Submit
               </button>
               <button
-                className="hermes-btn-reject"
+                className="enodios-btn-reject"
                 onClick={() => {
                   setEditing(false);
                   setEditValue(message.content);
@@ -351,13 +351,13 @@ export const ChatMessageItem = memo(
 
     return (
       <div
-        className={`hermes-message hermes-${message.role} ${message.isRunning ? "hermes-tool-running" : ""}`}
+        className={`enodios-message enodios-${message.role} ${message.isRunning ? "enodios-tool-running" : ""}`}
       >
-        <div className="hermes-message-header">
-          <span className="hermes-role">{roleLabel}</span>
-          <span className="hermes-message-meta">
+        <div className="enodios-message-header">
+          <span className="enodios-role">{roleLabel}</span>
+          <span className="enodios-message-meta">
             <button
-              className="hermes-icon-btn hermes-msg-action-btn"
+              className="enodios-icon-btn enodios-msg-action-btn"
               draggable
               onClick={handleCopy}
               onDragStart={(e) => {
@@ -401,7 +401,7 @@ export const ChatMessageItem = memo(
             </button>
             {message.role === "user" && (
               <button
-                className="hermes-icon-btn hermes-msg-action-btn"
+                className="enodios-icon-btn enodios-msg-action-btn"
                 onClick={() => {
                   setEditing(true);
                 }}
@@ -424,12 +424,12 @@ export const ChatMessageItem = memo(
                 </svg>
               </button>
             )}
-            <span className="hermes-timestamp">
+            <span className="enodios-timestamp">
               {new Date(message.timestamp).toLocaleTimeString()}
             </span>
           </span>
         </div>
-        <div className="hermes-message-content">
+        <div className="enodios-message-content">
           <MarkdownContent content={message.content} view={view} />
         </div>
       </div>
@@ -439,7 +439,7 @@ export const ChatMessageItem = memo(
 
 interface MarkdownContentProps {
   content: string;
-  view: HermesChatView;
+  view: EnodiosChatView;
 }
 
 export const MarkdownContent = memo(
@@ -471,7 +471,7 @@ export const MarkdownContent = memo(
         }
 
         // Handle our custom clickable paths in inline code
-        const code = target.closest("code.hermes-clickable-path");
+        const code = target.closest("code.enodios-clickable-path");
         if (code) {
           const text = code.textContent?.trim();
           if (text) {
@@ -542,19 +542,19 @@ export const MarkdownContent = memo(
             preElements.forEach((pre) => {
               if (
                 pre.parentElement?.classList.contains(
-                  "hermes-code-block-wrapper"
+                  "enodios-code-block-wrapper"
                 )
               ) {
                 return;
               }
 
               const wrapper = document.createElement("div");
-              wrapper.className = "hermes-code-block-wrapper";
+              wrapper.className = "enodios-code-block-wrapper";
               pre.parentNode?.insertBefore(wrapper, pre);
               wrapper.appendChild(pre);
 
               const copyBtn = document.createElement("button");
-              copyBtn.className = "hermes-icon-btn hermes-code-copy-btn";
+              copyBtn.className = "enodios-icon-btn enodios-code-copy-btn";
               copyBtn.title = "Copy or Drag code";
               copyBtn.draggable = true;
               copyBtn.addEventListener("dragstart", (e: DragEvent) => {
@@ -600,7 +600,7 @@ export const MarkdownContent = memo(
                   view.app.metadataCache.getFirstLinkpathDest(text, "") ||
                   view.app.vault.getAbstractFileByPath(text);
                 if (file instanceof TFile) {
-                  code.classList.add("hermes-clickable-path");
+                  code.classList.add("enodios-clickable-path");
                   code.title = `Click to open ${file.path}\nDrag to insert link`;
                   code.draggable = true;
                   code.addEventListener("dragstart", (e: DragEvent) => {
@@ -631,6 +631,6 @@ export const MarkdownContent = memo(
       };
     }, [content, view]);
 
-    return <div className="hermes-markdown-renderer" ref={containerRef} />;
+    return <div className="enodios-markdown-renderer" ref={containerRef} />;
   }
 );

@@ -1,7 +1,8 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useStreamBuffer } from '../Views/useStreamBuffer.ts';
-import type { ChatMessage } from '../Views/HermesChatView.tsx';
+import type { ChatMessage } from '../Views/EnodiosChatView.tsx';
 
 describe('useStreamBuffer', () => {
   let rAFCallbacks: Array<FrameRequestCallback> = [];
@@ -33,13 +34,13 @@ describe('useStreamBuffer', () => {
   };
 
   it('should buffer multiple appendContent calls and flush once', () => {
-    let state: ChatMessage[] = [{ role: 'assistant', content: 'Hello', timestamp: 1 }];
+    let state: ChatMessage[] = [{ role: 'assistant', content: 'Hello', timestamp: 1, id: '1' }];
     const setMessages = vi.fn().mockImplementation((updater) => {
       state = updater(state);
     });
 
     const { result } = renderHook(() => useStreamBuffer(setMessages, false));
-    result.current.streamingMessageIdRef.current = 1;
+    result.current.streamingMessageIdRef.current = '1';
 
     act(() => {
       result.current.appendContent(' world');
@@ -56,13 +57,13 @@ describe('useStreamBuffer', () => {
   });
 
   it('should synchronously flush when flushNow is called', () => {
-    let state: ChatMessage[] = [{ role: 'assistant', content: 'Sync', timestamp: 2 }];
+    let state: ChatMessage[] = [{ role: 'assistant', content: 'Sync', timestamp: 2, id: '2' }];
     const setMessages = vi.fn().mockImplementation((updater) => {
       state = updater(state);
     });
 
     const { result } = renderHook(() => useStreamBuffer(setMessages, false));
-    result.current.streamingMessageIdRef.current = 2;
+    result.current.streamingMessageIdRef.current = '2';
 
     act(() => {
       result.current.appendContent(' flush');
@@ -74,22 +75,23 @@ describe('useStreamBuffer', () => {
   });
 
   it('should append reasoning to a separate message when showReasoning is true', () => {
-    let state: ChatMessage[] = [{ role: 'assistant', content: '', timestamp: 3 }];
+    let state: ChatMessage[] = [{ role: 'assistant', content: '', timestamp: 3, id: '3' }];
     const setMessages = vi.fn().mockImplementation((updater) => {
       state = updater(state);
     });
 
     const { result } = renderHook(() => useStreamBuffer(setMessages, true));
-    result.current.streamingMessageIdRef.current = 3;
+    result.current.streamingMessageIdRef.current = '3';
 
     act(() => {
       result.current.appendReasoning('Thinking...');
       result.current.flushNow();
     });
 
-    // It should dynamically create a new reasoning message
+    // It should dynamically create a new reasoning message and insert it before the assistant response
     expect(state).toHaveLength(2);
-    expect(state[1]?.role).toBe('reasoning');
-    expect(state[1]?.content).toBe('Thinking...');
+    expect(state[0]?.role).toBe('reasoning');
+    expect(state[0]?.content).toBe('Thinking...');
+    expect(state[1]?.role).toBe('assistant');
   });
 });

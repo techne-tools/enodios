@@ -10,18 +10,18 @@ export interface AuditLogPanelProps {
 
 export const AuditLogPanel = memo(({ entries, onClear, onClose }: AuditLogPanelProps): ReactElement => {
   return (
-    <div className="hermes-audit-log-panel">
-      <div className="hermes-audit-log-header">
+    <div className="enodios-audit-log-panel">
+      <div className="enodios-audit-log-header">
         <span>Audit Trace Log</span>
-        <div className="hermes-audit-log-actions">
-          <button className="hermes-text-btn" onClick={onClear} type="button">Clear</button>
-          <button className="hermes-icon-btn" onClick={onClose} title="Close" type="button">✕</button>
+        <div className="enodios-audit-log-actions">
+          <button className="enodios-text-btn" onClick={onClear} type="button">Clear</button>
+          <button className="enodios-icon-btn" onClick={onClose} title="Close" type="button">✕</button>
         </div>
       </div>
-      <div className="hermes-audit-log-list">
+      <div className="enodios-audit-log-list">
         {entries.length === 0
 ? (
-          <div className="hermes-audit-empty">No trace entries recorded yet</div>
+          <div className="enodios-audit-empty">No trace entries recorded yet</div>
         )
 : (
           entries.map((entry, idx) => {
@@ -43,12 +43,12 @@ export const AuditLogPanel = memo(({ entries, onClear, onClose }: AuditLogPanelP
             }[entry.action];
 
             return (
-              <div className={`hermes-audit-entry ${entry.status}`} key={idx}>
-                <div className="hermes-audit-entry-header">
+              <div className={`enodios-audit-entry ${entry.status}`} key={idx}>
+                <div className="enodios-audit-entry-header">
                   <span>{icon} {actionLabel} <strong>{entry.action}</strong></span>
-                  <span className="hermes-audit-entry-time">{time}</span>
+                  <span className="enodios-audit-entry-time">{time}</span>
                 </div>
-                <div className="hermes-audit-entry-details">
+                <div className="enodios-audit-entry-details">
                   {entry.details}
                 </div>
               </div>

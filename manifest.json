@@ -3,9 +3,9 @@
   "authorUrl": "https://github.com/prismatic7/",
   "description": "A plugin to allow working with your Hermes agent in your Obsidian Vault.",
   "css": "styles",
-  "id": "hermes",
+  "id": "enodios",
   "isDesktopOnly": true,
-  "name": "Hermes Agent for Obsidian",
-  "version": "0.6.2",
+  "name": "Enodios",
+  "version": "0.7.0",
   "minAppVersion": "1.13.7"
 }

@@ -44,3 +44,23 @@ export class App {
     this.metadataCache = { getFileCache: () => null };
   }
 }
+
+export class Component {
+  load() {}
+  unload() {}
+}
+
+export class View extends Component {}
+
+export class ItemView extends View {
+  constructor(leaf) {
+    super();
+  }
+}
+
+export class MarkdownView extends View {
+  constructor() {
+    super();
+    this.file = null;
+  }
+}

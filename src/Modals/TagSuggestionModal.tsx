@@ -79,7 +79,7 @@ function TagSuggestionComponent({ plugin, file, close }: TagSuggestionComponentP
   if (loading) {
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
-        <div className="hermes-tool-spinner" style={{ margin: '0 auto 10px auto' }}></div>
+        <div className="enodios-tool-spinner" style={{ margin: '0 auto 10px auto' }}></div>
         <div>Analyzing note content...</div>
       </div>
     );

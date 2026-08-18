@@ -26,22 +26,22 @@ class FileHeaderWidget extends WidgetType {
 
   toDOM() {
     const div = document.createElement('div');
-    div.className = 'hermes-diff-file-header';
+    div.className = 'enodios-diff-file-header';
     // NOTE: "Approve All" / "Reject All" here refers to ALL hunks within
     // this single file change, not all pending changes globally. The UI
     // presents one file header per pending change, so "All" is scoped
     // to the current file's hunks.
     div.innerHTML = `
-      <div class="hermes-diff-file-title">Pending Changes</div>
-      <div class="hermes-diff-actions">
-        <button class="hermes-btn-approve">Approve All</button>
-        <button class="hermes-btn-reject">Reject All</button>
+      <div class="enodios-diff-file-title">Pending Changes</div>
+      <div class="enodios-diff-actions">
+        <button class="enodios-btn-approve">Approve All</button>
+        <button class="enodios-btn-reject">Reject All</button>
       </div>
     `;
-    div.querySelector('.hermes-btn-approve')!.addEventListener('click', () => {
+    div.querySelector('.enodios-btn-approve')!.addEventListener('click', () => {
       this.manager.approveChange(this.changeId);
     });
-    div.querySelector('.hermes-btn-reject')!.addEventListener('click', () => {
+    div.querySelector('.enodios-btn-reject')!.addEventListener('click', () => {
       this.manager.rejectChange(this.changeId);
     });
     return div;
@@ -57,17 +57,17 @@ class HunkHeaderWidget extends WidgetType {
 
   toDOM() {
     const div = document.createElement('div');
-    div.className = 'hermes-diff-hunk-header';
+    div.className = 'enodios-diff-hunk-header';
     div.innerHTML = `
-      <div class="hermes-diff-actions">
-        <button class="hermes-btn-approve-sm">Approve Hunk</button>
-        <button class="hermes-btn-reject-sm">Reject Hunk</button>
+      <div class="enodios-diff-actions">
+        <button class="enodios-btn-approve-sm">Approve Hunk</button>
+        <button class="enodios-btn-reject-sm">Reject Hunk</button>
       </div>
     `;
-    div.querySelector('.hermes-btn-approve-sm')!.addEventListener('click', () => {
+    div.querySelector('.enodios-btn-approve-sm')!.addEventListener('click', () => {
       this.manager.processPartialChange(this.changeId, this.indices, 'approve');
     });
-    div.querySelector('.hermes-btn-reject-sm')!.addEventListener('click', () => {
+    div.querySelector('.enodios-btn-reject-sm')!.addEventListener('click', () => {
       this.manager.processPartialChange(this.changeId, this.indices, 'reject');
     });
     return div;
@@ -88,24 +88,24 @@ class InlineDiffWidget extends WidgetType {
 
   toDOM(): HTMLElement {
     const span = document.createElement('div');
-    span.className = 'hermes-diff-line hermes-diff-' + this.line.type;
+    span.className = 'enodios-diff-line enodios-diff-' + this.line.type;
 
     const marker = document.createElement('span');
-    marker.className = 'hermes-diff-marker';
+    marker.className = 'enodios-diff-marker';
     marker.textContent = this.line.type === 'added' ? '+' : this.line.type === 'removed' ? '-' : ' ';
     span.appendChild(marker);
 
     const text = document.createElement('span');
-    text.className = 'hermes-diff-text';
+    text.className = 'enodios-diff-text';
     text.textContent = this.line.line || ' ';
     span.appendChild(text);
 
     // Add inline action buttons on hover
     const actions = document.createElement('span');
-    actions.className = 'hermes-diff-line-actions';
+    actions.className = 'enodios-diff-line-actions';
 
     const approveBtn = document.createElement('button');
-    approveBtn.className = 'hermes-btn-approve-line';
+    approveBtn.className = 'enodios-btn-approve-line';
     approveBtn.title = 'Approve change';
     approveBtn.textContent = '✓';
     approveBtn.addEventListener('click', (e) => {
@@ -114,7 +114,7 @@ class InlineDiffWidget extends WidgetType {
     });
 
     const rejectBtn = document.createElement('button');
-    rejectBtn.className = 'hermes-btn-reject-line';
+    rejectBtn.className = 'enodios-btn-reject-line';
     rejectBtn.title = 'Reject change';
     rejectBtn.textContent = '✗';
     rejectBtn.addEventListener('click', (e) => {

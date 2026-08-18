@@ -747,7 +747,7 @@ export class AcpClient implements ChatClient {
     } finally {
       // The ACP SDK streams content/reasoning/tool updates as notifications while
       // prompt() is in flight, but it does not emit a dedicated 'stop' event.
-      // HermesChatView's streaming pipeline relies on a 'stop' update to flush
+      // EnodiosChatView's streaming pipeline relies on a 'stop' update to flush
       // the buffered content, clear isTyping, and render the final assistant
       // response. Emit one now that the prompt turn has completed.
       this.emitUpdate({ type: 'stop' });
@@ -1201,11 +1201,11 @@ export class AcpClient implements ChatClient {
       // Authenticate if needed
       if (initResponse.authMethods && initResponse.authMethods.length > 0) {
         const terminalMethod = initResponse.authMethods.find(
-          (m) => m.id === 'hermes-setup'
+          (m) => m.id === 'enodios-setup'
         );
         if (terminalMethod) {
           await this.clientConnection.authenticate({
-            methodId: 'hermes-setup'
+            methodId: 'enodios-setup'
           });
         }
       }
@@ -1341,7 +1341,7 @@ export class AcpClient implements ChatClient {
     if (update.type === 'usage' && update.usage) {
       const estimatedCost = (update.usage.inputTokens * 0.000003) + (update.usage.outputTokens * 0.000015); // Approximate GPT-4 pricing
       window.dispatchEvent(
-        new CustomEvent('hermes-usage-update', {
+        new CustomEvent('enodios-usage-update', {
           detail: {
             estimatedCost,
             inputTokens: update.usage.inputTokens,

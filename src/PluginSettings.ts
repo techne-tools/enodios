@@ -14,7 +14,7 @@ export class PluginSettings {
   public chatAgentName = 'Hermes';
 
   // Conversation Persistence
-  public chatSaveFolder = 'hermes';
+  public chatSaveFolder = 'enodios';
   // Connection
   public connectionMode: 'acp' | 'api' = 'acp';
 
@@ -43,7 +43,7 @@ export class PluginSettings {
   // Onboarding
   public hasSeenOnboarding = false;
   // API Configuration
-  public hermesAgentName = 'hermes-agent';
+  public hermesAgentName = 'enodios-agent';
 
   public hermesApiUrl = 'http://localhost:8642';
 

@@ -1,12 +1,12 @@
 import { memo  } from 'react';
 import type { ReactElement } from 'react';
-import type { HermesChatView, ChatMessage } from '../HermesChatView.tsx';
+import type { EnodiosChatView, ChatMessage } from '../EnodiosChatView.tsx';
 import { ChatMessageItem } from './ChatMessageItem.tsx';
 import type { AcpConnectionStatus } from '../../ChatClient.ts';
 
 // Helper component
 function TypingIndicator({ agentName }: { agentName: string }): ReactElement {
-    return <div className="hermes-typing-indicator">{agentName} is thinking...</div>;
+    return <div className="enodios-typing-indicator">{agentName} is thinking...</div>;
 }
 
 export interface MessageListProps {
@@ -16,7 +16,7 @@ export interface MessageListProps {
   editingMessageId: string | null;
   setEditingMessageId: (id: string | null) => void;
   handleEditSubmit: (id: string, text: string) => Promise<void>;
-  view: HermesChatView;
+  view: EnodiosChatView;
   messageRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
   agentName: string;
   connectionStatus: AcpConnectionStatus | null;
@@ -69,11 +69,11 @@ export const MessageList = memo(({
       })}
       {isTyping && <TypingIndicator agentName={agentName} />}
       {connectionStatus && connectionStatus.state !== 'connected' && !(connectionStatus.state === 'error' && error) && (
-        <div className={`hermes-status hermes-status-${connectionStatus.state}`} role="status">
-          <span className="hermes-status-icon">
+        <div className={`enodios-status enodios-status-${connectionStatus.state}`} role="status">
+          <span className="enodios-status-icon">
             {connectionStatus.state === 'error' ? '⚠️' : '⏳'}
           </span>
-          <span className="hermes-status-text">
+          <span className="enodios-status-text">
             {connectionStatus.state === 'connecting' && 'Connecting to Hermes via ACP...'}
             {connectionStatus.state === 'loading' && (connectionStatus.detail || 'Hermes is starting...')}
             {connectionStatus.state === 'error' && (connectionStatus.detail || 'Connection error')}

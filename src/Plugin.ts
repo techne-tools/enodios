@@ -41,9 +41,9 @@ import { TemplateManager } from './TemplateManager.ts';
 import { isPluginEnabled } from './utils/plugins.ts';
 import { VaultManager } from './VaultManager.ts';
 import {
-  HERMES_CHAT_VIEW_TYPE,
-  HermesChatView
-} from './Views/HermesChatView.tsx';
+  ENODIOS_CHAT_VIEW_TYPE,
+  EnodiosChatView
+} from './Views/EnodiosChatView.tsx';
 
 export class Plugin extends PluginBase<PluginTypes> {
   public acpClient!: AcpClient;
@@ -145,7 +145,7 @@ export class Plugin extends PluginBase<PluginTypes> {
       this.debug.error('Initial connection failed', err);
     });
 
-    this.registerView(HERMES_CHAT_VIEW_TYPE, (leaf) => new HermesChatView(leaf, this));
+    this.registerView(ENODIOS_CHAT_VIEW_TYPE, (leaf) => new EnodiosChatView(leaf, this));
 
     // Register CodeMirror 6 extensions for inline ghost text and diff
     this.registerEditorExtension(ghostTextExtension);
@@ -157,15 +157,15 @@ export class Plugin extends PluginBase<PluginTypes> {
       })
     );
 
-    // Add ribbon icon for Hermes chat
-    const ribbonIconEl = this.addRibbonIcon('message-square', 'Open Hermes Chat', () => {
-      this.openView(HERMES_CHAT_VIEW_TYPE).catch((err) => {
+    // Add ribbon icon for Enodios chat
+    const ribbonIconEl = this.addRibbonIcon('message-square', 'Open Enodios Chat', () => {
+      this.openView(ENODIOS_CHAT_VIEW_TYPE).catch((err) => {
         this.debug.error('Failed to open view', err);
       });
     });
 
-    ribbonIconEl.classList.add('hermes-ribbon-icon');
-    this.ribbonBadgeEl = ribbonIconEl.createSpan({ cls: 'hermes-ribbon-badge' });
+    ribbonIconEl.classList.add('enodios-ribbon-icon');
+    this.ribbonBadgeEl = ribbonIconEl.createSpan({ cls: 'enodios-ribbon-badge' });
     this.ribbonBadgeEl.style.display = 'none';
 
     const updateBadge = (): void => {
@@ -181,21 +181,21 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.fileChangeManager.onChanges(updateBadge);
     this.acpClient.onPermissionsChange(updateBadge);
 
-    // Add command to open Hermes chat view
+    // Add command to open Enodios chat view
     this.addCommand({
       callback: () => {
-        this.openView(HERMES_CHAT_VIEW_TYPE).catch((err) => {
+        this.openView(ENODIOS_CHAT_VIEW_TYPE).catch((err) => {
           this.debug.error('Failed to open view', err);
         });
       },
-      id: 'open-hermes-chat',
-      name: 'Open Hermes Chat'
+      id: 'open-enodios-chat',
+      name: 'Open Enodios Chat'
     });
 
-    // Add command to toggle Hermes chat view
+    // Add command to toggle Enodios chat view
     this.addCommand({
       callback: () => {
-        this.toggleView(HERMES_CHAT_VIEW_TYPE).catch((err) => {
+        this.toggleView(ENODIOS_CHAT_VIEW_TYPE).catch((err) => {
           this.debug.error('Failed to toggle view', err);
         });
       },
@@ -205,11 +205,11 @@ export class Plugin extends PluginBase<PluginTypes> {
           modifiers: ['Mod']
         }
       ],
-      id: 'toggle-hermes-chat',
-      name: 'Toggle Hermes Chat'
+      id: 'toggle-enodios-chat',
+      name: 'Toggle Enodios Chat'
     });
 
-    // Add command to focus chat input (when chat is open)
+    // Add command to focus Enodios chat input (when chat is open)
     this.addCommand({
       callback: () => {
         this.focusChatInput().catch((err) => {
@@ -222,8 +222,8 @@ export class Plugin extends PluginBase<PluginTypes> {
           modifiers: ['Mod', 'Shift']
         }
       ],
-      id: 'focus-hermes-chat-input',
-      name: 'Focus Hermes Chat Input'
+      id: 'focus-enodios-chat-input',
+      name: 'Focus Enodios Chat Input'
     });
 
     // Add command to trigger inline completion (Ghost Text)
@@ -268,7 +268,7 @@ export class Plugin extends PluginBase<PluginTypes> {
           cmView.dispatch({ effects: setGhostTextEffect.of(null) });
         }
       },
-      id: 'hermes-inline-suggest',
+      id: 'enodios-inline-suggest',
       name: 'Trigger Inline Suggestion'
     });
 
@@ -285,7 +285,7 @@ export class Plugin extends PluginBase<PluginTypes> {
       return true;
     };
 
-    // Command Palette: Ask Hermes about selection
+    // Command Palette: Ask Enodios about selection
     this.addCommand({
       editorCallback: async (editor, _view) => {
         if (!checkRateLimit()) return;
@@ -295,12 +295,12 @@ export class Plugin extends PluginBase<PluginTypes> {
           return;
         }
 
-        await this.openView(HERMES_CHAT_VIEW_TYPE);
-        const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+        await this.openView(ENODIOS_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(ENODIOS_CHAT_VIEW_TYPE);
         if (leaves.length === 0) return;
 
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) return;
+        if (!(chatView instanceof EnodiosChatView)) return;
 
         const contextItems = [{
           id: `selection-${Date.now()}`,
@@ -310,8 +310,8 @@ export class Plugin extends PluginBase<PluginTypes> {
 
         await chatView.sendPrompt(`Please explain or elaborate on the following:\n\n${selection}`, contextItems);
       },
-      id: 'hermes-ask-selection',
-      name: 'Ask Hermes about selection'
+      id: 'enodios-ask-selection',
+      name: 'Ask Enodios about selection'
     });
 
     // Command Palette: Summarize current note
@@ -324,12 +324,12 @@ export class Plugin extends PluginBase<PluginTypes> {
           return;
         }
 
-        await this.openView(HERMES_CHAT_VIEW_TYPE);
-        const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+        await this.openView(ENODIOS_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(ENODIOS_CHAT_VIEW_TYPE);
         if (leaves.length === 0) return;
 
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) return;
+        if (!(chatView instanceof EnodiosChatView)) return;
 
         const contextItems = [{
           id: `note-${activeFile.path}`,
@@ -339,8 +339,8 @@ export class Plugin extends PluginBase<PluginTypes> {
 
         await chatView.sendPrompt('Please provide a concise summary of this note.', contextItems);
       },
-      id: 'hermes-summarize-note',
-      name: 'Summarize current note with Hermes'
+      id: 'enodios-summarize-note',
+      name: 'Summarize current note with Enodios'
     });
 
     // Command Palette: Generate tags for current note
@@ -353,12 +353,12 @@ export class Plugin extends PluginBase<PluginTypes> {
           return;
         }
 
-        await this.openView(HERMES_CHAT_VIEW_TYPE);
-        const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+        await this.openView(ENODIOS_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(ENODIOS_CHAT_VIEW_TYPE);
         if (leaves.length === 0) return;
 
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) return;
+        if (!(chatView instanceof EnodiosChatView)) return;
 
         const contextItems = [{
           id: `note-${activeFile.path}`,
@@ -368,7 +368,7 @@ export class Plugin extends PluginBase<PluginTypes> {
 
         await chatView.sendPrompt('Generate 3-5 relevant tags for this note. Return them as a comma-separated list.', contextItems);
       },
-      id: 'hermes-generate-tags',
+      id: 'enodios-generate-tags',
       name: 'Generate tags for current note'
     });
 
@@ -378,7 +378,7 @@ export class Plugin extends PluginBase<PluginTypes> {
         const items = await this.citationManager.loadBibliography();
         new CitationSuggestModal(this, items).open();
       },
-      id: 'hermes-insert-citation',
+      id: 'enodios-insert-citation',
       name: 'Insert Citation'
     });
 
@@ -422,7 +422,7 @@ export class Plugin extends PluginBase<PluginTypes> {
         await this.app.vault.modify(activeFile, newContent);
         new Notice('Bibliography generated successfully');
       },
-      id: 'hermes-generate-bibliography',
+      id: 'enodios-generate-bibliography',
       name: 'Generate Bibliography for Current Note'
     });
 
@@ -431,7 +431,7 @@ export class Plugin extends PluginBase<PluginTypes> {
       callback: () => {
         new TagSuggestionModal(this).open();
       },
-      id: 'hermes-suggest-tags',
+      id: 'enodios-suggest-tags',
       name: 'Suggest Tags for Current Note'
     });
 
@@ -447,11 +447,11 @@ export class Plugin extends PluginBase<PluginTypes> {
           new Notice('No active note to generate slides from.');
           return;
         }
-        await this.openView(HERMES_CHAT_VIEW_TYPE);
-        const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+        await this.openView(ENODIOS_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(ENODIOS_CHAT_VIEW_TYPE);
         if (leaves.length === 0) return;
         const chatView = leaves[0]!.view;
-        if (!(chatView instanceof HermesChatView)) return;
+        if (!(chatView instanceof EnodiosChatView)) return;
         const contextItems = [{
           id: `note-${activeFile.path}`,
           text: activeFile.basename,
@@ -462,7 +462,7 @@ export class Plugin extends PluginBase<PluginTypes> {
           contextItems
         );
       },
-      id: 'hermes-generate-slides',
+      id: 'enodios-generate-slides',
       name: 'Generate Slides from active note'
     });
 
@@ -480,7 +480,7 @@ export class Plugin extends PluginBase<PluginTypes> {
         }
         await this.slidesManager.openPresentationMode(activeFile);
       },
-      id: 'hermes-present-slides',
+      id: 'enodios-present-slides',
       name: 'Present active note with Slides'
     });
   }
@@ -509,9 +509,9 @@ export class Plugin extends PluginBase<PluginTypes> {
   }
 
   private async focusChatInput(): Promise<void> {
-    const leaves = this.app.workspace.getLeavesOfType(HERMES_CHAT_VIEW_TYPE);
+    const leaves = this.app.workspace.getLeavesOfType(ENODIOS_CHAT_VIEW_TYPE);
     if (leaves.length === 0) {
-      await this.openView(HERMES_CHAT_VIEW_TYPE);
+      await this.openView(ENODIOS_CHAT_VIEW_TYPE);
       return;
     }
 
@@ -519,7 +519,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Focus the textarea after a short delay to allow the view to render
     setTimeout(() => {
       const container = leaves[0]!.view.containerEl;
-      const textarea = container.querySelector('.hermes-input') as HTMLElement | null;
+      const textarea = container.querySelector('.enodios-input') as HTMLElement | null;
       if (textarea) {
         textarea.focus();
       }
@@ -562,11 +562,11 @@ export class Plugin extends PluginBase<PluginTypes> {
     if (isActive) {
       this.statusBarItemEl.textContent = '● Hermes';
       this.statusBarItemEl.style.display = 'inline-block';
-      this.statusBarItemEl.classList.add('hermes-status-pulsing');
+      this.statusBarItemEl.classList.add('enodios-status-pulsing');
     } else {
       this.statusBarItemEl.textContent = '';
       this.statusBarItemEl.style.display = 'none';
-      this.statusBarItemEl.classList.remove('hermes-status-pulsing');
+      this.statusBarItemEl.classList.remove('enodios-status-pulsing');
     }
   }
 }

@@ -8,11 +8,11 @@
   /* Override library styles */
 }
 
-.hermes-ribbon-icon {
+.enodios-ribbon-icon {
   position: relative;
 }
 
-.hermes-ribbon-badge {
+.enodios-ribbon-badge {
   position: absolute;
   top: 0px;
   right: 0px;
@@ -33,7 +33,7 @@
 }
 
 /* Hermes Chat View Styles */
-.hermes-chat-container {
+.enodios-chat-container {
   --radius: 6px;
   --radius-lg: 8px;
   display: flex;
@@ -53,30 +53,30 @@
     border-radius: 4px;
   }
 
-  .hermes-icon-btn:focus-visible,
-  .hermes-context-btn:focus-visible,
-  .hermes-attach-btn:focus-visible,
-  .hermes-send-btn:focus-visible,
-  .hermes-context-remove:focus-visible,
-  .hermes-btn-approve:focus-visible,
-  .hermes-btn-reject:focus-visible,
-  .hermes-permission-option:focus-visible {
+  .enodios-icon-btn:focus-visible,
+  .enodios-context-btn:focus-visible,
+  .enodios-attach-btn:focus-visible,
+  .enodios-send-btn:focus-visible,
+  .enodios-context-remove:focus-visible,
+  .enodios-btn-approve:focus-visible,
+  .enodios-btn-reject:focus-visible,
+  .enodios-permission-option:focus-visible {
     outline: 2px solid var(--interactive-accent);
     outline-offset: 2px;
   }
 
   /* Press feedback — buttons move down 1px on activation */
-  .hermes-icon-btn:active,
-  .hermes-context-btn:active,
-  .hermes-attach-btn:active,
-  .hermes-btn-approve:active,
-  .hermes-btn-reject:active,
-  .hermes-permission-option:active {
+  .enodios-icon-btn:active,
+  .enodios-context-btn:active,
+  .enodios-attach-btn:active,
+  .enodios-btn-approve:active,
+  .enodios-btn-reject:active,
+  .enodios-permission-option:active {
     transform: translateY(1px);
   }
 }
 
-.hermes-chat-header {
+.enodios-chat-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -97,30 +97,30 @@
     gap: 4px;
   }
 
-  .hermes-chat-agent-name {
+  .enodios-chat-agent-name {
     font-size: 13px;
     font-weight: 600;
     color: var(--text-normal);
   }
 
-  .hermes-saving-indicator {
+  .enodios-saving-indicator {
     font-size: 8px;
     color: var(--text-accent);
-    animation: hermes-pulse 1.5s ease-in-out infinite;
+    animation: enodios-pulse 1.5s ease-in-out infinite;
   }
 }
 
-@keyframes hermes-pulse {
+@keyframes enodios-pulse {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
 }
 
-@keyframes hermes-spin {
+@keyframes enodios-spin {
   100% { transform: rotate(360deg); }
 }
 
 /* Tool progress braille helix spinner */
-.hermes-tool-helix {
+.enodios-tool-helix {
   display: inline-block;
   vertical-align: baseline;
   margin-right: 4px;
@@ -129,17 +129,17 @@
   line-height: 1;
 }
 
-.hermes-tool-helix.stopped {
+.enodios-tool-helix.stopped {
   color: var(--text-muted);
 }
 
 /* Running tool message pulse effect */
-.hermes-tool-running {
-  animation: hermes-tool-pulse 2s ease-in-out infinite;
+.enodios-tool-running {
+  animation: enodios-tool-pulse 2s ease-in-out infinite;
   border-left: 3px solid var(--text-accent) !important;
 }
 
-@keyframes hermes-tool-pulse {
+@keyframes enodios-tool-pulse {
   0%, 100% {
     border-left-color: var(--text-accent);
     box-shadow: 0 0 0 0 rgba(var(--text-accent-rgb, 100, 100, 255), 0.2);
@@ -151,27 +151,27 @@
 }
 
 /* Collapsible reasoning and tools */
-.hermes-reasoning-collapsed,
-.hermes-tool-collapsed {
+.enodios-reasoning-collapsed,
+.enodios-tool-collapsed {
   opacity: 0.7;
-  .hermes-message-header {
+  .enodios-message-header {
     cursor: pointer;
   }
 }
 
-.hermes-reasoning-expanded,
-.hermes-tool-expanded {
+.enodios-reasoning-expanded,
+.enodios-tool-expanded {
   opacity: 1;
-  .hermes-message-header {
+  .enodios-message-header {
     cursor: pointer;
   }
 }
 
-.hermes-status-pulsing {
-  animation: hermes-pulse 1.5s ease-in-out infinite;
+.enodios-status-pulsing {
+  animation: enodios-pulse 1.5s ease-in-out infinite;
 }
 
-.hermes-conversation-list {
+.enodios-conversation-list {
   position: absolute;
   top: 40px;
   left: 8px;
@@ -204,7 +204,7 @@
     overflow-y: auto;
   }
 
-  .hermes-conversation-item {
+  .enodios-conversation-item {
     width: 100%;
     text-align: left;
     padding: 10px 12px;
@@ -229,7 +229,7 @@
     }
   }
 
-  .hermes-conversation-empty {
+  .enodios-conversation-empty {
     padding: 16px;
     text-align: center;
     color: var(--text-muted);
@@ -238,7 +238,7 @@
 }
 
 /* Session Settings Modal */
-.hermes-session-settings {
+.enodios-session-settings {
   position: absolute;
   top: 40px;
   left: 8px;
@@ -282,7 +282,7 @@
     flex-wrap: wrap;
   }
 
-  .hermes-btn-secondary {
+  .enodios-btn-secondary {
     padding: 4px 8px;
     font-size: 11px;
     background-color: var(--background-secondary);
@@ -297,7 +297,7 @@
   }
 }
 
-.hermes-session-tool-toggle {
+.enodios-session-tool-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -311,12 +311,12 @@
   }
 }
 
-.hermes-chat-title {
+.enodios-chat-title {
   display: none;
 }
 
 /* Conversation Search Bar */
-.hermes-search-bar {
+.enodios-search-bar {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -324,7 +324,7 @@
   border-bottom: 1px solid var(--background-modifier-border);
   background-color: var(--background-primary);
 
-  .hermes-search-input {
+  .enodios-search-input {
     flex: 1;
     padding: 4px 8px;
     border: 1px solid var(--background-modifier-border);
@@ -339,24 +339,24 @@
     }
   }
 
-  .hermes-search-count {
+  .enodios-search-count {
     font-size: 12px;
     color: var(--text-muted);
     white-space: nowrap;
   }
 }
 
-.hermes-search-highlight {
-  animation: hermes-search-flash 2s ease-out;
+.enodios-search-highlight {
+  animation: enodios-search-flash 2s ease-out;
 }
 
-@keyframes hermes-search-flash {
+@keyframes enodios-search-flash {
   0% { background-color: rgba(var(--interactive-accent-rgb), 0.3); }
   100% { background-color: transparent; }
 }
 
 /* Token Usage Footer */
-.hermes-token-footer {
+.enodios-token-footer {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -367,7 +367,7 @@
   color: var(--text-muted);
   flex-shrink: 0;
 
-  .hermes-token-stat {
+  .enodios-token-stat {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -378,7 +378,7 @@
     }
   }
 
-  .hermes-token-cost {
+  .enodios-token-cost {
     margin-left: auto;
     font-weight: 600;
     color: var(--text-accent);
@@ -386,7 +386,7 @@
 }
 
 /* Onboarding Panel */
-.hermes-onboarding {
+.enodios-onboarding {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -451,7 +451,7 @@
   }
 }
 
-.hermes-chat-content {
+.enodios-chat-content {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -479,7 +479,7 @@
   }
 }
 
-.hermes-message {
+.enodios-message {
   display: flex;
   flex-direction: column;
   max-width: 95%;
@@ -492,21 +492,21 @@
     margin-top: 6px;
   }
 
-  &.hermes-assistant + &.hermes-user,
-  &.hermes-reasoning + &.hermes-user,
-  &.hermes-tool + &.hermes-user,
-  &.hermes-terminal + &.hermes-user {
+  &.enodios-assistant + &.enodios-user,
+  &.enodios-reasoning + &.enodios-user,
+  &.enodios-tool + &.enodios-user,
+  &.enodios-terminal + &.enodios-user {
     margin-top: 18px;
   }
 
-  &.hermes-user + &.hermes-assistant,
-  &.hermes-user + &.hermes-reasoning,
-  &.hermes-user + &.hermes-tool,
-  &.hermes-user + &.hermes-terminal {
+  &.enodios-user + &.enodios-assistant,
+  &.enodios-user + &.enodios-reasoning,
+  &.enodios-user + &.enodios-tool,
+  &.enodios-user + &.enodios-terminal {
     margin-top: 18px;
   }
 
-  &.hermes-user {
+  &.enodios-user {
     align-self: flex-end;
     background-color: var(--interactive-accent);
     color: var(--text-on-accent);
@@ -523,14 +523,14 @@
       }
     }
 
-    .hermes-markdown-renderer code:not(pre code) {
+    .enodios-markdown-renderer code:not(pre code) {
       background-color: rgba(0, 0, 0, 0.55) !important;
       color: #ffffff !important;
       border-color: rgba(255, 255, 255, 0.35);
     }
   }
 
-  &.hermes-assistant {
+  &.enodios-assistant {
     align-self: flex-start;
     background-color: color-mix(in oklab, var(--interactive-accent) 8%, var(--background-secondary-alt));
     color: var(--text-normal);
@@ -539,14 +539,14 @@
     padding: 6px 10px;
   }
 
-  &.hermes-system {
+  &.enodios-system {
     align-self: center;
     background-color: transparent;
     color: var(--text-muted);
     font-size: 12px;
   }
 
-  &.hermes-reasoning {
+  &.enodios-reasoning {
     align-self: flex-start;
     background-color: var(--background-secondary-alt);
     color: var(--text-muted);
@@ -558,7 +558,7 @@
     padding: 6px 10px;
   }
 
-  &.hermes-tool {
+  &.enodios-tool {
     align-self: flex-start;
     background-color: var(--background-secondary);
     color: var(--text-normal);
@@ -567,7 +567,7 @@
     max-width: 95%;
   }
 
-  &.hermes-tool-backgrounded {
+  &.enodios-tool-backgrounded {
     align-self: flex-start;
     background: none;
     margin: 0;
@@ -577,12 +577,12 @@
     max-width: 95%;
     border: none;
 
-    .hermes-backgrounded-tool-indicator {
+    .enodios-backgrounded-tool-indicator {
       opacity: 0.7;
     }
   }
 
-  &.hermes-terminal {
+  &.enodios-terminal {
     align-self: stretch;
     background-color: var(--background-secondary-alt);
     color: var(--text-normal);
@@ -592,7 +592,7 @@
     margin: 4px 0;
     max-width: 100%;
 
-    .hermes-message-header {
+    .enodios-message-header {
       padding: 6px 8px;
       margin: 0;
       background-color: var(--background-secondary);
@@ -602,7 +602,7 @@
   }
 }
 
-.hermes-terminal-content {
+.enodios-terminal-content {
   max-height: 300px;
   overflow-y: auto;
   padding: 8px;
@@ -613,7 +613,7 @@
   border-radius: 0 0 6px 6px;
 }
 
-.hermes-abort-btn {
+.enodios-abort-btn {
   margin: 4px 8px 8px;
   background-color: var(--background-modifier-error);
   color: var(--text-on-accent);
@@ -628,14 +628,14 @@
   }
 }
 
-.hermes-message-header {
+.enodios-message-header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 6px;
   line-height: 1.0;
 
-  .hermes-role {
+  .enodios-role {
     font-weight: 600;
     font-size: 11px;
     color: var(--text-normal);
@@ -646,19 +646,19 @@
     padding-right: 8px;
   }
 
-  .hermes-message-meta {
+  .enodios-message-meta {
     display: flex;
     align-items: center;
     gap: 6px;
   }
 
-  .hermes-msg-action-btn {
+  .enodios-msg-action-btn {
     opacity: 0;
     transition: opacity 0.2s ease;
   }
 
-  .hermes-timestamp,
-  .hermes-typing {
+  .enodios-timestamp,
+  .enodios-typing {
     font-size: 10px;
     color: var(--text-muted);
     white-space: nowrap;
@@ -666,7 +666,7 @@
     margin-left: auto;
   }
 
-  .hermes-spinner {
+  .enodios-spinner {
     display: inline-block;
     width: 1ch;
     text-align: center;
@@ -678,11 +678,11 @@
   }
 }
 
-.hermes-message:hover .hermes-msg-action-btn {
+.enodios-message:hover .enodios-msg-action-btn {
   opacity: 1;
 }
 
-.hermes-message-content {
+.enodios-message-content {
   word-wrap: break-word;
   overflow-wrap: break-word;
   padding: 0;
@@ -697,7 +697,7 @@
   }
 }
 
-.hermes-markdown-renderer {
+.enodios-markdown-renderer {
   background-color: transparent !important;
   word-wrap: break-word;
   font-size: 13px;
@@ -714,16 +714,16 @@
     background-color: transparent !important;
   }
 
-  .hermes-code-block-wrapper {
+  .enodios-code-block-wrapper {
     position: relative;
     margin: 8px 0;
 
-    &:hover .hermes-code-copy-btn {
+    &:hover .enodios-code-copy-btn {
       opacity: 1;
     }
   }
 
-  .hermes-code-copy-btn {
+  .enodios-code-copy-btn {
     position: absolute;
     top: 6px;
     right: 6px;
@@ -806,7 +806,7 @@
     border: 1px solid var(--background-modifier-border-hover);
     font-weight: 500;
 
-    &.hermes-clickable-path {
+    &.enodios-clickable-path {
       cursor: pointer;
       text-decoration: underline;
       text-decoration-style: dotted;
@@ -874,13 +874,13 @@
   }
 }
 
-.hermes-input-wrapper {
+.enodios-input-wrapper {
   position: relative;
   padding: 8px 12px 12px;
   flex-shrink: 0;
 }
 
-.hermes-input-container {
+.enodios-input-container {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -892,21 +892,21 @@
   position: relative;
 }
 
-.hermes-input-top {
+.enodios-input-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
 }
 
-.hermes-input-bottom {
+.enodios-input-bottom {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-top: 4px;
 }
 
-.hermes-input-left {
+.enodios-input-left {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -914,13 +914,13 @@
   max-width: 100%;
 }
 
-.hermes-input-right {
+.enodios-input-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.hermes-context-btn {
+.enodios-context-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -945,7 +945,7 @@
   }
 }
 
-.hermes-context-list {
+.enodios-context-list {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -953,7 +953,7 @@
   max-width: calc(100% - 40px);
 }
 
-.hermes-context-chip {
+.enodios-context-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -969,7 +969,7 @@
   max-width: 100%;
   min-width: 4ch;
 
-  .hermes-context-remove {
+  .enodios-context-remove {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -994,7 +994,7 @@
     }
   }
 
-  .hermes-context-text {
+  .enodios-context-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1002,12 +1002,12 @@
   }
 
   /* Slash-command chip — outline/ghost style, distinct from the solid file chip */
-  &.hermes-context-chip--command {
+  &.enodios-context-chip--command {
     background-color: transparent;
     color: var(--interactive-accent);
     border: 1px solid var(--interactive-accent);
 
-    .hermes-context-remove {
+    .enodios-context-remove {
       background-color: color-mix(in srgb, var(--interactive-accent) 15%, transparent);
       color: var(--interactive-accent);
 
@@ -1019,7 +1019,7 @@
   }
 }
 
-.hermes-input {
+.enodios-input {
   width: 100%;
   padding: 5px 0;
   border: none;
@@ -1045,7 +1045,7 @@
   }
 }
 
-.hermes-icon-btn {
+.enodios-icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1079,7 +1079,7 @@
   }
 }
 
-.hermes-edit-input {
+.enodios-edit-input {
   width: 100%;
   background-color: var(--background-modifier-form-field);
   border: 1px solid var(--background-modifier-border);
@@ -1097,13 +1097,13 @@
   }
 }
 
-.hermes-edit-actions {
+.enodios-edit-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
 
-.hermes-send-btn {
+.enodios-send-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1138,7 +1138,7 @@
   }
 }
 
-.hermes-attach-btn {
+.enodios-attach-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1163,14 +1163,14 @@
   }
 }
 
-.hermes-rate-limit {
+.enodios-rate-limit {
   font-size: 11px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   padding-right: 4px;
 }
 
-.hermes-stop-btn {
+.enodios-stop-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1201,7 +1201,7 @@
 }
 
 /* Context Modal Styles */
-.hermes-context-modal {
+.enodios-context-modal {
   max-width: 500px;
   max-height: 600px;
   overflow-y: auto;
@@ -1212,11 +1212,11 @@
     font-weight: 600;
   }
 
-  .hermes-search-container {
+  .enodios-search-container {
     margin-bottom: 16px;
   }
 
-  .hermes-search-input {
+  .enodios-search-input {
     width: 100%;
     padding: 8px 12px;
     border: 1px solid var(--background-modifier-border);
@@ -1232,7 +1232,7 @@
     }
   }
 
-  .hermes-results-container {
+  .enodios-results-container {
     margin-bottom: 16px;
     max-height: 300px;
     overflow-y: auto;
@@ -1244,7 +1244,7 @@
     }
   }
 
-  .hermes-recent-section {
+  .enodios-recent-section {
     margin-bottom: 16px;
 
     h3 {
@@ -1255,7 +1255,7 @@
     }
   }
 
-  .hermes-result-item {
+  .enodios-result-item {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -1288,7 +1288,7 @@
 }
 
 /* Empty State */
-.hermes-empty-state {
+.enodios-empty-state {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1300,7 +1300,7 @@
 }
 
 /* Status Banner (connecting / loading / error) */
-.hermes-status {
+.enodios-status {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -1312,13 +1312,13 @@
   max-height: 40vh;
   overflow-y: auto;
 
-  .hermes-status-icon {
+  .enodios-status-icon {
     flex-shrink: 0;
     font-size: 14px;
     margin-top: 1px;
   }
 
-  .hermes-status-text {
+  .enodios-status-text {
     flex: 1;
     word-break: break-word;
     overflow-wrap: anywhere;
@@ -1326,24 +1326,24 @@
   }
 }
 
-.hermes-status-connecting,
-.hermes-status-loading {
+.enodios-status-connecting,
+.enodios-status-loading {
   background-color: var(--background-modifier-form-field);
   color: var(--text-muted);
 }
 
-.hermes-status-error {
+.enodios-status-error {
   background-color: var(--background-modifier-error);
   color: var(--text-on-accent, #ffffff);
 
-  .hermes-status-text {
+  .enodios-status-text {
     -webkit-line-clamp: unset;
     overflow: visible;
   }
 }
 
 /* Error Banner */
-.hermes-error {
+.enodios-error {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -1359,21 +1359,21 @@
   max-height: 50vh;
   overflow-y: auto;
 
-  .hermes-error-icon {
+  .enodios-error-icon {
     flex-shrink: 0;
     font-size: 14px;
     margin-top: 2px;
   }
 
-  .hermes-error-text {
+  .enodios-error-text {
     flex: 1;
     word-break: break-word;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
   }
 
-  .hermes-error-dismiss,
-  .hermes-error-retry {
+  .enodios-error-dismiss,
+  .enodios-error-retry {
     flex-shrink: 0;
     padding: 4px 8px;
     border: none;
@@ -1388,13 +1388,13 @@
     }
   }
 
-  .hermes-error-retry {
+  .enodios-error-retry {
     font-weight: 600;
   }
 }
 
 /* Autocomplete Styles */
-.hermes-autocomplete {
+.enodios-autocomplete {
   position: absolute;
   bottom: 100%;
   left: 0;
@@ -1421,7 +1421,7 @@
     border-radius: 2px;
   }
 
-  .hermes-autocomplete-item {
+  .enodios-autocomplete-item {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -1438,7 +1438,7 @@
       font-weight: 600;
     }
 
-    .hermes-autocomplete-icon {
+    .enodios-autocomplete-icon {
       display: flex;
       align-items: center;
       flex-shrink: 0;
@@ -1449,7 +1449,7 @@
       }
     }
 
-    .hermes-autocomplete-text {
+    .enodios-autocomplete-text {
       display: flex;
       align-items: baseline;
       gap: 6px;
@@ -1463,7 +1463,7 @@
       }
     }
 
-    .hermes-autocomplete-desc {
+    .enodios-autocomplete-desc {
       font-size: 10px;
       color: var(--text-muted);
       font-weight: normal;
@@ -1473,7 +1473,7 @@
   }
 }
 
-.hermes-autocomplete-hint {
+.enodios-autocomplete-hint {
   padding: 3px 8px;
   color: var(--text-muted);
   font-size: 10px;
@@ -1482,58 +1482,58 @@
 
 /* Mobile Responsive */
 @media (max-width: 600px) {
-  .hermes-chat-container {
+  .enodios-chat-container {
     height: 100vh;
   }
 
-  .hermes-chat-header {
+  .enodios-chat-header {
     padding: 6px 8px;
 
-    .hermes-chat-agent-name {
+    .enodios-chat-agent-name {
       font-size: 12px;
     }
   }
 
-  .hermes-chat-content {
+  .enodios-chat-content {
     padding: 6px 12px 6px 6px;
     gap: 6px;
   }
 
-  .hermes-message {
+  .enodios-message {
     max-width: 95%;
     padding: 5px 8px;
     font-size: 12px;
   }
 
-  .hermes-message-header {
-    .hermes-role,
-    .hermes-timestamp,
-    .hermes-typing {
+  .enodios-message-header {
+    .enodios-role,
+    .enodios-timestamp,
+    .enodios-typing {
       font-size: 9px;
     }
   }
 
-  .hermes-input-wrapper {
+  .enodios-input-wrapper {
     padding: 6px 0 8px 0;
   }
 
-  .hermes-input-container {
+  .enodios-input-container {
     padding: 8px;
     gap: 6px;
   }
 
-  .hermes-context-btn {
+  .enodios-context-btn {
     width: 28px;
     height: 28px;
     font-size: 14px;
   }
 
-  .hermes-context-chip {
+  .enodios-context-chip {
     padding: 3px 6px 3px 3px;
     font-size: 11px;
   }
 
-  .hermes-send-btn {
+  .enodios-send-btn {
     width: 24px;
     height: 24px;
 
@@ -1543,7 +1543,7 @@
     }
   }
 
-  .hermes-icon-btn {
+  .enodios-icon-btn {
     width: 24px;
     height: 24px;
 
@@ -1553,7 +1553,7 @@
     }
   }
 
-  .hermes-error {
+  .enodios-error {
     margin: 6px 8px;
     padding: 8px 10px;
     font-size: 12px;
@@ -1561,7 +1561,7 @@
 }
 
 /* Pending Changes Panel */
-.hermes-pending-changes {
+.enodios-pending-changes {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1590,14 +1590,14 @@
   }
 }
 
-.hermes-pending-change {
+.enodios-pending-change {
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius);
   overflow: hidden;
   background-color: var(--background-primary);
 
-  &.hermes-change-approved,
-  &.hermes-change-rejected {
+  &.enodios-change-approved,
+  &.enodios-change-rejected {
     opacity: 0.7;
   }
 
@@ -1642,20 +1642,20 @@
     text-transform: uppercase;
     font-weight: 600;
 
-    &.hermes-badge-delete {
+    &.enodios-badge-delete {
       background-color: var(--background-modifier-error);
     }
 
-    &.hermes-badge-create {
+    &.enodios-badge-create {
       background-color: rgba(0, 200, 83, 0.8);
     }
 
-    &.hermes-badge-approved {
+    &.enodios-badge-approved {
       background-color: rgba(0, 200, 83, 0.4);
       color: var(--text-normal);
     }
 
-    &.hermes-badge-rejected {
+    &.enodios-badge-rejected {
       background-color: var(--background-modifier-border);
       color: var(--text-muted);
     }
@@ -1673,7 +1673,7 @@
   }
 }
 
-.hermes-diff-view {
+.enodios-diff-view {
   max-height: 200px;
   overflow-y: auto;
   font-family: var(--font-monospace);
@@ -1694,25 +1694,25 @@
   .token.class-name { color: var(--syntax-color-class-name, #e5c07b); }
 }
 
-.hermes-diff-line {
+.enodios-diff-line {
   display: flex;
   align-items: center;
   padding: 1px 8px;
   white-space: pre-wrap;
   word-break: break-all;
 
-  .hermes-diff-marker {
+  .enodios-diff-marker {
     width: 20px;
     flex-shrink: 0;
     text-align: center;
     user-select: none;
   }
 
-  .hermes-diff-text {
+  .enodios-diff-text {
     flex: 1;
   }
 
-  .hermes-diff-checkbox {
+  .enodios-diff-checkbox {
     margin-right: 6px;
     flex-shrink: 0;
     cursor: pointer;
@@ -1720,41 +1720,41 @@
     height: 14px;
   }
 
-  &.hermes-diff-added {
+  &.enodios-diff-added {
     background-color: rgba(0, 200, 83, 0.12);
     color: var(--text-normal);
 
-    .hermes-diff-marker {
+    .enodios-diff-marker {
       color: #00c853;
     }
   }
 
-  &.hermes-diff-removed {
+  &.enodios-diff-removed {
     background-color: rgba(255, 82, 82, 0.12);
     color: var(--text-normal);
 
-    .hermes-diff-marker {
+    .enodios-diff-marker {
       color: #ff5252;
     }
   }
 
-  &.hermes-diff-unchanged {
+  &.enodios-diff-unchanged {
     color: var(--text-muted);
   }
 
-  &.hermes-diff-selected {
-    &.hermes-diff-added {
+  &.enodios-diff-selected {
+    &.enodios-diff-added {
       background-color: rgba(0, 200, 83, 0.35);
     }
 
-    &.hermes-diff-removed {
+    &.enodios-diff-removed {
       background-color: rgba(255, 82, 82, 0.35);
     }
   }
 }
 
-.hermes-btn-approve,
-.hermes-btn-reject {
+.enodios-btn-approve,
+.enodios-btn-reject {
   padding: 4px 12px;
   border: none;
   border-radius: 4px;
@@ -1764,7 +1764,7 @@
   transition: all 0.2s ease;
 }
 
-.hermes-btn-approve {
+.enodios-btn-approve {
   background-color: var(--interactive-accent);
   color: var(--text-on-accent);
 
@@ -1773,7 +1773,7 @@
   }
 }
 
-.hermes-btn-reject {
+.enodios-btn-reject {
   background-color: var(--background-modifier-border);
   color: var(--text-normal);
 
@@ -1783,7 +1783,7 @@
 }
 
 /* Permission Request Panel */
-.hermes-pending-permissions {
+.enodios-pending-permissions {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1822,7 +1822,7 @@
   }
 }
 
-.hermes-pending-permission {
+.enodios-pending-permission {
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius);
   overflow: hidden;
@@ -1936,7 +1936,7 @@
   }
 }
 
-.hermes-permission-option {
+.enodios-permission-option {
   padding: 4px 10px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
@@ -1974,13 +1974,13 @@
 }
 
 /* CodeMirror 6 Ghost Text */
-.hermes-ghost-text {
+.enodios-ghost-text {
   color: var(--text-faint) !important;
   font-style: italic !important;
   opacity: 0.65 !important;
 }
 
-.hermes-ghost-text[data-alternatives]::after {
+.enodios-ghost-text[data-alternatives]::after {
   content: " (" attr(data-alternatives) ")";
   font-size: 0.8em;
   opacity: 0.7;
@@ -1990,7 +1990,7 @@
 }
 
 /* Inline Diff Extension Styles */
-.hermes-diff-line {
+.enodios-diff-line {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -2003,31 +2003,31 @@
   cursor: default;
 }
 
-.hermes-diff-added {
+.enodios-diff-added {
   background-color: rgba(0, 128, 0, 0.15);
   border-left: 2px solid var(--interactive-success);
 }
 
-.hermes-diff-removed {
+.enodios-diff-removed {
   background-color: rgba(255, 0, 0, 0.15);
   border-left: 2px solid var(--interactive-error);
 }
 
-.hermes-diff-marker {
+.enodios-diff-marker {
   font-weight: 700;
   flex-shrink: 0;
 }
 
-.hermes-diff-text {
+.enodios-diff-text {
   word-break: break-all;
   white-space: pre-wrap;
 }
 
-.hermes-diff-removed-line {
+.enodios-diff-removed-line {
   background-color: rgba(255, 0, 0, 0.15);
 }
 
-.hermes-diff-file-header {
+.enodios-diff-file-header {
   background-color: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   padding: 8px 12px;
@@ -2038,13 +2038,13 @@
   align-items: center;
 }
 
-.hermes-diff-file-title {
+.enodios-diff-file-title {
   font-weight: 600;
   font-size: 14px;
   color: var(--text-normal);
 }
 
-.hermes-diff-hunk-header {
+.enodios-diff-hunk-header {
   background-color: var(--background-secondary-alt);
   border: 1px solid var(--background-modifier-border);
   border-bottom: none;
@@ -2055,45 +2055,45 @@
   border-top-right-radius: 4px;
 }
 
-.hermes-diff-actions {
+.enodios-diff-actions {
   display: flex;
   gap: 8px;
 }
 
-.hermes-btn-approve, .hermes-btn-reject, .hermes-btn-approve-sm, .hermes-btn-reject-sm {
+.enodios-btn-approve, .enodios-btn-reject, .enodios-btn-approve-sm, .enodios-btn-reject-sm {
   cursor: pointer;
   border-radius: 4px;
   font-weight: 500;
   border: 1px solid transparent;
 }
 
-.hermes-btn-approve, .hermes-btn-reject {
+.enodios-btn-approve, .enodios-btn-reject {
   padding: 4px 12px;
   font-size: 13px;
 }
 
-.hermes-btn-approve-sm, .hermes-btn-reject-sm {
+.enodios-btn-approve-sm, .enodios-btn-reject-sm {
   padding: 2px 8px;
   font-size: 11px;
 }
 
-.hermes-btn-approve, .hermes-btn-approve-sm {
+.enodios-btn-approve, .enodios-btn-approve-sm {
   background-color: var(--interactive-success);
   color: var(--text-on-accent);
 }
 
-.hermes-btn-reject, .hermes-btn-reject-sm {
+.enodios-btn-reject, .enodios-btn-reject-sm {
   background-color: transparent;
   color: var(--text-error);
   border: 1px solid var(--text-error);
 }
 
-.hermes-btn-reject:hover, .hermes-btn-reject-sm:hover {
+.enodios-btn-reject:hover, .enodios-btn-reject-sm:hover {
   background-color: rgba(255, 0, 0, 0.1);
 }
 
 /* Audit Log Panel Styles */
-.hermes-audit-log-panel {
+.enodios-audit-log-panel {
   position: absolute;
   top: 40px; /* Right under the header */
   left: 0;
@@ -2106,7 +2106,7 @@
   z-index: 15;
 }
 
-.hermes-audit-log-header {
+.enodios-audit-log-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2117,13 +2117,13 @@
   font-size: 13px;
 }
 
-.hermes-audit-log-actions {
+.enodios-audit-log-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.hermes-text-btn {
+.enodios-text-btn {
   background: transparent;
   border: none;
   color: var(--text-accent);
@@ -2132,11 +2132,11 @@
   padding: 2px 4px;
 }
 
-.hermes-text-btn:hover {
+.enodios-text-btn:hover {
   text-decoration: underline;
 }
 
-.hermes-audit-log-list {
+.enodios-audit-log-list {
   flex: 1;
   overflow-y: auto;
   padding: 8px 12px;
@@ -2145,14 +2145,14 @@
   gap: 8px;
 }
 
-.hermes-audit-empty {
+.enodios-audit-empty {
   color: var(--text-muted);
   text-align: center;
   padding: 20px;
   font-style: italic;
 }
 
-.hermes-audit-entry {
+.enodios-audit-entry {
   border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
   padding: 8px;
@@ -2173,18 +2173,18 @@
   }
 }
 
-.hermes-audit-entry-header {
+.enodios-audit-entry-header {
   display: flex;
   justify-content: space-between;
   margin-bottom: 4px;
   font-size: 11px;
 }
 
-.hermes-audit-entry-time {
+.enodios-audit-entry-time {
   color: var(--text-muted);
 }
 
-.hermes-audit-entry-details {
+.enodios-audit-entry-details {
   color: var(--text-normal);
   word-break: break-all;
   font-family: var(--font-monospace);
@@ -2193,7 +2193,7 @@
 }
 
 /* Individual line actions in inline diff */
-.hermes-diff-line-actions {
+.enodios-diff-line-actions {
   display: inline-flex;
   margin-left: 8px;
   gap: 4px;
@@ -2201,11 +2201,11 @@
   transition: opacity 0.2s ease-in-out;
 }
 
-.hermes-diff-line:hover .hermes-diff-line-actions {
+.enodios-diff-line:hover .enodios-diff-line-actions {
   opacity: 1.0;
 }
 
-.hermes-btn-approve-line, .hermes-btn-reject-line {
+.enodios-btn-approve-line, .enodios-btn-reject-line {
   cursor: pointer;
   border: none;
   background: transparent;
@@ -2220,22 +2220,22 @@
   justify-content: center;
 }
 
-.hermes-btn-approve-line {
+.enodios-btn-approve-line {
   color: var(--text-success);
 }
-.hermes-btn-approve-line:hover {
+.enodios-btn-approve-line:hover {
   background-color: rgba(0, 255, 0, 0.15);
 }
 
-.hermes-btn-reject-line {
+.enodios-btn-reject-line {
   color: var(--text-error);
 }
-.hermes-btn-reject-line:hover {
+.enodios-btn-reject-line:hover {
   background-color: rgba(255, 0, 0, 0.15);
 }
 
 /* Collapsible Settings Accordion (Tier 3) */
-.hermes-settings-details {
+.enodios-settings-details {
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   margin-bottom: 12px;
@@ -2250,14 +2250,14 @@
   &[open] {
     border-color: var(--interactive-accent);
     
-    .hermes-settings-summary {
+    .enodios-settings-summary {
       border-bottom: 1px solid var(--background-modifier-border);
       background-color: var(--background-secondary-alt);
     }
   }
 }
 
-.hermes-settings-summary {
+.enodios-settings-summary {
   padding: 10px 14px;
   font-weight: 600;
   font-size: 1.05em;
@@ -2282,11 +2282,11 @@
   }
 }
 
-.hermes-settings-details[open] .hermes-settings-summary::before {
+.enodios-settings-details[open] .enodios-settings-summary::before {
   transform: rotate(90deg);
 }
 
-.hermes-settings-content {
+.enodios-settings-content {
   padding: 12px 16px;
   display: flex;
   flex-direction: column;

@@ -8,7 +8,7 @@ import {
 } from 'obsidian';
 
 import type { Plugin } from './Plugin.ts';
-import type { ChatMessage } from './Views/HermesChatView.tsx';
+import type { ChatMessage } from './Views/EnodiosChatView.tsx';
 
 import { generateMessageId } from './utils/uuid.ts';
 
@@ -435,7 +435,7 @@ export class VaultManager {
    * Get the configured save folder path.
    */
   private getSaveFolder(): string {
-    return this.plugin.settings.chatSaveFolder || 'hermes';
+    return this.plugin.settings.chatSaveFolder || 'enodios';
   }
 
   /**
@@ -486,7 +486,7 @@ export class VaultManager {
       }
 
       const roleText = headerMatch[1]?.toLowerCase() ?? '';
-      const role = roleText === 'you' ? 'user' : roleText === 'hermes' ? 'assistant' : 'system';
+      const role = roleText === 'you' ? 'user' : (roleText === 'hermes' || roleText === 'enodios') ? 'assistant' : 'system';
 
       // Extract message id if present
       const idMatch = /^id:\s*([a-f0-9\-]+)\n\n/m.exec(trimmed);
@@ -524,7 +524,7 @@ export class VaultManager {
       `createdAt: ${metadata.createdAt}`,
       `updatedAt: ${metadata.updatedAt}`,
       ...(allowedTools ? [`allowedTools: ${JSON.stringify(allowedTools)}`] : []),
-      'type: hermes-conversation',
+      'type: enodios-conversation',
       '---',
       ''
     ].join('\n');

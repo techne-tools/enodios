@@ -22,7 +22,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
     super.display();
     this.containerEl.empty();
 
-    this.containerEl.createEl('h2', { text: 'Hermes Plugin Settings' });
+    this.containerEl.createEl('h2', { text: 'Enodios Plugin Settings' });
 
     this.renderCollapsibleSection('🔌 Connection Settings', (el) => this.renderConnectionSection(el));
     this.renderCollapsibleSection('🤖 Agent Personality', (el) => this.renderAgentIdentitySection(el));
@@ -38,9 +38,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   }
 
   private renderCollapsibleSection(title: string, renderFunc: (el: HTMLElement) => void): void {
-    const details = this.containerEl.createEl('details', { cls: 'hermes-settings-details' });
-    details.createEl('summary', { text: title, cls: 'hermes-settings-summary' });
-    const content = details.createEl('div', { cls: 'hermes-settings-content' });
+    const details = this.containerEl.createEl('details', { cls: 'enodios-settings-details' });
+    details.createEl('summary', { text: title, cls: 'enodios-settings-summary' });
+    const content = details.createEl('div', { cls: 'enodios-settings-content' });
     renderFunc(content);
   }
 
@@ -100,7 +100,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
     new SettingEx(containerEl)
       .setName('Connection Mode')
       .setDesc(
-        'Choose how Hermes talks to your AI agent. "Local" runs on your computer (fastest, private). "Remote" connects to a server (good for teams or powerful GPUs).'
+        'Choose how Enodios connects to your Hermes agent. "Local" runs on your computer (fastest, private). "Remote" connects to a server (good for teams or powerful GPUs).'
       )
       .addDropdown((dropdown) => {
         dropdown.addOption('acp', 'Local — runs on this computer');
@@ -191,9 +191,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
       new SettingEx(containerEl)
         .setName('Agent Name on Server')
-        .setDesc('The name your server knows this agent by. Usually "hermes-agent" unless your admin changed it.')
+        .setDesc('The name your server knows this agent by. Usually "enodios-agent" unless your admin changed it.')
         .addText((text) => {
-          text.setPlaceholder('hermes-agent')
+          text.setPlaceholder('enodios-agent')
             .setValue(this.plugin.settings.hermesAgentName);
           this.bind(text, 'hermesAgentName');
         });
@@ -300,10 +300,10 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderCommunityPluginSection(containerEl: HTMLElement): void {
     containerEl.createEl('p', {
       cls: 'setting-item-description',
-      text: 'Hermes automatically integrates with these popular community plugins when they are enabled in your vault:'
+      text: 'Enodios automatically integrates with these popular community plugins when they are enabled in your vault:'
     });
 
-    const ul = containerEl.createEl('ul', { cls: 'hermes-settings-list' });
+    const ul = containerEl.createEl('ul', { cls: 'enodios-settings-list' });
     ul.createEl('li').innerHTML = '<strong>Dataview:</strong> Use <code>/dataview &lt;query&gt;</code> to run queries directly in chat.';
     ul.createEl('li').innerHTML = '<strong>Templater:</strong> Use <code>/templater insert &lt;name&gt;</code> to insert templates into the active note.';
     ul.createEl('li').innerHTML =
@@ -325,9 +325,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderConversationStorageSection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
       .setName('Save Folder')
-      .setDesc('Where conversation files are stored in your vault. Default is a folder called "hermes".')
+      .setDesc('Where conversation files are stored in your vault. Default is a folder called "enodios".')
       .addText((text) => {
-        text.setPlaceholder('hermes')
+        text.setPlaceholder('enodios')
           .setValue(this.plugin.settings.chatSaveFolder);
         this.bind(text, 'chatSaveFolder');
       });

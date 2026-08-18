@@ -1,11 +1,11 @@
-# Hermes Agent for Obsidian
+# Enodios for Obsidian
 
 [![GitHub release](https://img.shields.io/github/v/release/prismatic7/obsidian-hermes)](https://github.com/prismatic7/obsidian-hermes/releases)
 [![GitHub downloads](https://img.shields.io/github/downloads/prismatic7/obsidian-hermes/total)](https://github.com/prismatic7/obsidian-hermes/releases)
 
-Bring the power of the **Hermes autonomous AI agent** directly into your Obsidian vault.
+Bring the power of the **Hermes autonomous AI agent** directly into your Obsidian vault using **Enodios**.
 
-Obsidian Hermes deeply integrates the agent into your workflow, allowing it to seamlessly read your notes, write files, and manage your thoughts directly in the markdown editor — all while keeping you firmly in control with a robust security and approval system.
+Enodios deeply integrates the agent into your workflow, allowing it to seamlessly read your notes, write files, and manage your thoughts directly in the markdown editor — all while keeping you firmly in control with a robust security and approval system.
 
 ## ✨ Core Features
 
@@ -13,7 +13,7 @@ Obsidian Hermes deeply integrates the agent into your workflow, allowing it to s
 No more copy-pasting your notes. Simply type `/search [query]` in the chat to search across your entire vault and attach relevant note excerpts directly into the agent's context. Uses keyword-based matching with relevance scoring.
 
 ### 📝 Deep Editor Integration (Ghost Text)
-Use the **"Hermes: Trigger Inline Suggestion"** command while typing in any markdown file to generate Copilot-style "ghost text" auto-completions. Press `Tab` to accept the agent's suggestion and seamlessly integrate it into your writing.
+Use the **"Enodios: Trigger Inline Suggestion"** command while typing in any markdown file to generate Copilot-style "ghost text" auto-completions. Press `Tab` to accept the agent's suggestion and seamlessly integrate it into your writing.
 
 ### 🎨 Canvas Support
 Hermes understands Obsidian Canvas! Open a mind-map and type `/canvas` to inject its structure into the chat. Hermes can natively read and output `.canvas` files to help you brainstorm visually.
@@ -49,7 +49,7 @@ Scan note keyword frequencies against active vault tags to get term-matching rec
 When you attach a note to the conversation, Hermes automatically enriches it with metadata — word count, character count, tags, YAML frontmatter, created/modified timestamps, and backlinks — giving the agent richer context for better responses.
 
 ### 🌍 Community Plugin Integrations
-Hermes seamlessly hooks into the Obsidian ecosystem. If you have any of the following plugins enabled, Hermes will auto-detect them and unlock advanced slash commands and integrations:
+Enodios seamlessly hooks into the Obsidian ecosystem. If you have any of the following plugins enabled, Enodios will auto-detect them and unlock advanced slash commands and integrations:
 - **Dataview**: Run `/dataview <query>` to execute live queries.
 - **Templater**: Use `/templater insert` or `generate` to manipulate templates and run `tp.user` scripts.
 - **Omnisearch**: The default `/search` command uses Omnisearch's OCR and fuzzy-matching engine.
@@ -99,12 +99,12 @@ Configuring local MCP servers allows the Hermes agent to execute external progra
 ## 🚀 Getting Started
 
 1. **Install the plugin** (see instructions below).
-2. **Open Settings**: Navigate to `Settings > Hermes` in Obsidian.
+2. **Open Settings**: Navigate to `Settings > Enodios` in Obsidian.
 3. **Choose Connection Mode**:
    - *For local usage:* Select **ACP**. Ensure the Hermes binary is installed on your system. If it's not in your system PATH, provide the absolute path to the binary.
    - *For remote usage:* Select **API** and enter your Hermes API URL and secure API key.
 4. **Click "Test Connection"** to verify everything is working.
-5. **Open the Chat**: Click the message bubble icon in your left ribbon menu, or run the "Open Hermes Chat" command.
+5. **Open the Chat**: Click the message bubble icon in your left ribbon menu, or run the "Open Enodios Chat" command.
 
 ### 💬 Chat Commands & Usage
 - Type `{`, `[[`, or `[@` to instantly auto-complete files, notes, and citations in your prompt context.
@@ -124,7 +124,7 @@ Configuring local MCP servers allows the Hermes agent to execute external progra
 - Use the **Session Tools** (wrench icon in the chat header) to restrict which tools Hermes is allowed to use on a per-conversation basis.
 - Hover over any of your previous messages to reveal the **Edit** button (or press `ArrowUp` while focused on empty input). Editing a message truncates history and branches.
 - If you enable **Terminal Access** in settings, Hermes can run shell commands. You can view the live stdout stream directly in the chat and use the 🛑 **Abort** button to kill runaway processes.
-- **Command Palette**: Use "Ask Hermes about selection", "Summarize current note", or "Generate tags" for quick actions without opening the chat.
+- **Command Palette**: Use "Ask Enodios about selection", "Summarize current note with Enodios", or "Generate tags" for quick actions without opening the chat.
 - **Export**: Click the download icon in the chat header to export as HTML, JSON, or Markdown.
 - **Search**: Press `Cmd+F` in the chat to search through all messages.
 

@@ -53,7 +53,7 @@ export class AuditLog {
   private callbacks: (() => void)[] = [];
 
   private get logFilePath(): string {
-    const folder = this.plugin.settings.chatSaveFolder || 'hermes';
+    const folder = this.plugin.settings.chatSaveFolder || 'enodios';
     return `${folder}/audit-log.md`;
   }
 
@@ -162,7 +162,7 @@ export class AuditLog {
       const file = this.plugin.app.vault.getAbstractFileByPath(this.logFilePath);
       if (file instanceof TFile) {
         const header =
-          '---\ntype: hermes-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n';
+          '---\ntype: enodios-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n';
         await this.plugin.app.vault.modify(file, header);
       }
     } catch (error) {
@@ -253,7 +253,7 @@ export class AuditLog {
     }
 
     const header =
-      '---\ntype: hermes-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n';
+      '---\ntype: enodios-audit-log\ngeneratedBy: obsidian-hermes\n---\n\n# Hermes Action Audit Log\n\n> This file records all tool invocations, file changes, permission grants, and terminal commands for transparency and debugging.\n\n';
     await this.plugin.app.vault.create(this.logFilePath, header);
   }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { VaultManager } from '../VaultManager.ts';
 import type { Plugin } from '../Plugin.ts';
-import type { ChatMessage } from '../Views/HermesChatView.tsx';
+import type { ChatMessage } from '../Views/EnodiosChatView.tsx';
 
 // Mock Obsidian modules
 vi.mock('obsidian', () => ({
@@ -117,7 +117,7 @@ describe('VaultManager', () => {
 
       expect(filePath).toMatch(/^hermes\/test-/);
       expect(content).toContain('---');
-      expect(content).toContain('type: hermes-conversation');
+      expect(content).toContain('type: enodios-conversation');
       expect(content).toContain('**You**');
       expect(content).toContain('**Hermes**');
     });
@@ -162,7 +162,7 @@ id: conv-123
 title: Test Chat
 createdAt: 1700000000000
 updatedAt: 1700000001000
-type: hermes-conversation
+type: enodios-conversation
 ---
 
 ## **You** — 11/14/2023, 12:00:00 PM
@@ -197,7 +197,7 @@ id: conv-123
 title: Test Chat
 createdAt: 1700000000000
 updatedAt: 1700000001000
-type: hermes-conversation
+type: enodios-conversation
 ---
 
 ## **You** — 11/14/2023, 12:00:00 PM

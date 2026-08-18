@@ -120,7 +120,7 @@ function stripAnsi(text: string): string {
     .replace(/\x1b\x1b/g, ""); // Double escapes
 }
 
-export const HERMES_CHAT_VIEW_TYPE = "hermes-chat-view";
+export const ENODIOS_CHAT_VIEW_TYPE = "enodios-chat-view";
 
 export interface ChatMessage {
   content: string;
@@ -146,11 +146,11 @@ interface AutocompleteSuggestion {
 // Re-export ContextItem shape from AcpClient for UI use
 type ContextItem = PromptContextItem;
 
-interface HermesChatViewComponentProps {
-  view: HermesChatView;
+interface EnodiosChatViewComponentProps {
+  view: EnodiosChatView;
 }
 
-export class HermesChatView extends ItemView {
+export class EnodiosChatView extends ItemView {
   private root: null | ReturnType<typeof createRoot> = null;
 
   constructor(
@@ -181,7 +181,7 @@ export class HermesChatView extends ItemView {
   }
 
   public override getDisplayText(): string {
-    return "Hermes Chat";
+    return "Enodios Chat";
   }
 
   public override getIcon(): string {
@@ -197,7 +197,7 @@ export class HermesChatView extends ItemView {
   }
 
   public override getViewType(): string {
-    return HERMES_CHAT_VIEW_TYPE;
+    return ENODIOS_CHAT_VIEW_TYPE;
   }
 
   public override async onClose(): Promise<void> {
@@ -210,7 +210,7 @@ export class HermesChatView extends ItemView {
   public override async onOpen(): Promise<void> {
     this.contentEl.empty();
     this.root = createRoot(this.contentEl);
-    this.root.render(<HermesChatViewComponent view={this} />);
+    this.root.render(<EnodiosChatViewComponent view={this} />);
   }
 
   public async sendPrompt(
@@ -254,9 +254,9 @@ export class HermesChatView extends ItemView {
 
 // --- Sub-components ---
 
-export function HermesChatViewComponent({
+export function EnodiosChatViewComponent({
   view
-}: HermesChatViewComponentProps): ReactElement {
+}: EnodiosChatViewComponentProps): ReactElement {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -353,9 +353,9 @@ export function HermesChatViewComponent({
         textareaRef.current?.focus();
       }, 0);
     };
-    window.addEventListener("hermes-load-template", handleLoadTemplate);
+    window.addEventListener("enodios-load-template", handleLoadTemplate);
     return () => {
-      window.removeEventListener("hermes-load-template", handleLoadTemplate);
+      window.removeEventListener("enodios-load-template", handleLoadTemplate);
     };
   }, []);
 
@@ -738,7 +738,7 @@ export function HermesChatViewComponent({
               ...m,
               isRunning: false,
               content: m.content
-                .replace('<span class="hermes-tool-helix"></span>', "❌")
+                .replace('<span class="enodios-tool-helix"></span>', "❌")
                 .replace(" *(running...)*", "")
             };
           }
@@ -1826,7 +1826,7 @@ export function HermesChatViewComponent({
         const syntheticName = input.slice(1).split(/\s/)[0] ?? "";
         setSlashSuggestions([
           {
-            description: "Send command to Hermes",
+            description: "Send command to Enodios",
             name: syntheticName
           }
         ]);
@@ -1889,9 +1889,9 @@ export function HermesChatViewComponent({
         const el = msgId ? messageRefs.current.get(msgId) : undefined;
         if (el) {
           el.scrollIntoView({ behavior: "smooth", block: "center" });
-          el.classList.add("hermes-search-highlight");
+          el.classList.add("enodios-search-highlight");
           setTimeout(() => {
-            el.classList.remove("hermes-search-highlight");
+            el.classList.remove("enodios-search-highlight");
           }, 2000);
         }
       }
@@ -1914,7 +1914,7 @@ export function HermesChatViewComponent({
   );
 
   return (
-    <div className="hermes-chat-container">
+    <div className="enodios-chat-container">
       <ChatHeader
         agentName={settings.chatAgentName || "Hermes"}
         isSaving={isSaving}
@@ -1985,11 +1985,11 @@ export function HermesChatViewComponent({
       )}
 
       {isConversationListOpen && (
-        <div className="hermes-conversation-list">
-          <div className="hermes-conversation-list-header">
+        <div className="enodios-conversation-list">
+          <div className="enodios-conversation-list-header">
             <span>Previous Conversations</span>
             <button
-              className="hermes-icon-btn"
+              className="enodios-icon-btn"
               onClick={() => {
                 setIsConversationListOpen(false);
               }}
@@ -2001,7 +2001,7 @@ export function HermesChatViewComponent({
           </div>
           {conversations.length === 0
 ? (
-            <div className="hermes-conversation-empty">
+            <div className="enodios-conversation-empty">
               No saved conversations
             </div>
           )
@@ -2010,7 +2010,7 @@ export function HermesChatViewComponent({
               {conversations.slice(0, 5).map((conv) => (
                 <li key={conv.filePath}>
                   <button
-                    className="hermes-conversation-item"
+                    className="enodios-conversation-item"
                     onClick={() => void handleLoadConversation(conv.filePath)}
                     type="button"
                   >
@@ -2024,9 +2024,9 @@ export function HermesChatViewComponent({
       )}
 
       {isSearchOpen && (
-        <div className="hermes-search-bar">
+        <div className="enodios-search-bar">
           <input
-            className="hermes-search-input"
+            className="enodios-search-input"
             onChange={(e) => {
               setSearchQuery(e.target.value);
               performSearch(e.target.value);
@@ -2038,12 +2038,12 @@ export function HermesChatViewComponent({
             value={searchQuery}
           />
           {searchMatches.length > 0 && (
-            <span className="hermes-search-count">
+            <span className="enodios-search-count">
               {currentMatchIndex + 1} / {searchMatches.length}
             </span>
           )}
           <button
-            className="hermes-icon-btn"
+            className="enodios-icon-btn"
             onClick={() => {
               jumpToMatch("prev");
             }}
@@ -2053,7 +2053,7 @@ export function HermesChatViewComponent({
             ↑
           </button>
           <button
-            className="hermes-icon-btn"
+            className="enodios-icon-btn"
             onClick={() => {
               jumpToMatch("next");
             }}
@@ -2063,7 +2063,7 @@ export function HermesChatViewComponent({
             ↓
           </button>
           <button
-            className="hermes-icon-btn"
+            className="enodios-icon-btn"
             onClick={() => {
               setIsSearchOpen(false);
               setSearchQuery("");
@@ -2077,7 +2077,7 @@ export function HermesChatViewComponent({
         </div>
       )}
 
-      <div className="hermes-chat-content" ref={chatContainerRef}>
+      <div className="enodios-chat-content" ref={chatContainerRef}>
         {messages.length === 0 && !error && (
           <OnboardingPanel
             agentName={settings.chatAgentName || "Hermes"}
@@ -2105,13 +2105,13 @@ export function HermesChatViewComponent({
           view={view}
         />
         {error && (
-          <div className="hermes-error" role="alert">
-            <span className="hermes-error-icon">⚠️</span>
-            <span className="hermes-error-text">
+          <div className="enodios-error" role="alert">
+            <span className="enodios-error-icon">⚠️</span>
+            <span className="enodios-error-text">
               {error || "An error occurred"}
             </span>
             <button
-              className="hermes-error-dismiss"
+              className="enodios-error-dismiss"
               onClick={() => {
                 setError(null);
               }}
@@ -2121,7 +2121,7 @@ export function HermesChatViewComponent({
               ✕
             </button>
             <button
-              className="hermes-error-retry"
+              className="enodios-error-retry"
               onClick={handleRetry}
               title="Retry"
               type="button"
@@ -2237,11 +2237,11 @@ const SessionSettingsPanel = memo(
     };
 
     return (
-      <div className="hermes-session-settings">
-        <div className="hermes-session-settings-header">
+      <div className="enodios-session-settings">
+        <div className="enodios-session-settings-header">
           <span>Session Tools</span>
           <button
-            className="hermes-icon-btn"
+            className="enodios-icon-btn"
             onClick={onClose}
             title="Close"
             type="button"
@@ -2249,14 +2249,14 @@ const SessionSettingsPanel = memo(
             ✕
           </button>
         </div>
-        <div className="hermes-session-settings-content">
-          <p className="hermes-session-settings-desc">
+        <div className="enodios-session-settings-content">
+          <p className="enodios-session-settings-desc">
             Select which tools the agent is allowed to use during this specific
             chat session.
           </p>
-          <div className="hermes-session-settings-actions">
+          <div className="enodios-session-settings-actions">
             <button
-              className="hermes-btn-secondary"
+              className="enodios-btn-secondary"
               onClick={() => {
                 onToolsChange(null);
               }}
@@ -2266,7 +2266,7 @@ const SessionSettingsPanel = memo(
               Reset Default
             </button>
             <button
-              className="hermes-btn-secondary"
+              className="enodios-btn-secondary"
               onClick={() => {
                 onToolsChange(availableTools.map((t) => t.id));
               }}
@@ -2275,7 +2275,7 @@ const SessionSettingsPanel = memo(
               Allow All
             </button>
             <button
-              className="hermes-btn-secondary"
+              className="enodios-btn-secondary"
               onClick={() => {
                 onToolsChange([]);
               }}
@@ -2285,7 +2285,7 @@ const SessionSettingsPanel = memo(
             </button>
           </div>
           {availableTools.map((tool) => (
-            <label className="hermes-session-tool-toggle" key={tool.id}>
+            <label className="enodios-session-tool-toggle" key={tool.id}>
               <input
                 checked={isAllAllowed || allowedTools.includes(tool.id)}
                 onChange={() => {
@@ -2375,27 +2375,27 @@ const ChatInput = memo(
     }, [slashSelectionIndex, autocompleteSelectionIndex]);
 
     return (
-      <div className="hermes-input-wrapper">
+      <div className="enodios-input-wrapper">
         {isSlashOpen && slashSuggestions.length > 0 && (
           <div
-            className="hermes-autocomplete hermes-slash-commands"
+            className="enodios-autocomplete enodios-slash-commands"
             ref={autocompleteRef}
           >
-            <div className="hermes-autocomplete-hint">Commands</div>
+            <div className="enodios-autocomplete-hint">Commands</div>
             {slashSuggestions.map((suggestion, index) => (
               <div
                 aria-selected={index === slashSelectionIndex}
-                className={`hermes-autocomplete-item ${index === slashSelectionIndex ? "selected" : ""}`}
+                className={`enodios-autocomplete-item ${index === slashSelectionIndex ? "selected" : ""}`}
                 key={suggestion.name}
                 onClick={() => {
                   onSelectSlash(suggestion.name);
                 }}
                 role="option"
               >
-                <span className="hermes-autocomplete-icon">⚡</span>
-                <span className="hermes-autocomplete-text">
+                <span className="enodios-autocomplete-icon">⚡</span>
+                <span className="enodios-autocomplete-text">
                   <strong>/{suggestion.name}</strong>
-                  <span className="hermes-autocomplete-desc">
+                  <span className="enodios-autocomplete-desc">
                     {suggestion.description}
                   </span>
                 </span>
@@ -2404,13 +2404,13 @@ const ChatInput = memo(
           </div>
         )}
 
-        <div className="hermes-input-container">
-          <div className="hermes-input-top">
-            <div className="hermes-context-list">
+        <div className="enodios-input-container">
+          <div className="enodios-input-top">
+            <div className="enodios-context-list">
               {activeCommand && (
-                <div className="hermes-context-chip">
+                <div className="enodios-context-chip">
                   <button
-                    className="hermes-context-remove"
+                    className="enodios-context-remove"
                     onClick={onRemoveCommand}
                     title="Remove command"
                     type="button"
@@ -2430,15 +2430,15 @@ const ChatInput = memo(
                       <line x1="6" x2="18" y1="6" y2="18" />
                     </svg>
                   </button>
-                  <span className="hermes-context-text">
+                  <span className="enodios-context-text">
                     ⚡ /{activeCommand}
                   </span>
                 </div>
               )}
               {contextItems.map((item) => (
-                <div className="hermes-context-chip" key={item.id}>
+                <div className="enodios-context-chip" key={item.id}>
                   <button
-                    className="hermes-context-remove"
+                    className="enodios-context-remove"
                     onClick={() => {
                       onRemoveContextItem(item.id);
                     }}
@@ -2460,7 +2460,7 @@ const ChatInput = memo(
                       <line x1="6" x2="18" y1="6" y2="18" />
                     </svg>
                   </button>
-                  <span className="hermes-context-text">
+                  <span className="enodios-context-text">
                     {item.type === "image" ? "🖼️ " : ""}
                     {item.type === "pdf" ? "📄 " : ""}
                     {item.text}
@@ -2469,7 +2469,7 @@ const ChatInput = memo(
               ))}
             </div>
             <button
-              className="hermes-stop-btn"
+              className="enodios-stop-btn"
               disabled={!isTyping}
               onClick={() => {
                 onStop();
@@ -2493,7 +2493,7 @@ const ChatInput = memo(
             </button>
           </div>
           <textarea
-            className="hermes-input"
+            className="enodios-input"
             onChange={onInputChange}
             onKeyDown={onInputKeyDown}
             placeholder="Message Hermes..."
@@ -2501,10 +2501,10 @@ const ChatInput = memo(
             rows={1}
             value={input}
           />
-          <div className="hermes-input-bottom">
-            <div className="hermes-input-left">
+          <div className="enodios-input-bottom">
+            <div className="enodios-input-left">
               <button
-                className="hermes-context-btn"
+                className="enodios-context-btn"
                 onClick={onContextClick}
                 title="Add Context"
                 type="button"
@@ -2525,7 +2525,7 @@ const ChatInput = memo(
                 </svg>
               </button>
             </div>
-            <div className="hermes-input-right">
+            <div className="enodios-input-right">
               <input
                 accept="*/*"
                 multiple
@@ -2540,7 +2540,7 @@ const ChatInput = memo(
                 type="file"
               />
               <button
-                className="hermes-attach-btn"
+                className="enodios-attach-btn"
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach files"
                 type="button"
@@ -2560,10 +2560,10 @@ const ChatInput = memo(
                 </svg>
               </button>
               {rateLimitSeconds > 0 && (
-                <span className="hermes-rate-limit">{rateLimitSeconds}s</span>
+                <span className="enodios-rate-limit">{rateLimitSeconds}s</span>
               )}
               <button
-                className="hermes-send-btn"
+                className="enodios-send-btn"
                 disabled={isTyping || !input.trim() || rateLimitSeconds > 0}
                 onClick={onSend}
                 title="Send"
@@ -2590,10 +2590,10 @@ const ChatInput = memo(
 
         {isAutocompleteOpen && autocompleteSuggestions.length > 0 && (
           <div
-            className="hermes-autocomplete hermes-autocomplete-rich"
+            className="enodios-autocomplete enodios-autocomplete-rich"
             ref={autocompleteRef}
           >
-            <div className="hermes-autocomplete-hint">
+            <div className="enodios-autocomplete-hint">
               {autocompleteSuggestions[0]?.type === "citation"
                 ? "Type to search citations..."
                 : "Type to search files..."}
@@ -2601,23 +2601,23 @@ const ChatInput = memo(
             {autocompleteSuggestions.map((suggestion, index) => (
               <div
                 aria-selected={index === autocompleteSelectionIndex}
-                className={`hermes-autocomplete-item ${index === autocompleteSelectionIndex ? "selected" : ""}`}
+                className={`enodios-autocomplete-item ${index === autocompleteSelectionIndex ? "selected" : ""}`}
                 key={suggestion.id}
                 onClick={() => {
                   onSelectAutocomplete(suggestion);
                 }}
                 role="option"
               >
-                <span className="hermes-autocomplete-icon">
+                <span className="enodios-autocomplete-icon">
                   {suggestion.type === "folder"
                     ? "📁"
                     : suggestion.type === "citation"
                       ? "🎓"
                       : "📄"}
                 </span>
-                <span className="hermes-autocomplete-text">
+                <span className="enodios-autocomplete-text">
                   <strong>{suggestion.text}</strong>
-                  <span className="hermes-autocomplete-desc">
+                  <span className="enodios-autocomplete-desc">
                     {suggestion.type === "folder"
                       ? "Folder"
                       : suggestion.type === "citation"
@@ -2794,8 +2794,8 @@ const PendingChangesPanel = memo(
     ]);
 
     return (
-      <div className="hermes-pending-changes">
-        <div className="hermes-pending-changes-header">
+      <div className="enodios-pending-changes">
+        <div className="enodios-pending-changes-header">
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             <span>
               File Changes ({pendingCount} pending
@@ -2805,11 +2805,11 @@ const PendingChangesPanel = memo(
               Shortcuts: ⌘⇧A (Approve All) • ⌘⇧R (Reject All)
             </span>
           </div>
-          <div className="hermes-pending-changes-actions">
+          <div className="enodios-pending-changes-actions">
             {pendingCount > 1 && (
               <>
                 <button
-                  className="hermes-btn-approve"
+                  className="enodios-btn-approve"
                   onClick={onApproveAll}
                   title="Shortcut: ⌘⇧A"
                   type="button"
@@ -2817,7 +2817,7 @@ const PendingChangesPanel = memo(
                   Approve All
                 </button>
                 <button
-                  className="hermes-btn-reject"
+                  className="enodios-btn-reject"
                   onClick={onRejectAll}
                   title="Shortcut: ⌘⇧R"
                   type="button"
@@ -2828,7 +2828,7 @@ const PendingChangesPanel = memo(
             )}
             {resolvedCount > 0 && (
               <button
-                className="hermes-icon-btn"
+                className="enodios-icon-btn"
                 onClick={onClearResolved}
                 title="Clear resolved"
                 type="button"
@@ -2847,35 +2847,35 @@ const PendingChangesPanel = memo(
           const hasSelections = selected.size > 0;
           return (
             <div
-              className={`hermes-pending-change hermes-change-${change.status}`}
+              className={`enodios-pending-change enodios-change-${change.status}`}
               key={change.id}
             >
               <div
-                className="hermes-pending-change-summary"
+                className="enodios-pending-change-summary"
                 onClick={() => {
                   setExpandedId(isExpanded ? null : change.id);
                 }}
                 role="button"
                 tabIndex={0}
               >
-                <span className="hermes-pending-change-path">
+                <span className="enodios-pending-change-path">
                   {change.path}
                 </span>
-                <div className="hermes-pending-change-badges">
+                <div className="enodios-pending-change-badges">
                   {change.status !== "pending" && (
                     <span
-                      className={`hermes-pending-change-badge hermes-badge-${change.status}`}
+                      className={`enodios-pending-change-badge enodios-badge-${change.status}`}
                     >
                       {change.status}
                     </span>
                   )}
                   <span
-                    className={`hermes-pending-change-badge hermes-badge-${change.action}`}
+                    className={`enodios-pending-change-badge enodios-badge-${change.action}`}
                   >
                     {change.action}
                   </span>
                   <button
-                    className="hermes-icon-btn"
+                    className="enodios-icon-btn"
                     draggable
                     onClick={(e) => {
                       e.stopPropagation();
@@ -2927,21 +2927,21 @@ const PendingChangesPanel = memo(
                 </div>
               </div>
               {isExpanded && (
-                <div className="hermes-pending-change-diff">
-                  <div className="hermes-diff-view">
+                <div className="enodios-pending-change-diff">
+                  <div className="enodios-diff-view">
                     {diffLines.map((dl, idx) => {
                       const isSelected = selected.has(idx);
                       const isToggleable =
                         dl.type === "added" || dl.type === "removed";
                       return (
                         <div
-                          className={`hermes-diff-line hermes-diff-${dl.type} ${isSelected ? "hermes-diff-selected" : ""}`}
+                          className={`enodios-diff-line enodios-diff-${dl.type} ${isSelected ? "enodios-diff-selected" : ""}`}
                           key={idx}
                         >
                           {isToggleable && change.status === "pending" && (
                             <input
                               checked={isSelected}
-                              className="hermes-diff-checkbox"
+                              className="enodios-diff-checkbox"
                               onChange={() => {
                                 toggleLine(change.id, idx);
                               }}
@@ -2953,7 +2953,7 @@ const PendingChangesPanel = memo(
                               type="checkbox"
                             />
                           )}
-                          <span className="hermes-diff-marker">
+                          <span className="enodios-diff-marker">
                             {dl.type === "added"
                               ? "+"
                               : dl.type === "removed"
@@ -2961,7 +2961,7 @@ const PendingChangesPanel = memo(
                                 : " "}
                           </span>
                           <span
-                            className="hermes-diff-text"
+                            className="enodios-diff-text"
                             dangerouslySetInnerHTML={{
                               __html: highlightLine(dl.line, change.path)
                             }}
@@ -2971,9 +2971,9 @@ const PendingChangesPanel = memo(
                     })}
                   </div>
                   {change.status === "pending" && (
-                    <div className="hermes-pending-change-actions">
+                    <div className="enodios-pending-change-actions">
                       <button
-                        className="hermes-btn-approve"
+                        className="enodios-btn-approve"
                         onClick={() => {
                           if (hasSelections) {
                             const partial = getPartialContent(change, selected);
@@ -2988,7 +2988,7 @@ const PendingChangesPanel = memo(
                         {hasSelections ? "Approve Selected" : "Approve All"}
                       </button>
                       <button
-                        className="hermes-btn-reject"
+                        className="enodios-btn-reject"
                         onClick={() => {
                           onReject(change.id);
                         }}
@@ -3052,23 +3052,23 @@ const PendingPermissionsPanel = memo(
     permissions
   }: PendingPermissionsPanelProps): ReactElement => {
     return (
-      <div className="hermes-pending-permissions">
-        <div className="hermes-pending-permissions-header">
-          <span className="hermes-pending-permissions-title">
-            <span className="hermes-pending-permissions-icon">🔒</span>
+      <div className="enodios-pending-permissions">
+        <div className="enodios-pending-permissions-header">
+          <span className="enodios-pending-permissions-title">
+            <span className="enodios-pending-permissions-icon">🔒</span>
             Permission Requests ({permissions.length})
           </span>
           {permissions.length > 1 && (
-            <div className="hermes-pending-permissions-actions">
+            <div className="enodios-pending-permissions-actions">
               <button
-                className="hermes-btn-approve"
+                className="enodios-btn-approve"
                 onClick={onApproveAll}
                 type="button"
               >
                 Approve All
               </button>
               <button
-                className="hermes-btn-reject"
+                className="enodios-btn-reject"
                 onClick={onRejectAll}
                 type="button"
               >
@@ -3207,39 +3207,39 @@ const PendingPermissionsPanel = memo(
               .filter(Boolean) || [];
 
           return (
-            <div className="hermes-pending-permission" key={permission.id}>
-              <div className="hermes-pending-permission-header">
-                <span className="hermes-pending-permission-tool">
-                  <span className="hermes-pending-permission-tool-icon">
+            <div className="enodios-pending-permission" key={permission.id}>
+              <div className="enodios-pending-permission-header">
+                <span className="enodios-pending-permission-tool">
+                  <span className="enodios-pending-permission-tool-icon">
                     {toolIcon}
                   </span>
                   <strong>{toolName}</strong>
-                  <span className="hermes-pending-permission-kind">
+                  <span className="enodios-pending-permission-kind">
                     ({toolKind})
                   </span>
                 </span>
               </div>
 
-              <div className="hermes-pending-permission-details">
+              <div className="enodios-pending-permission-details">
                 {actionDesc && (
-                  <div className="hermes-pending-permission-action">
-                    <span className="hermes-pending-permission-label">
+                  <div className="enodios-pending-permission-action">
+                    <span className="enodios-pending-permission-label">
                       Action:
                     </span>
-                    <code className="hermes-pending-permission-value">
+                    <code className="enodios-pending-permission-value">
                       {actionDesc}
                     </code>
                   </div>
                 )}
                 {locationPaths.length > 0 && (
-                  <div className="hermes-pending-permission-locations">
-                    <span className="hermes-pending-permission-label">
+                  <div className="enodios-pending-permission-locations">
+                    <span className="enodios-pending-permission-label">
                       Affects:
                     </span>
-                    <span className="hermes-pending-permission-value">
+                    <span className="enodios-pending-permission-value">
                       {locationPaths.map((p, i) => (
                         <span
-                          className="hermes-pending-permission-path"
+                          className="enodios-pending-permission-path"
                           key={i}
                         >
                           {p}
@@ -3249,21 +3249,21 @@ const PendingPermissionsPanel = memo(
                   </div>
                 )}
                 {patchContent && (
-                  <div className="hermes-pending-permission-patch">
-                    <span className="hermes-pending-permission-label">
+                  <div className="enodios-pending-permission-patch">
+                    <span className="enodios-pending-permission-label">
                       Patch Preview:
                     </span>
-                    <pre className="hermes-pending-permission-diff">
+                    <pre className="enodios-pending-permission-diff">
                       <code className="language-diff">{patchContent}</code>
                     </pre>
                   </div>
                 )}
               </div>
 
-              <div className="hermes-pending-permission-options">
+              <div className="enodios-pending-permission-options">
                 {permission.params.options.map((option) => (
                   <button
-                    className={`hermes-permission-option hermes-permission-option--${option.kind}`}
+                    className={`enodios-permission-option enodios-permission-option--${option.kind}`}
                     key={option.optionId}
                     onClick={() => {
                       onApprove(permission.id, option.optionId);
@@ -3314,12 +3314,12 @@ const TokenUsageFooter = memo(
       };
 
       window.addEventListener(
-        "hermes-usage-update",
+        "enodios-usage-update",
         handleUsageUpdate as EventListener
       );
       return () => {
         window.removeEventListener(
-          "hermes-usage-update",
+          "enodios-usage-update",
           handleUsageUpdate as EventListener
         );
       };
@@ -3330,8 +3330,8 @@ const TokenUsageFooter = memo(
     }
 
     return (
-      <div className="hermes-token-footer">
-        <span className="hermes-token-stat" title="Input tokens">
+      <div className="enodios-token-footer">
+        <span className="enodios-token-stat" title="Input tokens">
           <svg
             fill="none"
             height="12"
@@ -3349,7 +3349,7 @@ const TokenUsageFooter = memo(
           </svg>{" "}
           {usage.inputTokens.toLocaleString()} in
         </span>
-        <span className="hermes-token-stat" title="Output tokens">
+        <span className="enodios-token-stat" title="Output tokens">
           <svg
             fill="none"
             height="12"
@@ -3367,11 +3367,11 @@ const TokenUsageFooter = memo(
           </svg>{" "}
           {usage.outputTokens.toLocaleString()} out
         </span>
-        <span className="hermes-token-stat" title="Total tokens">
+        <span className="enodios-token-stat" title="Total tokens">
           {usage.totalTokens.toLocaleString()} total
         </span>
         <span
-          className="hermes-token-stat hermes-token-cost"
+          className="enodios-token-stat enodios-token-cost"
           title="Estimated cost (USD)"
         >
           ~${usage.estimatedCost.toFixed(4)}
@@ -3420,7 +3420,7 @@ const OnboardingPanel = memo(
     if (!isVisible) {
       return (
         <div
-          className="hermes-empty-state-container"
+          className="enodios-empty-state-container"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -3432,7 +3432,7 @@ const OnboardingPanel = memo(
           }}
         >
           <div
-            className="hermes-empty-state"
+            className="enodios-empty-state"
             style={{
               fontSize: "1.2em",
               fontWeight: "bold",
@@ -3517,11 +3517,11 @@ const OnboardingPanel = memo(
     }
 
     return (
-      <div className="hermes-onboarding">
-        <div className="hermes-onboarding-header">
+      <div className="enodios-onboarding">
+        <div className="enodios-onboarding-header">
           <span>👋 Welcome to {agentName}</span>
           <button
-            className="hermes-icon-btn"
+            className="enodios-icon-btn"
             onClick={() => {
               setIsVisible(false);
               onDismiss();
@@ -3532,7 +3532,7 @@ const OnboardingPanel = memo(
             ✕
           </button>
         </div>
-        <div className="hermes-onboarding-content">
+        <div className="enodios-onboarding-content">
           <p>
             <strong>{agentName}</strong> is your AI assistant inside Obsidian.
             Here's how to get started:
@@ -3563,14 +3563,14 @@ const OnboardingPanel = memo(
               personas, and security in the settings tab.
             </li>
           </ul>
-          <p className="hermes-onboarding-security">
+          <p className="enodios-onboarding-security">
             🔒 <strong>Security Note:</strong> Terminal access is disabled by
             default. File changes require your explicit approval via the diff
             viewer.
           </p>
         </div>
         <button
-          className="hermes-btn-approve"
+          className="enodios-btn-approve"
           onClick={() => {
             setIsVisible(false);
             onDismiss();

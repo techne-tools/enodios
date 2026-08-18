@@ -4,7 +4,7 @@ useEffect,
 useRef
 } from 'react';
 
-import type { ChatMessage } from './HermesChatView.tsx';
+import type { ChatMessage } from './EnodiosChatView.tsx';
 
 import { generateMessageId } from '../utils/uuid.ts';
 
