@@ -729,26 +729,28 @@ export class AcpClient implements ChatClient {
       prompt: promptBlocks,
       sessionId: this.currentSessionId
     };
-    const promptResponse = await this.clientConnection.prompt(promptRequest);
+    try {
+      const promptResponse = await this.clientConnection.prompt(promptRequest);
 
-    // The ACP SDK streams content/reasoning/tool updates as notifications while
-    // prompt() is in flight, but it does not emit a dedicated 'stop' event.
-    // HermesChatView's streaming pipeline relies on a 'stop' update to flush
-    // the buffered content, clear isTyping, and render the final assistant
-    // response. Emit one now that the prompt turn has completed.
-    this.emitUpdate({ type: 'stop' });
-
-    // Forward usage data if the agent reported it. This keeps the token footer
-    // consistent between ACP and API modes.
-    if (promptResponse.usage) {
-      this.emitUpdate({
-        type: 'usage',
-        usage: {
-          inputTokens: Number(promptResponse.usage.inputTokens ?? 0),
-          outputTokens: Number(promptResponse.usage.outputTokens ?? 0),
-          totalTokens: Number(promptResponse.usage.totalTokens ?? 0)
-        }
-      });
+      // Forward usage data if the agent reported it. This keeps the token footer
+      // consistent between ACP and API modes.
+      if (promptResponse.usage) {
+        this.emitUpdate({
+          type: 'usage',
+          usage: {
+            inputTokens: Number(promptResponse.usage.inputTokens ?? 0),
+            outputTokens: Number(promptResponse.usage.outputTokens ?? 0),
+            totalTokens: Number(promptResponse.usage.totalTokens ?? 0)
+          }
+        });
+      }
+    } finally {
+      // The ACP SDK streams content/reasoning/tool updates as notifications while
+      // prompt() is in flight, but it does not emit a dedicated 'stop' event.
+      // HermesChatView's streaming pipeline relies on a 'stop' update to flush
+      // the buffered content, clear isTyping, and render the final assistant
+      // response. Emit one now that the prompt turn has completed.
+      this.emitUpdate({ type: 'stop' });
     }
   }
 

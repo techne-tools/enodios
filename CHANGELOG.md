@@ -2,6 +2,15 @@
 
 All notable changes to the Obsidian Hermes plugin.
 
+## [0.6.1] - 2026-08-18
+
+### New Features
+- **Available Web Tools** — Added `web_search` and `web_extract` to the default tool list inside `HermesChatView.tsx` and the **Research Assistant** persona configuration in `PluginSettings.ts`.
+
+### Bug Fixes
+- **Hyperlink Contrast Fix** — Styled hyperlinks inside user message bubbles with `var(--text-on-accent)` and an underline, ensuring they are readable and visible against the purple/violet background.
+- **Silent Stream Cessation Fix** — Wrapped prompt connection execution and token usage payload processing in a `try/finally` block inside `AcpClient.ts`. This guarantees that stream-completion `stop` updates are always emitted to flush buffers and clean up typing indicator states, resolving silent hangs after failed/rejected tool calls.
+
 ## [0.5.0] - 2026-07-08
 
 ### New Features

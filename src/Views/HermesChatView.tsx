@@ -301,7 +301,9 @@ export function HermesChatViewComponent({
   >([
     { id: "read_file", name: "Read Files" },
     { id: "write_file", name: "Write Files" },
-    { id: "terminal", name: "Terminal Commands" }
+    { id: "terminal", name: "Terminal Commands" },
+    { id: "web_search", name: "Web Search" },
+    { id: "web_extract", name: "Web Extract" }
   ]);
   const isSlashOpenRef = useRef(false);
   const inputRef = useRef("");
@@ -759,7 +761,9 @@ export function HermesChatViewComponent({
         const baseTools = [
           { id: "read_file", name: "Read Files" },
           { id: "write_file", name: "Write Files" },
-          { id: "terminal", name: "Terminal Commands" }
+          { id: "terminal", name: "Terminal Commands" },
+          { id: "web_search", name: "Web Search" },
+          { id: "web_extract", name: "Web Extract" }
         ];
         const dynamicTools = commands.map((c) => ({
           id: c.name,

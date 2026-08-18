@@ -77,7 +77,7 @@ export class PluginSettings {
       systemPrompt: 'You are an experienced editor and writing coach. Help refine prose, fix grammar, and suggest structural improvements.'
     },
     {
-      defaultTools: ['read_file', 'write_file'],
+      defaultTools: ['read_file', 'write_file', 'web_search', 'web_extract'],
       id: 'research',
       name: 'Research Assistant',
       systemPrompt: 'You are a research assistant. Synthesize information, cite sources when possible, and ask clarifying questions.'
