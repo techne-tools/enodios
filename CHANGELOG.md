@@ -1,4 +1,9 @@
-# Changelog
+# CHANGELOG
+
+## 0.6.2
+
+- docs(changelog): simplify previous version header for parser compatibility
+- docs(design): import design pass guidelines, workflows, and cspell settings
 
 ## 0.6.1
 
