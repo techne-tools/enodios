@@ -34,13 +34,46 @@
 
 /* Hermes Chat View Styles */
 .hermes-chat-container {
+  --radius: 6px;
+  --radius-lg: 8px;
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  background: var(--background-primary);
   padding: 0;
   gap: 0;
-  overflow: visible;
-  position: relative;
+
+  /* ─── focus visibility ───────────────────────────────────────── */
+  :focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .hermes-icon-btn:focus-visible,
+  .hermes-context-btn:focus-visible,
+  .hermes-attach-btn:focus-visible,
+  .hermes-send-btn:focus-visible,
+  .hermes-context-remove:focus-visible,
+  .hermes-btn-approve:focus-visible,
+  .hermes-btn-reject:focus-visible,
+  .hermes-permission-option:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: 2px;
+  }
+
+  /* Press feedback — buttons move down 1px on activation */
+  .hermes-icon-btn:active,
+  .hermes-context-btn:active,
+  .hermes-attach-btn:active,
+  .hermes-btn-approve:active,
+  .hermes-btn-reject:active,
+  .hermes-permission-option:active {
+    transform: translateY(1px);
+  }
 }
 
 .hermes-chat-header {
@@ -50,6 +83,7 @@
   padding: 8px 12px;
   border-bottom: 1px solid var(--background-modifier-border);
   background-color: var(--background-primary);
+  flex-shrink: 0;
 
   &-left {
     display: flex;
@@ -331,6 +365,7 @@
   background-color: var(--background-primary);
   font-size: 11px;
   color: var(--text-muted);
+  flex-shrink: 0;
 
   .hermes-token-stat {
     display: flex;
@@ -420,10 +455,10 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 14px 16px;
+  padding: 16px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-height: 0;
 
   &::-webkit-scrollbar {
@@ -447,11 +482,11 @@
 .hermes-message {
   display: flex;
   flex-direction: column;
-  max-width: 90%;
-  padding: 8px 12px;
-  border-radius: 6px;
+  max-width: 95%;
+  padding: 6px 10px;
+  border-radius: var(--radius);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
 
   & + & {
     margin-top: 6px;
@@ -475,6 +510,9 @@
     align-self: flex-end;
     background-color: var(--interactive-accent);
     color: var(--text-on-accent);
+    border-left: none;
+    border-radius: var(--radius);
+    padding: 6px 10px;
 
     a {
       color: var(--text-on-accent);
@@ -484,12 +522,21 @@
         opacity: 0.8;
       }
     }
+
+    .hermes-markdown-renderer code:not(pre code) {
+      background-color: rgba(0, 0, 0, 0.55) !important;
+      color: #ffffff !important;
+      border-color: rgba(255, 255, 255, 0.35);
+    }
   }
 
   &.hermes-assistant {
     align-self: flex-start;
-    background-color: var(--background-secondary);
+    background-color: color-mix(in oklab, var(--interactive-accent) 8%, var(--background-secondary-alt));
     color: var(--text-normal);
+    border-left: 3px solid var(--text-accent);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 6px 10px;
   }
 
   &.hermes-system {
@@ -503,10 +550,12 @@
     align-self: flex-start;
     background-color: var(--background-secondary-alt);
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 1.5;
     border-left: 3px solid var(--text-accent);
-    border-radius: 0 6px 6px 0;
+    border-radius: 0 var(--radius) var(--radius) 0;
     max-width: 95%;
+    padding: 6px 10px;
   }
 
   &.hermes-tool {
@@ -522,8 +571,8 @@
     align-self: flex-start;
     background: none;
     margin: 0;
-    padding: 1px 4px;
-    font-size: 11px;
+    padding: 2px 4px;
+    font-size: 12px;
     color: var(--text-muted);
     max-width: 95%;
     border: none;
@@ -539,7 +588,7 @@
     color: var(--text-normal);
     font-size: 12px;
     border: 1px solid var(--background-modifier-border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     margin: 4px 0;
     max-width: 100%;
 
@@ -548,7 +597,7 @@
       margin: 0;
       background-color: var(--background-secondary);
       border-bottom: 1px solid var(--background-modifier-border);
-      border-radius: 6px 6px 0 0;
+      border-radius: var(--radius) var(--radius) 0 0;
     }
   }
 }
@@ -581,14 +630,15 @@
 
 .hermes-message-header {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-  padding-bottom: 2px;
+  margin-bottom: 6px;
+  line-height: 1.0;
 
   .hermes-role {
     font-weight: 600;
-    font-size: 10px;
+    font-size: 11px;
+    color: var(--text-normal);
     word-break: break-all;
     white-space: normal;
     min-width: 0;
@@ -613,7 +663,7 @@
     color: var(--text-muted);
     white-space: nowrap;
     flex-shrink: 0;
-    margin-left: 6px;
+    margin-left: auto;
   }
 
   .hermes-spinner {
@@ -635,16 +685,30 @@
 .hermes-message-content {
   word-wrap: break-word;
   overflow-wrap: break-word;
-  padding: 2px 0;
+  padding: 0;
+  margin-top: -3px;
   background-color: transparent !important;
+
+  p {
+    margin: 0;
+    & + p {
+      margin-top: 6px;
+    }
+  }
 }
 
 .hermes-markdown-renderer {
   background-color: transparent !important;
-  white-space: pre-wrap;
   word-wrap: break-word;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
+
+  p {
+    margin: 0;
+    & + p {
+      margin-top: 6px;
+    }
+  }
 
   * {
     background-color: transparent !important;
@@ -681,15 +745,15 @@
   // Code blocks
   pre {
     background-color: var(--background-secondary) !important;
-    border-radius: 6px;
-    padding: 10px 12px;
-    margin: 0;
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    margin: 6px 0;
     overflow-x: auto;
 
     code {
       background-color: transparent !important;
       font-family: var(--font-monospace);
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1.5;
 
       /* CodeMirror-like syntax highlighting classes */
@@ -733,11 +797,14 @@
 
   // Inline code
   code:not(pre code) {
-    background-color: var(--background-secondary) !important;
-    padding: 2px 5px;
+    background-color: var(--background-modifier-border) !important;
+    color: var(--text-normal);
+    padding: 1px 5px;
     border-radius: 4px;
     font-family: var(--font-monospace);
-    font-size: 12px;
+    font-size: 11px;
+    border: 1px solid var(--background-modifier-border-hover);
+    font-weight: 500;
 
     &.hermes-clickable-path {
       cursor: pointer;
@@ -809,6 +876,8 @@
 
 .hermes-input-wrapper {
   position: relative;
+  padding: 8px 12px 12px;
+  flex-shrink: 0;
 }
 
 .hermes-input-container {
@@ -816,13 +885,11 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background-color: transparent;
   border: 1px solid var(--interactive-accent);
   transition: all 0.2s ease;
   position: relative;
-  margin-bottom: 20px;
-  /* Cache bust: 2026-05-14-1603 */
 }
 
 .hermes-input-top {
@@ -933,6 +1000,23 @@
     white-space: nowrap;
     max-width: 200px;
   }
+
+  /* Slash-command chip — outline/ghost style, distinct from the solid file chip */
+  &.hermes-context-chip--command {
+    background-color: transparent;
+    color: var(--interactive-accent);
+    border: 1px solid var(--interactive-accent);
+
+    .hermes-context-remove {
+      background-color: color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+      color: var(--interactive-accent);
+
+      &:hover {
+        background-color: color-mix(in srgb, var(--interactive-accent) 25%, transparent);
+        color: var(--interactive-accent);
+      }
+    }
+  }
 }
 
 .hermes-input {
@@ -941,14 +1025,15 @@
   border: none;
   background-color: transparent;
   color: var(--text-normal);
-  font-size: 13px;
+  font-size: 14px;
   resize: none;
-  min-height: 24px;
+  min-height: 44px;
   max-height: none;
   outline: none;
   box-shadow: none;
-  line-height: 1.4;
+  line-height: 1.5;
   overflow-y: hidden;
+  font-family: var(--font-text);
 
   &:focus {
     outline: none;
@@ -979,14 +1064,18 @@
     color: var(--text-normal);
   }
 
+  &.active {
+    color: var(--text-accent);
+  }
+
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
   }
 }
 
@@ -1312,11 +1401,11 @@
   right: 0;
   z-index: 100;
   margin-bottom: 4px;
-  max-height: 250px;
+  max-height: 150px;
   overflow-y: auto;
   background-color: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
 
   &::-webkit-scrollbar {
@@ -1335,8 +1424,8 @@
   .hermes-autocomplete-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 3px 8px;
     cursor: pointer;
     transition: all 0.2s ease;
 
@@ -1350,44 +1439,45 @@
     }
 
     .hermes-autocomplete-icon {
-      font-size: 14px;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+
+      svg {
+        width: 11px;
+        height: 11px;
+      }
     }
 
     .hermes-autocomplete-text {
-      font-size: 13px;
-      color: var(--text-normal);
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      overflow: hidden;
+      white-space: nowrap;
+
+      strong {
+        font-size: 11px;
+        color: var(--text-normal);
+        flex-shrink: 0;
+      }
+    }
+
+    .hermes-autocomplete-desc {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: normal;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
     }
   }
 }
 
 .hermes-autocomplete-hint {
-  padding: 8px 12px;
+  padding: 3px 8px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 10px;
   border-bottom: 1px solid var(--background-modifier-border);
-}
-
-.hermes-slash-commands,
-.hermes-autocomplete-rich {
-  .hermes-autocomplete-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-
-    strong {
-      font-size: 13px;
-      color: var(--text-normal);
-    }
-  }
-
-  .hermes-autocomplete-desc {
-    font-size: 12px;
-    color: var(--text-muted);
-    font-weight: normal;
-  }
 }
 
 /* Mobile Responsive */
@@ -1502,7 +1592,7 @@
 
 .hermes-pending-change {
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   overflow: hidden;
   background-color: var(--background-primary);
 
@@ -1515,8 +1605,14 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    width: 100%;
     padding: 8px 12px;
     cursor: pointer;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     transition: background-color 0.15s ease;
 
     &:hover {
@@ -1728,7 +1824,7 @@
 
 .hermes-pending-permission {
   border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   overflow: hidden;
   background-color: var(--background-primary);
   flex-shrink: 0;
