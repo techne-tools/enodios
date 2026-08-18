@@ -1,8 +1,7 @@
 # Changelog
 
-All notable changes to the Obsidian Hermes plugin.
+## 0.6.1
 
-## [0.6.1] - 2026-08-18
 
 ### New Features
 - **Available Web Tools** — Added `web_search` and `web_extract` to the default tool list inside `HermesChatView.tsx` and the **Research Assistant** persona configuration in `PluginSettings.ts`.
