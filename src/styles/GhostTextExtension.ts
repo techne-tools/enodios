@@ -1,16 +1,7 @@
-import type { DecorationSet } from '@codemirror/view';
+import type { DecorationSet } from "@codemirror/view";
 
-import {
- StateEffect,
-StateField
-} from '@codemirror/state';
-import {
- Decoration,
-
-EditorView,
-keymap,
-WidgetType
-} from '@codemirror/view';
+import { StateEffect, StateField } from "@codemirror/state";
+import { Decoration, EditorView, keymap, WidgetType } from "@codemirror/view";
 
 /**
  * Ghost Text Inline Suggestions for CodeMirror 6
@@ -50,20 +41,31 @@ export interface GhostTextStateValue {
  * Uses CSS class 'enodios-ghost-text' for translucent styling.
  */
 class GhostTextWidget extends WidgetType {
-  constructor(public readonly text: string, public readonly currentIndex: number, public readonly total: number) {
+  constructor(
+    public readonly text: string,
+    public readonly currentIndex: number,
+    public readonly total: number,
+  ) {
     super();
   }
 
   override eq(other: GhostTextWidget): boolean {
-    return this.text === other.text && this.currentIndex === other.currentIndex && this.total === other.total;
+    return (
+      this.text === other.text &&
+      this.currentIndex === other.currentIndex &&
+      this.total === other.total
+    );
   }
 
   toDOM(): HTMLElement {
-    const span = document.createElement('span');
-    span.className = 'enodios-ghost-text';
+    const span = document.createElement("span");
+    span.className = "enodios-ghost-text";
     span.textContent = this.text;
     if (this.total > 1) {
-      span.setAttribute('data-alternatives', `${this.currentIndex + 1}/${this.total}`);
+      span.setAttribute(
+        "data-alternatives",
+        `${String(this.currentIndex + 1)}/${String(this.total)}`,
+      );
     }
     return span;
   }
@@ -87,7 +89,7 @@ export const ghostTextStateField = StateField.define<GhostTextStateValue>({
     if (state) {
       state = {
         ...state,
-        pos: tr.changes.mapPos(state.pos)
+        pos: tr.changes.mapPos(state.pos),
       };
     }
 
@@ -97,25 +99,29 @@ export const ghostTextStateField = StateField.define<GhostTextStateValue>({
           return { decorations: Decoration.none, state: null };
         }
         const { alternatives, currentIndex, pos } = effect.value;
-        const text = alternatives[currentIndex] ?? alternatives[0] ?? '';
+        const text = alternatives[currentIndex] ?? alternatives[0] ?? "";
         const widget = Decoration.widget({
           side: 1, // Render after the cursor
-          widget: new GhostTextWidget(text, currentIndex, alternatives.length)
+          widget: new GhostTextWidget(text, currentIndex, alternatives.length),
         });
         return {
           decorations: Decoration.set([widget.range(pos)]),
-          state: effect.value
+          state: effect.value,
         };
       }
     }
 
-    // Clear the ghost text if the user types anything and we didn't just explicitly set it
+    // Clear the ghost text only on USER input (typing/deleting), not on
+    // external document changes (e.g. a remote sync update or an agent edit).
+    // This prevents the suggestion from being wiped by unrelated edits.
     if (tr.docChanged && !tr.effects.some((e) => e.is(setGhostTextEffect))) {
-      return { decorations: Decoration.none, state: null };
+      if (tr.isUserEvent("input") || tr.isUserEvent("delete")) {
+        return { decorations: Decoration.none, state: null };
+      }
     }
 
     return { decorations, state };
-  }
+  },
 });
 
 /**
@@ -126,10 +132,12 @@ export const ghostTextStateField = StateField.define<GhostTextStateValue>({
  */
 export const ghostTextKeymap = keymap.of([
   {
-    key: 'Tab',
+    key: "Tab",
     run: (view: EditorView) => {
       const fieldVal = view.state.field(ghostTextStateField, false);
-      if (!fieldVal || !fieldVal.state) { return false; }
+      if (!fieldVal || !fieldVal.state) {
+        return false;
+      }
 
       const { alternatives, currentIndex, pos } = fieldVal.state;
       const text = alternatives[currentIndex];
@@ -137,19 +145,21 @@ export const ghostTextKeymap = keymap.of([
         // Insert the text and clear the decoration
         view.dispatch({
           changes: { from: pos, insert: text, to: pos },
-          effects: setGhostTextEffect.of(null)
+          effects: setGhostTextEffect.of(null),
         });
         return true;
       }
 
       return false;
-    }
+    },
   },
   {
-    key: 'Alt-ArrowRight',
+    key: "Alt-ArrowRight",
     run: (view: EditorView) => {
       const fieldVal = view.state.field(ghostTextStateField, false);
-      if (!fieldVal || !fieldVal.state) { return false; }
+      if (!fieldVal || !fieldVal.state) {
+        return false;
+      }
 
       const { alternatives, currentIndex, pos } = fieldVal.state;
       if (alternatives.length > 1) {
@@ -158,37 +168,40 @@ export const ghostTextKeymap = keymap.of([
           effects: setGhostTextEffect.of({
             alternatives,
             currentIndex: nextIndex,
-            pos
-          })
+            pos,
+          }),
         });
         return true;
       }
 
       return false;
-    }
+    },
   },
   {
-    key: 'Alt-ArrowLeft',
+    key: "Alt-ArrowLeft",
     run: (view: EditorView) => {
       const fieldVal = view.state.field(ghostTextStateField, false);
-      if (!fieldVal || !fieldVal.state) { return false; }
+      if (!fieldVal || !fieldVal.state) {
+        return false;
+      }
 
       const { alternatives, currentIndex, pos } = fieldVal.state;
       if (alternatives.length > 1) {
-        const nextIndex = (currentIndex - 1 + alternatives.length) % alternatives.length;
+        const nextIndex =
+          (currentIndex - 1 + alternatives.length) % alternatives.length;
         view.dispatch({
           effects: setGhostTextEffect.of({
             alternatives,
             currentIndex: nextIndex,
-            pos
-          })
+            pos,
+          }),
         });
         return true;
       }
 
       return false;
-    }
-  }
+    },
+  },
 ]);
 
 /** Combined extension to register with CodeMirror. */

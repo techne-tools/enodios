@@ -26,20 +26,20 @@ export class TagManager {
       if (cache.tags) {
         for (const t of cache.tags) {
           const tagName = t.tag.startsWith('#') ? t.tag : `#${t.tag}`;
-          tagsCount[tagName] = (tagsCount[tagName] || 0) + 1;
+          tagsCount[tagName] = (tagsCount[tagName] ?? 0) + 1;
         }
       }
 
       // Scan frontmatter tags
       if (cache.frontmatter) {
-        const rawTags = cache.frontmatter['tags'] || cache.frontmatter['tag'];
+        const rawTags: unknown = cache.frontmatter['tags'] ?? cache.frontmatter['tag'];
         if (rawTags) {
           if (Array.isArray(rawTags)) {
             for (const t of rawTags) {
               const clean = String(t).trim();
               if (clean) {
                 const tagName = clean.startsWith('#') ? clean : `#${clean}`;
-                tagsCount[tagName] = (tagsCount[tagName] || 0) + 1;
+                tagsCount[tagName] = (tagsCount[tagName] ?? 0) + 1;
               }
             }
           } else if (typeof rawTags === 'string') {
@@ -48,7 +48,7 @@ export class TagManager {
               const clean = p.trim();
               if (clean) {
                 const tagName = clean.startsWith('#') ? clean : `#${clean}`;
-                tagsCount[tagName] = (tagsCount[tagName] || 0) + 1;
+                tagsCount[tagName] = (tagsCount[tagName] ?? 0) + 1;
               }
             }
           }
@@ -62,7 +62,10 @@ export class TagManager {
   /**
    * Analyzes content and title to suggest existing vault tags with confidence scores.
    */
-  public suggestTagsForContent(content: string, title: string): { tag: string; confidence: number }[] {
+  public suggestTagsForContent(
+    content: string,
+    title: string
+  ): { tag: string; confidence: number }[] {
     const vaultTags = this.getAllVaultTagsWithCounts();
     const suggestions: { tag: string; confidence: number }[] = [];
 
@@ -88,12 +91,18 @@ export class TagManager {
       let maxScore = 0;
 
       // 1. Exact match in title
-      if (titleLower.includes(cleanTag) || tagParts.every((part) => titleWords.has(part))) {
+      if (
+        titleLower.includes(cleanTag)
+        || tagParts.every((part) => titleWords.has(part))
+      ) {
         maxScore = Math.max(maxScore, 0.85);
       }
 
       // 2. Exact match in first paragraph / snippet
-      if (bodySnippet.includes(cleanTag) || tagParts.every((part) => snippetWords.has(part))) {
+      if (
+        bodySnippet.includes(cleanTag)
+        || tagParts.every((part) => snippetWords.has(part))
+      ) {
         maxScore = Math.max(maxScore, 0.65);
       }
 
@@ -128,30 +137,33 @@ export class TagManager {
   public async applyTagsToNote(file: TFile, tags: string[]): Promise<void> {
     if (tags.length === 0) return;
 
-    await this.plugin.app.fileManager.processFrontMatter(file, (frontmatter) => {
-      // Get existing tags from frontmatter
-      const rawExisting = frontmatter['tags'] || frontmatter['tag'] || [];
-      const cleanTags = new Set<string>();
+    await this.plugin.app.fileManager.processFrontMatter(
+      file,
+      (frontmatter: Record<string, unknown>) => {
+        // Get existing tags from frontmatter
+        const rawExisting: unknown = frontmatter['tags'] ?? frontmatter['tag'] ?? [];
+        const cleanTags = new Set<string>();
 
-      // Helper to clean and add tag (no leading # in frontmatter)
-      const addCleanTag = (t: unknown) => {
-        const clean = String(t).replace(/^#/, '').trim();
-        if (clean) cleanTags.add(clean);
-      };
+        // Helper to clean and add tag (no leading # in frontmatter)
+        const addCleanTag = (t: unknown) => {
+          const clean = String(t).replace(/^#/, '').trim();
+          if (clean) cleanTags.add(clean);
+        };
 
-      // Process existing tags
-      if (Array.isArray(rawExisting)) {
-        rawExisting.forEach(addCleanTag);
-      } else if (typeof rawExisting === 'string') {
-        rawExisting.split(/,\s*/).forEach(addCleanTag);
+        // Process existing tags
+        if (Array.isArray(rawExisting)) {
+          rawExisting.forEach(addCleanTag);
+        } else if (typeof rawExisting === 'string') {
+          rawExisting.split(/,\s*/).forEach(addCleanTag);
+        }
+
+        // Process new tags to apply
+        tags.forEach(addCleanTag);
+
+        // Save back to frontmatter
+        delete frontmatter['tag'];
+        frontmatter['tags'] = Array.from(cleanTags);
       }
-
-      // Process new tags to apply
-      tags.forEach(addCleanTag);
-
-      // Save back to frontmatter
-      delete frontmatter['tag'];
-      frontmatter['tags'] = Array.from(cleanTags);
-    });
+    );
   }
 }

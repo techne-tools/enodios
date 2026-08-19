@@ -109,13 +109,13 @@ export class CanvasManager {
       typeCounts[node.type] = (typeCounts[node.type] ?? 0) + 1;
     }
     const typeSummary = Object.entries(typeCounts)
-      .map(([t, c]) => `${c} ${t}`)
+      .map(([t, c]) => `${String(c)} ${t}`)
       .join(', ');
 
     const lines: string[] = [
       `--- Canvas: ${file.basename} ---`,
-      `Nodes: ${nodeCount} (${typeSummary || 'none'})`,
-      `Edges: ${edgeCount}`,
+      `Nodes: ${String(nodeCount)} (${typeSummary || 'none'})`,
+      `Edges: ${String(edgeCount)}`,
       ''
     ];
 
@@ -172,10 +172,10 @@ export class CanvasManager {
       0
     );
     const newNode: CanvasNode = {
-      height: node.height ?? 200,
+      height: node.height,
       id: this.generateNodeId(),
       type: node.type,
-      width: node.width ?? 400,
+      width: node.width,
       x: node.x ?? 0,
       y: node.y ?? maxY + 40,
       ...(node.text !== undefined && { text: node.text }),

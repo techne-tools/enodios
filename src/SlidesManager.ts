@@ -76,7 +76,7 @@ export class SlidesManager {
           charCount: trimmed.length,
           content: trimmed,
           index: idx,
-          title: titleMatch ? titleMatch[1]! : null
+          title: titleMatch ? (titleMatch[1] ?? null) : null
         };
       })
       .filter((s) => s.content.length > 0);
@@ -121,14 +121,14 @@ export class SlidesManager {
     const totalChars = slides.reduce((acc, s) => acc + s.charCount, 0);
     const lines = [
       `--- Slides: ${file.basename} ---`,
-      `Total slides: ${slides.length} (${totalChars} total characters)`,
+      `Total slides: ${String(slides.length)} (${String(totalChars)} total characters)`,
       ''
     ];
 
     for (const slide of slides) {
       const title = slide.title ?? '(no title)';
       lines.push(
-        `  Slide ${slide.index + 1}: "${title}" — ${slide.charCount} chars`
+        `  Slide ${String(slide.index + 1)}: "${title}" — ${String(slide.charCount)} chars`
       );
     }
 

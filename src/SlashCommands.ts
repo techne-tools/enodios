@@ -5,7 +5,10 @@ import type { Plugin } from './Plugin.ts';
 
 export interface SlashCommand {
   description: string;
-  execute: (plugin: Plugin, args: string) => Promise<null | string>;
+  execute: (
+    plugin: Plugin,
+    args: string
+  ) => Promise<null | string> | null | string;
   name: string;
 }
 
@@ -34,7 +37,7 @@ export interface SlashCommand {
 const BUILT_IN_COMMANDS: SlashCommand[] = [
   {
     description: 'Clear the current conversation',
-    execute: async (_plugin) => {
+    execute: (_plugin) => {
       return null;
     },
     name: 'clear'
@@ -43,13 +46,14 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     description: 'Display a summary of the currently attached context items.',
     execute: async (plugin) => {
       const leaves = plugin.app.workspace.getLeavesOfType('enodios-chat-view');
-      if (leaves.length === 0) {
+      const firstLeaf = leaves[0];
+      if (!firstLeaf) {
         return 'No active chat view found.';
       }
-      const view = leaves[0]!.view as unknown as {
-        activeContextItems: Array<Record<string, unknown>>;
+      const view = firstLeaf.view as unknown as {
+        activeContextItems?: Array<Record<string, unknown>>;
       };
-      const items = view.activeContextItems || [];
+      const items = view.activeContextItems ?? [];
       if (items.length === 0) {
         return 'Context is currently empty. Use the `@` button or type `[[` to add notes.';
       }
@@ -87,7 +91,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
   {
     description: 'Show available slash commands',
-    execute: async (_plugin) => {
+    execute: (_plugin) => {
       const commands = getSlashCommands();
       const list = commands
         .map((cmd) => `**/${cmd.name}** — ${cmd.description}`)
@@ -388,18 +392,19 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         }
 
         const leaves = plugin.app.workspace.getLeavesOfType('enodios-chat-view');
-        if (leaves.length === 0) {
+        const firstLeaf = leaves[0];
+        if (!firstLeaf) {
           return 'No active chat view found.';
         }
-        const chatView = leaves[0]!.view as unknown as {
-          activeMessages: Array<Record<string, unknown>>;
+        const chatView = firstLeaf.view as unknown as {
+          activeMessages?: Array<Record<string, unknown>>;
         };
-        const messages = chatView.activeMessages || [];
+        const messages = chatView.activeMessages ?? [];
         const userMsgs = messages.filter((m) => m['role'] === 'user');
         if (userMsgs.length === 0) {
           return 'No user prompt found in this conversation to save as template.';
         }
-        const lastPrompt = userMsgs[userMsgs.length - 1]!['content'] as string;
+        const lastPrompt = userMsgs[userMsgs.length - 1]?.['content'] as string;
 
         await plugin.templateManager.saveTemplate(name, lastPrompt);
         return `Template **${name}** saved successfully.`;
@@ -430,7 +435,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       }
 
       if (sub === 'page') {
-        const pageNum = parseInt(pageStr || '', 10);
+        const pageNum = parseInt(pageStr ?? '', 10);
         if (isNaN(pageNum) || pageNum < 1) {
           return 'Please specify a valid page number. Example: `/pdf page papers/my-paper.pdf 2`';
         }
@@ -862,7 +867,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
   {
     description: 'Forge metadata management. Usage: /forge [validate | patch <desc>]',
-    execute: async (plugin, args) => {
+    execute: (plugin, args) => {
       // Assuming Forge doesn't strictly have to be enabled to generate patches, but we check anyway if needed.
       const parts = args.trim().split(/\s+(.*)/, 2);
       const sub = (parts[0] ?? '').toLowerCase();
@@ -883,14 +888,14 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
   {
     description: 'Analyze plugin load times for Lazy Loader. Usage: /lazyloader analyze',
-    execute: async (plugin) => {
+    execute: (plugin) => {
       return plugin.communityPluginsManager.getLazyLoaderSuggestions();
     },
     name: 'lazyloader'
   },
   {
     description: 'Git operations. Usage: /git [status | commit <message> | push]',
-    execute: async (plugin, args) => {
+    execute: (plugin, args) => {
       const parts = args.trim().split(/\s+(.*)/, 2);
       const sub = (parts[0] ?? '').toLowerCase();
       const message = (parts[1] ?? '').trim();
@@ -910,7 +915,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
   {
     description: 'Run the Obsidian Linter on the active file. Usage: /lint',
-    execute: async (plugin) => {
+    execute: (plugin) => {
       if (!isPluginEnabled(plugin.app, 'obsidian-linter')) {
         return 'Linter plugin is not enabled.';
       }
@@ -920,7 +925,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
   {
     description: 'Insert an Admonition block. Usage: /admonition insert <type>',
-    execute: async (plugin, args) => {
+    execute: (plugin, args) => {
       const parts = args.trim().split(/\s+/);
       const sub = (parts[0] ?? '').toLowerCase();
       const type = parts[1] ?? '';
@@ -938,13 +943,16 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
   {
     description: 'Advanced Tables tools. Usage: /table [generate | format]',
-    execute: async (plugin, args) => {
+    execute: (plugin, args) => {
       const parts = args.trim().split(/\s+(.*)/, 2);
       const sub = (parts[0] ?? '').toLowerCase();
 
       if (sub === 'generate') {
         const subArgs = parts.slice(1).join(' ').trim().split(/\s+/);
-        return plugin.communityPluginsManager.generateTable(subArgs[0], subArgs[1]);
+        return plugin.communityPluginsManager.generateTable(
+          subArgs[0],
+          subArgs[1]
+        );
       }
       if (sub === 'format') {
         return plugin.communityPluginsManager.formatTable();
@@ -955,7 +963,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
   {
     description: 'Format the active file with Prettier. Usage: /prettier',
-    execute: async (plugin) => {
+    execute: (plugin) => {
       if (!isPluginEnabled(plugin.app, 'obsidian-prettier')) {
         return 'Prettier plugin is not enabled.';
       }
@@ -965,7 +973,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   },
   {
     description: 'Make.md tools. Usage: /makemd',
-    execute: async () => {
+    execute: () => {
       return 'To integrate with make.md, ask Hermes:\n\n> Please structure this content using make.md Contexts or Spaces format.';
     },
     name: 'makemd'
@@ -1012,10 +1020,8 @@ export function getSlashCommands(): SlashCommand[] {
  * Commands now arrive via ACP push (available_commands_update), so this is a no-op.
  * Kept for API compatibility.
  */
-export async function getToolSlashCommands(
-  _plugin: Plugin
-): Promise<SlashCommand[]> {
-  return cachedToolCommands;
+export function getToolSlashCommands(_plugin: Plugin): Promise<SlashCommand[]> {
+  return Promise.resolve(cachedToolCommands);
 }
 
 /**

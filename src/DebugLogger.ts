@@ -30,7 +30,7 @@ export class DebugLogger {
   private readonly plugin: Plugin;
 
   private get isEnabled(): boolean {
-    return this.plugin.settings.enableDebugMode ?? false;
+    return this.plugin.settings.enableDebugMode;
   }
 
   constructor(plugin: Plugin) {
@@ -40,6 +40,7 @@ export class DebugLogger {
   /** Detailed diagnostics — only shown when debug mode is on. */
   public debug(message: string, ...args: unknown[]): void {
     if (this.isEnabled) {
+      // eslint-disable-next-line no-console -- debug logger intentionally uses console.debug
       console.debug(this.format('DEBUG', message, ...args));
     }
   }
@@ -52,10 +53,12 @@ export class DebugLogger {
   /** Group related logs together. Only outputs if debug mode is on. */
   public group(label: string, fn: () => void): void {
     if (this.isEnabled) {
+      // eslint-disable-next-line no-console -- debug logger intentionally uses console.group
       console.group(this.format('DEBUG', label));
       try {
         fn();
       } finally {
+        // eslint-disable-next-line no-console -- debug logger intentionally uses console.groupEnd
         console.groupEnd();
       }
     } else {
@@ -66,6 +69,7 @@ export class DebugLogger {
   /** General information — only shown when debug mode is on. */
   public info(message: string, ...args: unknown[]): void {
     if (this.isEnabled) {
+      // eslint-disable-next-line no-console -- debug logger intentionally uses console.info
       console.info(this.format('INFO', message, ...args));
     }
   }
@@ -79,8 +83,29 @@ export class DebugLogger {
 
   private format(level: string, message: string, ...args: unknown[]): string {
     const timestamp = new Date().toISOString();
-    const argsStr = args.length > 0 ? ` ${args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}` : '';
-    return this.redactSecrets(`[${timestamp}] [Hermes ${level}] ${message}${argsStr}`);
+    const argsStr = args.length > 0
+      ? ` ${args.map((a) => this.stringifyArg(a)).join(' ')}`
+      : '';
+    return this.redactSecrets(
+      `[${timestamp}] [Hermes ${level}] ${message}${argsStr}`
+    );
+  }
+
+  private stringifyArg(a: unknown): string {
+    if (typeof a === 'object' && a !== null) {
+      return JSON.stringify(a);
+    }
+    if (typeof a === 'string') {
+      return a;
+    }
+    if (
+      typeof a === 'number'
+      || typeof a === 'boolean'
+      || typeof a === 'bigint'
+    ) {
+      return String(a);
+    }
+    return String(a);
   }
 
   /**
@@ -97,7 +122,10 @@ export class DebugLogger {
     // Redact API keys in query strings: "api_key=abc123" → "api_key=[REDACTED]"
     redacted = redacted.replace(/(api[_-]?key=)\S+/gi, '$1[REDACTED]');
     // Redact Authorization headers: "Authorization: Basic abc123" → "Authorization: [REDACTED]"
-    redacted = redacted.replace(/(Authorization:\s*\w+\s+)\S+/gi, '$1[REDACTED]');
+    redacted = redacted.replace(
+      /(Authorization:\s*\w+\s+)\S+/gi,
+      '$1[REDACTED]'
+    );
     // Redact password fields in JSON: "password": "secret" → "password": "[REDACTED]"
     redacted = redacted.replace(/("password"\s*:\s*")[^"]*/gi, '$1[REDACTED]');
     return redacted;

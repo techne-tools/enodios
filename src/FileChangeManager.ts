@@ -1,6 +1,5 @@
 import {
   MarkdownView,
-  normalizePath,
   Notice,
   TFile
 } from 'obsidian';
@@ -10,6 +9,7 @@ import { EditorView } from '@codemirror/view';
 import type { Plugin } from './Plugin.ts';
 
 import { setInlineDiffEffect } from './styles/InlineDiffExtension.ts';
+import { isPathSafe } from './utils/pathSafety.ts';
 import { generateMessageId } from './utils/uuid.ts';
 
 export interface DiffLineState {
@@ -117,12 +117,17 @@ export class FileChangeManager {
         this.processingPaths.add(change.path);
 
         try {
-          const existingFile = this.plugin.app.vault.getAbstractFileByPath(change.path);
+          const existingFile = this.plugin.app.vault.getAbstractFileByPath(
+            change.path
+          );
           if (change.action === 'delete') {
             if (existingFile instanceof TFile) {
               await this.plugin.app.vault.trash(existingFile, true);
             }
-          } else if (existingFile instanceof TFile && change.newContent !== null) {
+          } else if (
+            existingFile instanceof TFile
+            && change.newContent !== null
+          ) {
             await this.plugin.app.vault.modify(existingFile, change.newContent);
           } else if (change.newContent !== null) {
             const parts = change.path.split('/');
@@ -133,12 +138,23 @@ export class FileChangeManager {
             await this.plugin.app.vault.create(change.path, change.newContent);
           }
           change.status = 'approved';
-          this.plugin.auditLog.recordFileChange(change.path, change.action, 'success');
+          this.plugin.auditLog.recordFileChange(
+            change.path,
+            change.action,
+            'success'
+          );
           if (change.resolve) change.resolve();
           successCount++;
         } catch (error) {
-          this.plugin.debug.error(`Failed to apply changes to ${change.path}`, error);
-          if (change.reject) change.reject(error instanceof Error ? error : new Error(String(error)));
+          this.plugin.debug.error(
+            `Failed to apply changes to ${change.path}`,
+            error
+          );
+          if (change.reject) {
+            change.reject(
+              error instanceof Error ? error : new Error(String(error))
+            );
+          }
         } finally {
           this.processingPaths.delete(change.path);
           this.clearInlineDiffForPath(change.path);
@@ -158,7 +174,10 @@ export class FileChangeManager {
    * Approve a pending change and write it to the vault.
    * If contentOverride is provided, writes that instead of change.newContent (for partial approvals).
    */
-  public async approveChange(changeId: string, contentOverride?: string): Promise<void> {
+  public async approveChange(
+    changeId: string,
+    contentOverride?: string
+  ): Promise<void> {
     const change = this.changes.find((c) => c.id === changeId);
     if (change?.status !== 'pending') {
       return;
@@ -171,8 +190,10 @@ export class FileChangeManager {
     this.processingPaths.add(change.path);
 
     try {
-      const contentToWrite = contentOverride !== undefined ? contentOverride : change.newContent;
-      const existingFile = this.plugin.app.vault.getAbstractFileByPath(change.path);
+      const contentToWrite = contentOverride ?? change.newContent;
+      const existingFile = this.plugin.app.vault.getAbstractFileByPath(
+        change.path
+      );
       const isPartial = contentOverride !== undefined && contentOverride !== change.newContent;
 
       if (change.action === 'delete') {
@@ -191,8 +212,14 @@ export class FileChangeManager {
       }
       change.status = isPartial ? 'partial' : 'approved';
       change.partialContent = contentOverride;
-      this.plugin.auditLog.recordFileChange(change.path, isPartial ? 'modify' : change.action, 'success');
-      new Notice(`Applied ${isPartial ? 'partial ' : ''}changes to ${change.path}`);
+      this.plugin.auditLog.recordFileChange(
+        change.path,
+        isPartial ? 'modify' : change.action,
+        'success'
+      );
+      new Notice(
+        `Applied ${isPartial ? 'partial ' : ''}changes to ${change.path}`
+      );
       if (change.status === 'approved' && change.resolve) {
         change.resolve();
       }
@@ -258,17 +285,20 @@ export class FileChangeManager {
     resolveCallback?: () => void,
     rejectCallback?: (error: Error) => void
   ): Promise<PendingFileChange> {
-    if (!this.isPathSafe(path)) {
+    if (!(await isPathSafe(this.plugin, path))) {
       throw new Error(`Invalid file path: ${path}`);
     }
 
     // Check if there is already a pending change for this path to coalesce rapid updates
-    let existingPendingIndex = this.changes.findIndex((c) => c.path === path && c.status === 'pending');
+    let existingPendingIndex = this.changes.findIndex(
+      (c) => c.path === path && c.status === 'pending'
+    );
 
     let originalContent = '';
     if (existingPendingIndex !== -1) {
       // Keep the original content from when the first change was proposed (already normalized)
-      originalContent = this.changes[existingPendingIndex]!.originalContent;
+      const existingChange = this.changes[existingPendingIndex];
+      originalContent = existingChange?.originalContent ?? '';
     } else {
       try {
         const file = this.plugin.app.vault.getAbstractFileByPath(path);
@@ -283,10 +313,13 @@ export class FileChangeManager {
 
       // Re-evaluate pending index because `await` yielded the event loop
       // Another rapid call could have pushed a pending change while we were reading disk
-      existingPendingIndex = this.changes.findIndex((c) => c.path === path && c.status === 'pending');
+      existingPendingIndex = this.changes.findIndex(
+        (c) => c.path === path && c.status === 'pending'
+      );
       if (existingPendingIndex !== -1) {
         // Fall back to the original content from the first registered change
-        originalContent = this.changes[existingPendingIndex]!.originalContent;
+        const existingChange = this.changes[existingPendingIndex];
+        originalContent = existingChange?.originalContent ?? '';
       }
     }
 
@@ -318,13 +351,17 @@ export class FileChangeManager {
     if (existingPendingIndex !== -1) {
       // Coalesce / overwrite the existing pending change to prevent rapid duplicates
       // Reject the previous pending change if it has callbacks
-      const oldChange = this.changes[existingPendingIndex]!;
-      if (oldChange.reject) {
+      const oldChange = this.changes[existingPendingIndex];
+      if (oldChange?.reject) {
         oldChange.reject(new Error('Superceded by new change'));
       }
-      new Notice(`Pending change to ${path} was superseded by an update from the agent.`);
-      change.id = oldChange.id;
-      this.changes[existingPendingIndex] = change;
+      new Notice(
+        `Pending change to ${path} was superseded by an update from the agent.`
+      );
+      change.id = oldChange?.id ?? change.id;
+      if (existingPendingIndex >= 0 && this.changes[existingPendingIndex]) {
+        this.changes[existingPendingIndex] = change;
+      }
     } else {
       this.changes.push(change);
       // Enforce max history to prevent unbounded array growth over long sessions
@@ -351,21 +388,25 @@ export class FileChangeManager {
 
     if (fileToOpen instanceof TFile) {
       // Find an existing leaf with this file, or open it in the active leaf
-      let leaf = this.plugin.app.workspace.getLeavesOfType('markdown').find((l) => {
-        return (l.view as MarkdownView).file?.path === path;
-      });
-      if (!leaf) {
-        leaf = this.plugin.app.workspace.getLeaf(false);
-      }
-      if (leaf) {
-        await leaf.openFile(fileToOpen);
-        const activeView = leaf.view;
-        if (activeView instanceof MarkdownView) {
-          // @ts-expect-error - Accessing internal CodeMirror 6 view
-          const cmView = activeView.editor.cm;
-          if (cmView) {
-            setTimeout(() => this.triggerInlineDiff(change, cmView), 100);
+      let leaf = this.plugin.app.workspace
+        .getLeavesOfType('markdown')
+        .find((l) => {
+          return (l.view as MarkdownView).file?.path === path;
+        });
+      leaf ??= this.plugin.app.workspace.getLeaf(false);
+      await leaf.openFile(fileToOpen);
+      const activeView = leaf.view;
+      if (activeView instanceof MarkdownView) {
+        // Access internal CodeMirror 6 view from Obsidian's Editor wrapper.
+        const cmView = (
+          activeView.editor as unknown as {
+            cm?: EditorView;
           }
+        ).cm;
+        if (cmView) {
+          setTimeout(() => {
+            this.triggerInlineDiff(change, cmView);
+          }, 100);
         }
       }
     }
@@ -382,13 +423,19 @@ export class FileChangeManager {
     if (!activeView || !activeView.file) return;
 
     const change = this.changes.find(
-      (c) => c.path === activeView.file!.path && c.status === 'pending'
+      (c) => c.path === activeView.file?.path && c.status === 'pending'
     );
     if (change) {
-      // @ts-expect-error - Accessing internal CodeMirror 6 view
-      const cmView = activeView.editor.cm as EditorView;
+      // Access internal CodeMirror 6 view from Obsidian's Editor wrapper.
+      const cmView = (
+        activeView.editor as unknown as {
+          cm?: EditorView;
+        }
+      ).cm;
       if (cmView) {
-        setTimeout(() => this.triggerInlineDiff(change, cmView), 100);
+        setTimeout(() => {
+          this.triggerInlineDiff(change, cmView);
+        }, 100);
       }
     }
   }
@@ -412,8 +459,12 @@ export class FileChangeManager {
   private clearInlineDiffForPath(path: string): void {
     const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
     if (activeView && activeView.file?.path === path) {
-      // @ts-expect-error - Accessing internal CodeMirror 6 view from Obsidian's Editor wrapper
-      const cmView = activeView.editor.cm as EditorView;
+      // Access internal CodeMirror 6 view from Obsidian's Editor wrapper.
+      const cmView = (
+        activeView.editor as unknown as {
+          cm?: EditorView;
+        }
+      ).cm;
       if (cmView) {
         cmView.dispatch({ effects: setInlineDiffEffect.of(null) });
       }
@@ -425,7 +476,9 @@ export class FileChangeManager {
    * diffs against the newly-written content rather than stale originalContent.
    */
   private async refreshPendingDiffsForPath(path: string): Promise<void> {
-    const pendingOnPath = this.changes.filter((c) => c.path === path && c.status === 'pending');
+    const pendingOnPath = this.changes.filter(
+      (c) => c.path === path && c.status === 'pending'
+    );
     if (pendingOnPath.length === 0) return;
 
     // Read the current file content from disk (or empty if deleted)
@@ -442,7 +495,10 @@ export class FileChangeManager {
 
     for (const change of pendingOnPath) {
       change.originalContent = currentContent;
-      change.diffSnapshot = computeDiffLines(currentContent, change.newContent ?? '');
+      change.diffSnapshot = computeDiffLines(
+        currentContent,
+        change.newContent ?? ''
+      );
     }
   }
 
@@ -457,7 +513,9 @@ export class FileChangeManager {
       this.clearInlineDiffForPath(change.path);
       await this.cleanupEmptyCreatedFile(change);
       if (change.reject) {
-        change.reject(new Error('Permission Denied: User rejected all changes'));
+        change.reject(
+          new Error('Permission Denied: User rejected all changes')
+        );
       }
     }
     new Notice(`Rejected ${pending.length} pending change(s)`);
@@ -481,7 +539,11 @@ export class FileChangeManager {
     this.notify();
   }
 
-  public async processPartialChange(changeId: string, indices: number[], decision: 'approve' | 'reject'): Promise<void> {
+  public async processPartialChange(
+    changeId: string,
+    indices: number[],
+    decision: 'approve' | 'reject'
+  ): Promise<void> {
     const change = this.changes.find((c) => c.id === changeId);
     if (!change || !change.diffSnapshot || change.status !== 'pending') return;
 
@@ -489,12 +551,37 @@ export class FileChangeManager {
     this.processingPaths.add(change.path);
 
     try {
+      // SECURITY/CORRECTNESS: Re-read the current disk content before applying
+      // a partial change. The diff snapshot may be stale if the file changed
+      // on disk since it was registered. We recompute the diff against the
+      // current disk state so indices map to the actual current content.
+      let currentDiskContent = '';
+      const existingFile = this.plugin.app.vault.getAbstractFileByPath(
+        change.path
+      );
+      if (existingFile instanceof TFile) {
+        currentDiskContent = await this.plugin.app.vault.read(existingFile);
+      }
+      currentDiskContent = currentDiskContent.replace(/\r\n/g, '\n');
+
+      const freshDiff = computeDiffLines(
+        currentDiskContent,
+        change.newContent ?? ''
+      );
       const targetIndices = new Set(indices);
+
+      // Validate that all requested indices are within the fresh diff.
+      for (const idx of indices) {
+        if (idx < 0 || idx >= freshDiff.length) {
+          throw new Error(`Invalid diff index ${idx} for partial change`);
+        }
+      }
+
       const diskLines: string[] = [];
       const proposedLines: string[] = [];
 
-      for (let i = 0; i < change.diffSnapshot.length; i++) {
-        const item = change.diffSnapshot[i];
+      for (let i = 0; i < freshDiff.length; i++) {
+        const item = freshDiff[i];
         if (!item) continue;
 
         if (item.type === 'unchanged') {
@@ -513,7 +600,8 @@ export class FileChangeManager {
             // Unrelated removed line: keep on disk (since it's still there), but do not put in proposed
             diskLines.push(item.line);
           }
-        } else if (item.type === 'added') {
+        } else {
+          // item.type === "added"
           if (targetIndices.has(i)) {
             if (decision === 'approve') {
               // Approve addition: write to disk and to proposed
@@ -532,7 +620,6 @@ export class FileChangeManager {
       const contentToWrite = diskLines.join('\n');
       change.newContent = proposedLines.join('\n');
 
-      const existingFile = this.plugin.app.vault.getAbstractFileByPath(change.path);
       if (existingFile instanceof TFile) {
         await this.plugin.app.vault.modify(existingFile, contentToWrite);
       } else {
@@ -541,7 +628,7 @@ export class FileChangeManager {
 
       await this.refreshPendingDiffsForPath(change.path);
 
-      if (!change.diffSnapshot || !change.diffSnapshot.some((l) => l.type !== 'unchanged')) {
+      if (!change.diffSnapshot.some((l) => l.type !== 'unchanged')) {
         change.status = 'approved';
         this.clearInlineDiffForPath(change.path);
         if (change.newContent === change.originalContent) {
@@ -556,18 +643,32 @@ export class FileChangeManager {
       } else {
         const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView && activeView.file?.path === change.path) {
-          // @ts-expect-error - Internal CM view
-          const cmView = activeView.editor.cm;
+          // Access internal CodeMirror 6 view from Obsidian's Editor wrapper.
+          const cmView = (
+            activeView.editor as unknown as {
+              cm?: EditorView;
+            }
+          ).cm;
           if (cmView) this.triggerInlineDiff(change, cmView);
         }
       }
+    } catch (error) {
+      this.plugin.debug.error(
+        `Failed to process partial change for ${change.path}`,
+        error
+      );
+      new Notice(
+        `Failed to apply partial change: ${error instanceof Error ? error.message : String(error)}`
+      );
     } finally {
       this.processingPaths.delete(change.path);
       this.notify();
     }
   }
 
-  private async cleanupEmptyCreatedFile(change: PendingFileChange): Promise<void> {
+  private async cleanupEmptyCreatedFile(
+    change: PendingFileChange
+  ): Promise<void> {
     if (change.action === 'create') {
       try {
         const file = this.plugin.app.vault.getAbstractFileByPath(change.path);
@@ -577,29 +678,10 @@ export class FileChangeManager {
             await this.plugin.app.vault.trash(file, true);
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignore errors during cleanup
       }
     }
-  }
-
-  /**
-   * Validate that a path is safe (within vault, no traversal).
-   * Rejects absolute paths, parent-directory traversal, null bytes, control
-   * characters, and Windows drive-letter paths.
-   */
-  private isPathSafe(filePath: string): boolean {
-    const normalized = normalizePath(filePath);
-    if (normalized.startsWith('..') || normalized.startsWith('/') || normalized.includes('../')) {
-      return false;
-    }
-    if (/[\x00-\x1f]/.test(normalized)) {
-      return false;
-    }
-    if (/^[a-zA-Z]:[\\\/]/.test(normalized)) {
-      return false;
-    }
-    return true;
   }
 
   private notify(): void {
@@ -620,7 +702,10 @@ export class FileChangeManager {
   }
 }
 
-export function computeDiffLines(original: string, updated: string): DiffLineState[] {
+export function computeDiffLines(
+  original: string,
+  updated: string
+): DiffLineState[] {
   const a = original.split(/\r?\n/);
   const b = updated.split(/\r?\n/);
   const n = a.length;
@@ -641,7 +726,7 @@ export function computeDiffLines(original: string, updated: string): DiffLineSta
 
   const result: DiffLineState[] = [];
   for (let i = 0; i < start; i++) {
-    result.push({ line: a[i]!, type: 'unchanged' });
+    result.push({ line: a[i] as string, type: 'unchanged' });
   }
 
   const subA = a.slice(start, endA + 1);
@@ -652,7 +737,7 @@ export function computeDiffLines(original: string, updated: string): DiffLineSta
   }
 
   for (let i = endA + 1; i < n; i++) {
-    result.push({ line: a[i]!, type: 'unchanged' });
+    result.push({ line: a[i] as string, type: 'unchanged' });
   }
 
   return result;
@@ -694,10 +779,13 @@ function myersDiff(a: string[], b: string[]): DiffLineState[] {
       const kOffset = max + k;
       let x: number;
 
-      if (k === -d || (k !== d && v[kOffset - 1]! < v[kOffset + 1]!)) {
-        x = v[kOffset + 1]!; // Move down (insertion)
+      if (
+        k === -d
+        || (k !== d && (v[kOffset - 1] as number) < (v[kOffset + 1] as number))
+      ) {
+        x = v[kOffset + 1] as number; // Move down (insertion)
       } else {
-        x = v[kOffset - 1]! + 1; // Move right (deletion)
+        x = (v[kOffset - 1] as number) + 1; // Move right (deletion)
       }
 
       let y = x - k;
@@ -728,30 +816,34 @@ function myersDiff(a: string[], b: string[]): DiffLineState[] {
 
   for (let step = d; step > 0; step--) {
     const k = x - y;
-    const vStep = trace[step - 1]!;
+    const vStep = trace[step - 1] as Int32Array;
 
     let prevK: number;
-    if (k === -step || (k !== step && vStep[k + step - 2]! < vStep[k + step]!)) {
+    if (
+      k === -step
+      || (k !== step
+        && (vStep[k + step - 2] as number) < (vStep[k + step] as number))
+    ) {
       prevK = k + 1;
     } else {
       prevK = k - 1;
     }
 
-    const prevX = vStep[prevK + step - 1]!;
+    const prevX = vStep[prevK + step - 1] as number;
     const prevY = prevX - prevK;
 
     while (x > prevX && y > prevY) {
       x--;
       y--;
-      diff.push({ line: a[x]!, type: 'unchanged' });
+      diff.push({ line: a[x] as string, type: 'unchanged' });
     }
 
     if (x > prevX) {
       x--;
-      diff.push({ line: a[x]!, type: 'removed' });
+      diff.push({ line: a[x] as string, type: 'removed' });
     } else if (y > prevY) {
       y--;
-      diff.push({ line: b[y]!, type: 'added' });
+      diff.push({ line: b[y] as string, type: 'added' });
     }
   }
 
@@ -759,7 +851,7 @@ function myersDiff(a: string[], b: string[]): DiffLineState[] {
   while (x > 0 && y > 0) {
     x--;
     y--;
-    diff.push({ line: a[x]!, type: 'unchanged' });
+    diff.push({ line: a[x] as string, type: 'unchanged' });
   }
 
   return diff.reverse();

@@ -1,23 +1,27 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { AcpClient } from '../AcpClient.ts';
-import type { Plugin } from '../Plugin.ts';
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { AcpClient } from "../AcpClient.ts";
+import type { Plugin } from "../Plugin.ts";
 
 // Mock obsidian
-vi.mock('obsidian', () => ({
+vi.mock("obsidian", () => ({
   Notice: class Notice {
     message: string;
-    constructor(message: string) { this.message = message; }
+    constructor(message: string) {
+      this.message = message;
+    }
   },
   TFile: class TFile {
-    extension = 'md';
-    path = '';
-    constructor(path: string) { this.path = path || ''; }
+    extension = "md";
+    path = "";
+    constructor(path: string) {
+      this.path = path || "";
+    }
   },
 }));
 
 // Mock fs
-vi.mock('fs', async (importOriginal) => {
-  const actual = await importOriginal();
+vi.mock("fs", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     existsSync: vi.fn().mockReturnValue(false),
@@ -25,8 +29,8 @@ vi.mock('fs', async (importOriginal) => {
 });
 
 // Mock child_process
-vi.mock('child_process', async (importOriginal) => {
-  const actual = await importOriginal();
+vi.mock("child_process", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     spawn: vi.fn().mockReturnValue({
@@ -48,7 +52,7 @@ const mockCloseSession = vi.fn();
 const mockPrompt = vi.fn();
 const mockCancel = vi.fn();
 
-vi.mock('@agentclientprotocol/sdk', () => ({
+vi.mock("@agentclientprotocol/sdk", () => ({
   ClientSideConnection: vi.fn().mockImplementation(() => ({
     initialize: mockInitialize,
     authenticate: mockAuthenticate,
@@ -68,7 +72,7 @@ function createMockPlugin(overrides?: Partial<Plugin>): Plugin {
     app: {
       vault: {
         getAbstractFileByPath: vi.fn(),
-        getRoot: vi.fn().mockReturnValue({ path: '/test/vault' }),
+        getRoot: vi.fn().mockReturnValue({ path: "/test/vault" }),
         read: vi.fn(),
       },
       workspace: {
@@ -93,13 +97,13 @@ function createMockPlugin(overrides?: Partial<Plugin>): Plugin {
     },
     settings: {
       allowTerminal: false,
-      hermesBinaryPath: '',
+      hermesBinaryPath: "",
     },
     ...overrides,
   } as unknown as Plugin;
 }
 
-describe('AcpClient', () => {
+describe("AcpClient", () => {
   let plugin: Plugin;
   let acpClient: AcpClient;
 
@@ -109,50 +113,52 @@ describe('AcpClient', () => {
     acpClient = new AcpClient(plugin);
   });
 
-  describe('isReady', () => {
-    it('should return false when not connected', () => {
+  describe("isReady", () => {
+    it("should return false when not connected", () => {
       expect(acpClient.isReady()).toBe(false);
     });
   });
 
-  describe('sendPrompt', () => {
-    it('should throw when not connected', async () => {
-      await expect(acpClient.sendPrompt('Hello')).rejects.toThrow('not connected');
+  describe("sendPrompt", () => {
+    it("should throw when not connected", async () => {
+      await expect(acpClient.sendPrompt("Hello")).rejects.toThrow(
+        "not connected",
+      );
     });
   });
 
-  describe('cancel', () => {
-    it('should not throw when not connected', async () => {
+  describe("cancel", () => {
+    it("should not throw when not connected", async () => {
       await expect(acpClient.cancel()).resolves.not.toThrow();
     });
   });
 
-  describe('permission handling', () => {
-    it('should return empty pending permissions initially', () => {
+  describe("permission handling", () => {
+    it("should return empty pending permissions initially", () => {
       const permissions = acpClient.getPendingPermissions();
       expect(permissions).toEqual([]);
     });
 
-    it('should support permission request subscriptions', () => {
+    it("should support permission request subscriptions", () => {
       const callback = vi.fn();
       const unsubscribe = acpClient.onPermissionsChange(callback);
 
-      expect(typeof unsubscribe).toBe('function');
+      expect(typeof unsubscribe).toBe("function");
       expect(() => unsubscribe()).not.toThrow();
     });
 
-    it('should resolve permissions correctly', () => {
+    it("should resolve permissions correctly", () => {
       const mockResolve = vi.fn();
       const mockReject = vi.fn();
 
       // Manually add a pending permission
       const pendingPermission = {
-        id: 'test-perm-1',
+        id: "test-perm-1",
         params: {
           options: [
-            { kind: 'allow_once', name: 'Allow Once', optionId: 'allow1' },
+            { kind: "allow_once", name: "Allow Once", optionId: "allow1" },
           ],
-          sessionId: 'session-1',
+          sessionId: "session-1",
           toolCall: {},
         },
         reject: mockReject,
@@ -160,88 +166,94 @@ describe('AcpClient', () => {
       };
 
       // Access private field through any cast for testing
-      (acpClient as unknown as Record<string, unknown>)['pendingPermissions'] = [pendingPermission];
+      (acpClient as unknown as Record<string, unknown>)["pendingPermissions"] =
+        [pendingPermission];
 
-      acpClient.resolvePermission('test-perm-1', 'allow1');
+      acpClient.resolvePermission("test-perm-1", "allow1");
 
-      expect(mockResolve).toHaveBeenCalledWith(expect.objectContaining({
-        outcome: expect.objectContaining({
-          outcome: 'selected',
-          optionId: 'allow1',
-        })
-      }));
+      expect(mockResolve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outcome: expect.objectContaining({
+            outcome: "selected",
+            optionId: "allow1",
+          }),
+        }),
+      );
     });
 
-    it('should cancel permissions correctly', () => {
+    it("should cancel permissions correctly", () => {
       const mockResolve = vi.fn();
       const mockReject = vi.fn();
 
       const pendingPermission = {
-        id: 'test-perm-2',
+        id: "test-perm-2",
         params: {
           options: [],
-          sessionId: 'session-1',
+          sessionId: "session-1",
           toolCall: {},
         },
         reject: mockReject,
         resolve: mockResolve,
       };
 
-      (acpClient as unknown as Record<string, unknown>)['pendingPermissions'] = [pendingPermission];
+      (acpClient as unknown as Record<string, unknown>)["pendingPermissions"] =
+        [pendingPermission];
 
-      acpClient.cancelPermission('test-perm-2');
+      acpClient.cancelPermission("test-perm-2");
 
-      expect(mockResolve).toHaveBeenCalledWith(expect.objectContaining({
-        outcome: expect.objectContaining({
-          outcome: 'cancelled',
-        })
-      }));
+      expect(mockResolve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outcome: expect.objectContaining({
+            outcome: "cancelled",
+          }),
+        }),
+      );
     });
   });
 
-  describe('subscriptions', () => {
-    it('should support update subscriptions', () => {
+  describe("subscriptions", () => {
+    it("should support update subscriptions", () => {
       const callback = vi.fn();
       const unsubscribe = acpClient.onUpdate(callback);
 
-      expect(typeof unsubscribe).toBe('function');
+      expect(typeof unsubscribe).toBe("function");
       expect(() => unsubscribe()).not.toThrow();
     });
 
-    it('should support error subscriptions', () => {
+    it("should support error subscriptions", () => {
       const callback = vi.fn();
       const unsubscribe = acpClient.onError(callback);
 
-      expect(typeof unsubscribe).toBe('function');
+      expect(typeof unsubscribe).toBe("function");
       expect(() => unsubscribe()).not.toThrow();
     });
 
-    it('should support available commands subscriptions', () => {
+    it("should support available commands subscriptions", () => {
       const callback = vi.fn();
       const unsubscribe = acpClient.onAvailableCommands(callback);
 
-      expect(typeof unsubscribe).toBe('function');
+      expect(typeof unsubscribe).toBe("function");
       expect(() => unsubscribe()).not.toThrow();
     });
 
-    it('should immediately notify commands callback with cached commands', () => {
+    it("should immediately notify commands callback with cached commands", () => {
       const callback = vi.fn();
 
       // Set cached commands via internal state
-      (acpClient as unknown as Record<string, unknown>)['lastAvailableCommands'] = [
-        { description: 'Test command', name: 'test' },
-      ];
+      (acpClient as unknown as Record<string, unknown>)[
+        "lastAvailableCommands"
+      ] = [{ description: "Test command", name: "test" }];
 
       acpClient.onAvailableCommands(callback);
 
       expect(callback).toHaveBeenCalledWith([
-        { description: 'Test command', name: 'test' },
+        { description: "Test command", name: "test" },
       ]);
     });
   });
 
-  describe('getLastAvailableCommands', () => {
-    it('should return empty array initially', () => {
+  describe("getLastAvailableCommands", () => {
+    it("should return empty array initially", () => {
       expect(acpClient.getLastAvailableCommands()).toEqual([]);
     });
   });

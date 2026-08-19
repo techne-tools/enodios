@@ -24,23 +24,55 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     this.containerEl.createEl('h2', { text: 'Enodios Plugin Settings' });
 
-    this.renderCollapsibleSection('🔌 Connection Settings', (el) => this.renderConnectionSection(el));
-    this.renderCollapsibleSection('🤖 Agent Personality', (el) => this.renderAgentIdentitySection(el));
-    this.renderCollapsibleSection('💬 What You See in Chat', (el) => this.renderChatDisplaySection(el));
-    this.renderCollapsibleSection('📎 Automatic Context', (el) => this.renderContextSection(el));
-    this.renderCollapsibleSection('🎓 Academic, Citations & Toggles', (el) => this.renderAcademicSection(el));
-    this.renderCollapsibleSection('🧩 Core Plugin Integrations', (el) => this.renderCorePluginSection(el));
-    this.renderCollapsibleSection('🌍 Community Plugin Integrations', (el) => this.renderCommunityPluginSection(el));
-    this.renderCollapsibleSection('🗂️ Saving Conversations', (el) => this.renderConversationStorageSection(el));
-    this.renderCollapsibleSection('🔊 Sound & Feel', (el) => this.renderFeedbackSection(el));
-    this.renderCollapsibleSection('🛡️ Security', (el) => this.renderSecuritySection(el));
-    this.renderCollapsibleSection('🐛 Troubleshooting', (el) => this.renderDebugSection(el));
+    this.renderCollapsibleSection('🔌 Connection Settings', (el) => {
+      this.renderConnectionSection(el);
+    });
+    this.renderCollapsibleSection('🤖 Agent Personality', (el) => {
+      this.renderAgentIdentitySection(el);
+    });
+    this.renderCollapsibleSection('💬 What You See in Chat', (el) => {
+      this.renderChatDisplaySection(el);
+    });
+    this.renderCollapsibleSection('📎 Automatic Context', (el) => {
+      this.renderContextSection(el);
+    });
+    this.renderCollapsibleSection('🎓 Academic, Citations & Toggles', (el) => {
+      this.renderAcademicSection(el);
+    });
+    this.renderCollapsibleSection('🧩 Core Plugin Integrations', (el) => {
+      this.renderCorePluginSection(el);
+    });
+    this.renderCollapsibleSection('🌍 Community Plugin Integrations', (el) => {
+      this.renderCommunityPluginSection(el);
+    });
+    this.renderCollapsibleSection('🗂️ Saving Conversations', (el) => {
+      this.renderConversationStorageSection(el);
+    });
+    this.renderCollapsibleSection('🔊 Sound & Feel', (el) => {
+      this.renderFeedbackSection(el);
+    });
+    this.renderCollapsibleSection('🛡️ Security', (el) => {
+      this.renderSecuritySection(el);
+    });
+    this.renderCollapsibleSection('🐛 Troubleshooting', (el) => {
+      this.renderDebugSection(el);
+    });
   }
 
-  private renderCollapsibleSection(title: string, renderFunc: (el: HTMLElement) => void): void {
-    const details = this.containerEl.createEl('details', { cls: 'enodios-settings-details' });
-    details.createEl('summary', { text: title, cls: 'enodios-settings-summary' });
-    const content = details.createEl('div', { cls: 'enodios-settings-content' });
+  private renderCollapsibleSection(
+    title: string,
+    renderFunc: (el: HTMLElement) => void
+  ): void {
+    const details = this.containerEl.createEl('details', {
+      cls: 'enodios-settings-details'
+    });
+    details.createEl('summary', {
+      text: title,
+      cls: 'enodios-settings-summary'
+    });
+    const content = details.createEl('div', {
+      cls: 'enodios-settings-content'
+    });
     renderFunc(content);
   }
 
@@ -48,9 +80,12 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderAgentIdentitySection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
       .setName('Agent Display Name')
-      .setDesc('What you call your assistant in the chat. Change it to whatever feels right — "Claude", "Friday", "Research Buddy", etc.')
+      .setDesc(
+        'What you call your assistant in the chat. Change it to whatever feels right — "Claude", "Friday", "Research Buddy", etc.'
+      )
       .addText((text) => {
-        text.setPlaceholder('Hermes')
+        text
+          .setPlaceholder('Hermes')
           .setValue(this.plugin.settings.chatAgentName);
         this.bind(text, 'chatAgentName');
       });
@@ -60,7 +95,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderChatDisplaySection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
       .setName('Show Reasoning Steps')
-      .setDesc('When the agent "thinks out loud" before answering, show those thoughts in the chat. Useful for understanding how it reached a conclusion.')
+      .setDesc(
+        'When the agent "thinks out loud" before answering, show those thoughts in the chat. Useful for understanding how it reached a conclusion.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.showReasoning);
         this.bind(toggle, 'showReasoning');
@@ -78,7 +115,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     new SettingEx(containerEl)
       .setName('Show Token Count')
-      .setDesc('Display the real-time token usage counter in the chat footer. Shows input/output tokens and estimated cost per conversation.')
+      .setDesc(
+        'Display the real-time token usage counter in the chat footer. Shows input/output tokens and estimated cost per conversation.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.showTokenCount);
         this.bind(toggle, 'showTokenCount');
@@ -117,9 +156,12 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
     if (this.plugin.settings.connectionMode === 'acp') {
       new SettingEx(containerEl)
         .setName('Hermes Program Location')
-        .setDesc('If Hermes is not in your system PATH, paste the full file path here. Leave blank to let the plugin find it automatically.')
+        .setDesc(
+          'If Hermes is not in your system PATH, paste the full file path here. Leave blank to let the plugin find it automatically.'
+        )
         .addText((text) => {
-          text.setPlaceholder('/Users/yourname/.local/bin/hermes')
+          text
+            .setPlaceholder('/Users/yourname/.local/bin/hermes')
             .setValue(this.plugin.settings.hermesBinaryPath);
           this.bind(text, 'hermesBinaryPath');
         });
@@ -128,10 +170,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         .setName('Test Local Connection')
         .setDesc('Make sure Hermes is installed and reachable.')
         .addButton((button) => {
-          button.setButtonText('Test Connection')
-            .onClick(async () => {
-              await this.testAcpConnection();
-            });
+          button.setButtonText('Test Connection').onClick(async () => {
+            await this.testAcpConnection();
+          });
         });
 
       new SettingEx(containerEl)
@@ -151,9 +192,14 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
       if (this.plugin.settings.mcpServersEnabled) {
         new SettingEx(containerEl)
           .setName('External Tool Server Paths')
-          .setDesc('One absolute path per line. These executables run with your user privileges and are not sandboxed. Restart the connection after changing.')
+          .setDesc(
+            'One absolute path per line. These executables run with your user privileges and are not sandboxed. Restart the connection after changing.'
+          )
           .addTextArea((text) => {
-            text.setPlaceholder('/Users/you/.local/bin/mcp-web-search\n/opt/mcp-database')
+            text
+              .setPlaceholder(
+                '/Users/you/.local/bin/mcp-web-search\n/opt/mcp-database'
+              )
               .setValue(this.plugin.settings.mcpServersList);
             text.inputEl.rows = 3;
             text.inputEl.style.width = '100%';
@@ -168,17 +214,19 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         .setName('Server Address')
         .setDesc('The web address of your Hermes server.')
         .addText((text) => {
-          text.setPlaceholder('http://127.0.0.1:8642')
+          text
+            .setPlaceholder('http://127.0.0.1:8642')
             .setValue(this.plugin.settings.hermesApiUrl);
           this.bind(text, 'hermesApiUrl');
         });
 
       new SettingEx(containerEl)
         .setName('API Key')
-        .setDesc('Your secret key for the server. This is stored securely and never shown again after saving.')
+        .setDesc(
+          'Your secret key for the server. This is stored securely and never shown again after saving.'
+        )
         .addText((text) => {
-          text.setPlaceholder('Paste your key here')
-            .setValue('');
+          text.setPlaceholder('Paste your key here').setValue('');
           text.inputEl.type = 'password';
           text.onChange(async (value) => {
             if (value) {
@@ -191,9 +239,12 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
       new SettingEx(containerEl)
         .setName('Agent Name on Server')
-        .setDesc('The name your server knows this agent by. Usually "enodios-agent" unless your admin changed it.')
+        .setDesc(
+          'The name your server knows this agent by. Usually "enodios-agent" unless your admin changed it.'
+        )
         .addText((text) => {
-          text.setPlaceholder('enodios-agent')
+          text
+            .setPlaceholder('enodios-agent')
             .setValue(this.plugin.settings.hermesAgentName);
           this.bind(text, 'hermesAgentName');
         });
@@ -202,10 +253,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         .setName('Test Remote Connection')
         .setDesc('Check that the server is online and your key works.')
         .addButton((button) => {
-          button.setButtonText('Test Connection')
-            .onClick(async () => {
-              await this.testApiConnection();
-            });
+          button.setButtonText('Test Connection').onClick(async () => {
+            await this.testApiConnection();
+          });
         });
     }
   }
@@ -227,7 +277,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderAcademicSection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
       .setName('Enable Citations')
-      .setDesc('Enable bibliography management, inline citation suggestions using [@, and Zotero integration.')
+      .setDesc(
+        'Enable bibliography management, inline citation suggestions using [@, and Zotero integration.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.enableCitations);
         this.bind(toggle, 'enableCitations');
@@ -235,7 +287,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     new SettingEx(containerEl)
       .setName('Enable PDF Integrations')
-      .setDesc('Enable extracting highlights/comments from PDF files, page text extraction, and metadata extraction.')
+      .setDesc(
+        'Enable extracting highlights/comments from PDF files, page text extraction, and metadata extraction.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.enableAnnotations);
         this.bind(toggle, 'enableAnnotations');
@@ -243,7 +297,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     new SettingEx(containerEl)
       .setName('Enable Auto-Tagging & Suggestions')
-      .setDesc('Enable term-matching tag suggestions and frontmatter tags updating.')
+      .setDesc(
+        'Enable term-matching tag suggestions and frontmatter tags updating.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.enableTags);
         this.bind(toggle, 'enableTags');
@@ -251,9 +307,12 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     new SettingEx(containerEl)
       .setName('Bibliography File Path')
-      .setDesc('Path to your bibliography file in the vault (e.g., "references.bib" or "references.json" for CSL JSON).')
+      .setDesc(
+        'Path to your bibliography file in the vault (e.g., "references.bib" or "references.json" for CSL JSON).'
+      )
       .addText((text) => {
-        text.setPlaceholder('references.bib')
+        text
+          .setPlaceholder('references.bib')
           .setValue(this.plugin.settings.bibliographyPath);
         this.bind(text, 'bibliographyPath');
       });
@@ -272,7 +331,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     new SettingEx(containerEl)
       .setName('Auto-Extract PDF Annotations')
-      .setDesc('Automatically extract highlights and comments from PDF files when you attach them to the conversation context.')
+      .setDesc(
+        'Automatically extract highlights and comments from PDF files when you attach them to the conversation context.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.autoExtractPdfAnnotations);
         this.bind(toggle, 'autoExtractPdfAnnotations');
@@ -288,7 +349,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     new SettingEx(containerEl)
       .setName('Note Templates Folder Override')
-      .setDesc('Override the auto-detected Templates folder. Leave blank to use the folder configured in Settings → Core plugins → Templates.')
+      .setDesc(
+        'Override the auto-detected Templates folder. Leave blank to use the folder configured in Settings → Core plugins → Templates.'
+      )
       .addText((text) => {
         text.setPlaceholder('e.g. Templates');
         text.setValue(this.plugin.settings.noteTemplatesFolder);
@@ -325,20 +388,28 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderConversationStorageSection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
       .setName('Save Folder')
-      .setDesc('Where conversation files are stored in your vault. Default is a folder called "enodios".')
+      .setDesc(
+        'Where conversation files are stored in your vault. Default is a folder called "enodios".'
+      )
       .addText((text) => {
-        text.setPlaceholder('enodios')
+        text
+          .setPlaceholder('enodios')
           .setValue(this.plugin.settings.chatSaveFolder);
         this.bind(text, 'chatSaveFolder');
       });
 
     new SettingEx(containerEl)
       .setName('Folder Organization')
-      .setDesc('How to organize saved conversations. "Flat" puts everything in one folder. "By Date" groups them into monthly folders like 2026-05.')
+      .setDesc(
+        'How to organize saved conversations. "Flat" puts everything in one folder. "By Date" groups them into monthly folders like 2026-05.'
+      )
       .addDropdown((dropdown) => {
         dropdown.addOption('flat', 'Flat — all in one folder');
         dropdown.addOption('by-date', 'By Date — monthly subfolders');
-        dropdown.addOption('by-project', 'By Project — tag-based (coming soon)');
+        dropdown.addOption(
+          'by-project',
+          'By Project — tag-based (coming soon)'
+        );
         dropdown.setValue(this.plugin.settings.conversationOrganization);
         this.bind(dropdown, 'conversationOrganization');
       });
@@ -358,31 +429,34 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     new SettingEx(containerEl)
       .setName('View Audit Log')
-      .setDesc('Open the audit log file that records every action the agent takes — file changes, tool calls, and permissions.')
+      .setDesc(
+        'Open the audit log file that records every action the agent takes — file changes, tool calls, and permissions.'
+      )
       .addButton((button) => {
-        button.setButtonText('Open Audit Log')
-          .onClick(() => {
-            const folder = this.plugin.settings.chatSaveFolder || 'hermes';
-            const logPath = `${folder}/audit-log.md`;
-            const file = this.plugin.app.vault.getAbstractFileByPath(logPath);
-            if (file instanceof TFile) {
-              this.plugin.app.workspace.getLeaf().openFile(file);
-            } else {
-              new Notice('Audit log not found yet. It is created after the first action.');
-            }
-          });
+        button.setButtonText('Open Audit Log').onClick(() => {
+          const folder = this.plugin.settings.chatSaveFolder || 'hermes';
+          const logPath = `${folder}/audit-log.md`;
+          const file = this.plugin.app.vault.getAbstractFileByPath(logPath);
+          if (file instanceof TFile) {
+            void this.plugin.app.workspace.getLeaf().openFile(file);
+          } else {
+            new Notice(
+              'Audit log not found yet. It is created after the first action.'
+            );
+          }
+        });
       });
 
     new SettingEx(containerEl)
       .setName('Reset Onboarding')
-      .setDesc('Show the welcome message again the next time you open the chat.')
+      .setDesc(
+        'Show the welcome message again the next time you open the chat.'
+      )
       .addButton((button) => {
-        button.setButtonText('Reset')
-          .onClick(() => {
-            (this.plugin.settings as unknown as { hasSeenOnboarding: boolean }).hasSeenOnboarding = false;
-            void this.plugin.settingsManager.saveToFile();
-            new Notice('Welcome message will appear next time you open chat.');
-          });
+        button.setButtonText('Reset').onClick(() => {
+          void this.plugin.setSetting('hasSeenOnboarding', false);
+          new Notice('Welcome message will appear next time you open chat.');
+        });
       });
   }
 
@@ -390,7 +464,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   private renderFeedbackSection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
       .setName('Typing Sounds')
-      .setDesc('Play a soft click sound while the agent is writing a response. Makes it feel more like a real conversation.')
+      .setDesc(
+        'Play a soft click sound while the agent is writing a response. Makes it feel more like a real conversation.'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.enableTypingSound);
         this.bind(toggle, 'enableTypingSound');
@@ -398,7 +474,9 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     new SettingEx(containerEl)
       .setName('Haptic Feedback')
-      .setDesc('Vibrate briefly when the agent starts responding. Only works on devices with vibration support (most phones and some laptops).')
+      .setDesc(
+        'Vibrate briefly when the agent starts responding. Only works on devices with vibration support (most phones and some laptops).'
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.enableHapticFeedback);
         this.bind(toggle, 'enableHapticFeedback');

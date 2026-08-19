@@ -1,7 +1,6 @@
 import type { Vault } from 'obsidian';
 
 import {
-  normalizePath,
   Notice,
   TFile,
   TFolder
@@ -10,6 +9,7 @@ import {
 import type { Plugin } from './Plugin.ts';
 import type { ChatMessage } from './Views/EnodiosChatView.tsx';
 
+import { isPathSafe } from './utils/pathSafety.ts';
 import { generateMessageId } from './utils/uuid.ts';
 
 const FRONTMATTER_ID_REGEX = /^id:\s*(.+)$/m;
@@ -64,8 +64,11 @@ export class VaultManager {
   /**
    * Create a new note in the vault.
    */
-  public async createNote(filePath: string, content: string): Promise<null | TFile> {
-    if (!this.isPathSafe(filePath)) return null;
+  public async createNote(
+    filePath: string,
+    content: string
+  ): Promise<null | TFile> {
+    if (!(await isPathSafe(this.plugin, filePath))) return null;
 
     try {
       // Ensure parent folder exists
@@ -76,7 +79,7 @@ export class VaultManager {
       }
 
       return await this.vault.create(filePath, content);
-    } catch (error) {
+    } catch {
       new Notice(`Failed to create note: ${filePath}`);
       return null;
     }
@@ -92,7 +95,7 @@ export class VaultManager {
     try {
       await this.vault.trash(file, true);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -101,7 +104,7 @@ export class VaultManager {
    * Delete a note from the vault.
    */
   public async deleteNote(filePath: string): Promise<boolean> {
-    if (!this.isPathSafe(filePath)) return false;
+    if (!(await isPathSafe(this.plugin, filePath))) return false;
 
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!(file instanceof TFile)) return false;
@@ -109,7 +112,7 @@ export class VaultManager {
     try {
       await this.vault.trash(file, true);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -130,7 +133,9 @@ export class VaultManager {
       if (existing instanceof TFolder) {
         currentFolder = existing;
       } else if (existing) {
-        throw new Error(`Path already exists but is not a folder: ${currentPath}`);
+        throw new Error(
+          `Path already exists but is not a folder: ${currentPath}`
+        );
       } else {
         currentFolder = await this.vault.createFolder(currentPath);
       }
@@ -154,7 +159,9 @@ export class VaultManager {
   /**
    * List all saved conversations.
    */
-  public async listConversations(): Promise<{ filePath: string; metadata: ConversationMetadata }[]> {
+  public async listConversations(): Promise<
+    { filePath: string; metadata: ConversationMetadata }[]
+  > {
     const folderPath = this.getSaveFolder();
     const folder = this.vault.getAbstractFileByPath(folderPath);
 
@@ -162,7 +169,10 @@ export class VaultManager {
       return [];
     }
 
-    const conversations: { filePath: string; metadata: ConversationMetadata }[] = [];
+    const conversations: {
+      filePath: string;
+      metadata: ConversationMetadata;
+    }[] = [];
 
     for (const child of folder.children) {
       if (child instanceof TFile && child.extension === 'md') {
@@ -174,8 +184,12 @@ export class VaultManager {
 
           const cache = this.plugin.app.metadataCache.getFileCache(child);
           if (cache?.frontmatter) {
-            id = cache.frontmatter['id'] ? String(cache.frontmatter['id']) : undefined;
-            title = cache.frontmatter['title'] ? String(cache.frontmatter['title']) : undefined;
+            id = cache.frontmatter['id']
+              ? String(cache.frontmatter['id'])
+              : undefined;
+            title = cache.frontmatter['title']
+              ? String(cache.frontmatter['title'])
+              : undefined;
             createdAt = Number(cache.frontmatter['createdAt']) || undefined;
             updatedAt = Number(cache.frontmatter['updatedAt']) || undefined;
           }
@@ -188,20 +202,20 @@ export class VaultManager {
             const createdMatch = FRONTMATTER_CREATED_REGEX.exec(content);
             const updatedMatch = FRONTMATTER_UPDATED_REGEX.exec(content);
 
-            id = id || idMatch?.[1]?.trim();
-            title = title || titleMatch?.[1]?.trim();
-            createdAt = createdAt || Number(createdMatch?.[1] ?? '');
-            updatedAt = updatedAt || Number(updatedMatch?.[1] ?? '');
+            id = id ?? idMatch?.[1]?.trim();
+            title = title ?? titleMatch?.[1]?.trim();
+            createdAt = createdAt ?? Number(createdMatch?.[1] ?? '');
+            updatedAt = updatedAt ?? Number(updatedMatch?.[1] ?? '');
           }
 
           if (id && title) {
             conversations.push({
               filePath: child.path,
               metadata: {
-                createdAt: createdAt || child.stat.ctime,
+                createdAt: createdAt ?? child.stat.ctime,
                 id: id.trim(),
                 title: title.trim(),
-                updatedAt: updatedAt || child.stat.mtime
+                updatedAt: updatedAt ?? child.stat.mtime
               }
             });
           }
@@ -219,7 +233,13 @@ export class VaultManager {
   /**
    * Load a conversation from the vault.
    */
-  public async loadConversation(filePath: string): Promise<{ allowedTools?: string[]; messages: ChatMessage[]; title: string } | null> {
+  public async loadConversation(filePath: string): Promise<
+    {
+      allowedTools?: string[];
+      messages: ChatMessage[];
+      title: string;
+    } | null
+  > {
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!(file instanceof TFile)) return null;
 
@@ -242,20 +262,23 @@ export class VaultManager {
       // Extract allowedTools from frontmatter
       let allowedTools: string[] | undefined;
       if (cache?.frontmatter?.['allowedTools']) {
-        const raw = cache.frontmatter['allowedTools'];
+        const raw: unknown = cache.frontmatter['allowedTools'];
         if (Array.isArray(raw)) {
-          allowedTools = raw.map(String);
+          allowedTools = raw.map((item) => String(item));
         } else if (typeof raw === 'string') {
           try {
             allowedTools = JSON.parse(raw) as string[];
           } catch {
-            allowedTools = raw.split(',').map((s) => s.trim()).filter(Boolean);
+            allowedTools = raw
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
           }
         }
       }
 
       return { messages, title, ...(allowedTools ? { allowedTools } : {}) };
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -264,14 +287,14 @@ export class VaultManager {
    * Read a note from the vault.
    */
   public async readNote(filePath: string): Promise<null | string> {
-    if (!this.isPathSafe(filePath)) return null;
+    if (!(await isPathSafe(this.plugin, filePath))) return null;
 
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!(file instanceof TFile)) return null;
 
     try {
       return await this.vault.read(file);
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -280,13 +303,25 @@ export class VaultManager {
    * Save a conversation to the vault.
    * Returns the file path if successful.
    */
-  public async saveConversation(messages: ChatMessage[], title?: string, allowedTools: null | string[] = null): Promise<null | string> {
+  public async saveConversation(
+    messages: ChatMessage[],
+    title?: string,
+    allowedTools: null | string[] = null
+  ): Promise<null | string> {
     if (messages.length === 0) return null;
 
     try {
-      const conversationTitle = title || 'Conversation';
-      const filePath = this.generateFilePath(conversationTitle, Date.now(), messages);
-      const content = this.messagesToMarkdown(messages, conversationTitle, allowedTools);
+      const conversationTitle = title ?? 'Conversation';
+      const filePath = this.generateFilePath(
+        conversationTitle,
+        Date.now(),
+        messages
+      );
+      const content = this.messagesToMarkdown(
+        messages,
+        conversationTitle,
+        allowedTools
+      );
 
       // Ensure the full folder path (including date subfolders) exists before creating the file
       const folderPath = filePath.split('/').slice(0, -1).join('/');
@@ -313,21 +348,36 @@ export class VaultManager {
   /**
    * Update an existing conversation file.
    */
-  public async updateConversation(filePath: string, messages: ChatMessage[], title?: string, allowedTools: null | string[] = null): Promise<boolean> {
+  public async updateConversation(
+    filePath: string,
+    messages: ChatMessage[],
+    title?: string,
+    allowedTools: null | string[] = null
+  ): Promise<boolean> {
     const abstractFile = this.vault.getAbstractFileByPath(filePath);
     if (!(abstractFile instanceof TFile)) {
-      console.warn(`[Hermes] updateConversation: file not found or not a TFile: ${filePath}`);
+      console.warn(
+        `[Hermes] updateConversation: file not found or not a TFile: ${filePath}`
+      );
       return false;
     }
     let file: TFile = abstractFile;
 
     try {
-      const conversationTitle = title || 'Conversation';
-      const content = this.messagesToMarkdown(messages, conversationTitle, allowedTools);
+      const conversationTitle = title ?? 'Conversation';
+      const content = this.messagesToMarkdown(
+        messages,
+        conversationTitle,
+        allowedTools
+      );
 
-      const orgMode = this.plugin.settings.conversationOrganization ?? 'flat';
+      const orgMode = this.plugin.settings.conversationOrganization;
       if (orgMode === 'by-project') {
-        const newPath = this.generateFilePath(conversationTitle, file.stat.ctime, messages);
+        const newPath = this.generateFilePath(
+          conversationTitle,
+          file.stat.ctime,
+          messages
+        );
         if (newPath !== file.path) {
           const folderPath = newPath.split('/').slice(0, -1).join('/');
           if (folderPath) {
@@ -355,7 +405,7 @@ export class VaultManager {
    * Update an existing note in the vault.
    */
   public async updateNote(filePath: string, content: string): Promise<boolean> {
-    if (!this.isPathSafe(filePath)) return false;
+    if (!(await isPathSafe(this.plugin, filePath))) return false;
 
     const file = this.vault.getAbstractFileByPath(filePath);
     if (!(file instanceof TFile)) return false;
@@ -363,7 +413,7 @@ export class VaultManager {
     try {
       await this.vault.modify(file, content);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -371,36 +421,48 @@ export class VaultManager {
   /**
    * Generate a unique file path for a conversation.
    */
-  private generateFilePath(title: string, timestamp: number, messages?: ChatMessage[]): string {
+  private generateFilePath(
+    title: string,
+    timestamp: number,
+    messages?: ChatMessage[]
+  ): string {
     const folder = this.getSaveFolder();
-    const safeTitle = this.sanitizeFilename(title) || 'conversation';
-    const dateStr = new Date(timestamp).toISOString().split('T')[0] ?? '';
+    const safeTitle = this.sanitizeFilename(title);
+    const isoDate = new Date(timestamp).toISOString();
+    const dateStr = isoDate.slice(0, 10); // YYYY-MM-DD
     const yearMonth = dateStr.slice(0, 7); // YYYY-MM
+    const timestampStr = String(timestamp);
 
     // Support folder organization modes
-    const orgMode = this.plugin.settings.conversationOrganization ?? 'flat';
+    const orgMode = this.plugin.settings.conversationOrganization;
     const validModes = ['flat', 'by-date', 'by-project'] as const;
-    const validatedMode = (validModes as readonly string[]).includes(orgMode) ? orgMode : 'flat';
+    const validatedMode = (validModes as readonly string[]).includes(orgMode)
+      ? orgMode
+      : 'flat';
 
     if (validatedMode === 'by-date') {
-      return `${folder}/${yearMonth}/${safeTitle}-${dateStr}-${timestamp}.md`;
+      return `${folder}/${yearMonth}/${safeTitle}-${dateStr}-${timestampStr}.md`;
     }
 
     if (validatedMode === 'by-project') {
       const projectDir = this.getProjectFolder(messages);
-      return `${folder}/${projectDir}/${safeTitle}-${dateStr}-${timestamp}.md`;
+      return `${folder}/${projectDir}/${safeTitle}-${dateStr}-${timestampStr}.md`;
     }
 
-    return `${folder}/${safeTitle}-${dateStr}-${timestamp}.md`;
+    return `${folder}/${safeTitle}-${dateStr}-${timestampStr}.md`;
   }
 
   private getProjectFolder(messages?: ChatMessage[]): string {
     const activeFile = this.plugin.app.workspace.getActiveFile();
     if (activeFile) {
       const cache = this.plugin.app.metadataCache.getFileCache(activeFile);
-      const rawTags = cache?.frontmatter?.['tags'] || cache?.frontmatter?.['tag'];
+      const rawTags: unknown = cache?.frontmatter?.['tags'] ?? cache?.frontmatter?.['tag'];
       if (rawTags) {
-        const tags = Array.isArray(rawTags) ? rawTags.map(String) : String(rawTags).split(/,\s*/);
+        const tags = Array.isArray(rawTags)
+          ? rawTags.map((item) => String(item))
+          : typeof rawTags === 'string'
+          ? rawTags.split(/,\s*/)
+          : [];
         const tag = tags.find((t) => t.trim());
         if (tag) return this.cleanTagForFolder(tag);
       }
@@ -439,28 +501,6 @@ export class VaultManager {
   }
 
   /**
-   * Validate that a path is safe (within vault, no traversal).
-   * Rejects absolute paths, parent-directory traversal, null bytes, control
-   * characters, and Windows drive-letter paths.
-   */
-  private isPathSafe(filePath: string): boolean {
-    const normalized = normalizePath(filePath);
-    if (normalized.startsWith('..') || normalized.startsWith('/') || normalized.includes('../')) {
-      return false;
-    }
-    if (/[\x00-\x1f]/.test(normalized)) {
-      return false;
-    }
-    if (/^[a-zA-Z]:[\\\/]/.test(normalized)) {
-      return false;
-    }
-    if (normalized.startsWith('\\\\')) {
-      return false;
-    }
-    return true;
-  }
-
-  /**
    * Parse markdown content back into messages.
    */
   private markdownToMessages(content: string): ChatMessage[] {
@@ -479,20 +519,32 @@ export class VaultManager {
       const headerMatch = MESSAGE_HEADER_REGEX.exec(trimmed);
       if (!headerMatch) {
         if (messages.length > 0) {
-          const prevMsg = messages[messages.length - 1]!;
-          prevMsg.content = (prevMsg.content + '\n\n---\n\n' + trimmed).trim();
+          const prevMsg = messages[messages.length - 1];
+          if (prevMsg) {
+            prevMsg.content = (
+              prevMsg.content
+              + '\n\n---\n\n'
+              + trimmed
+            ).trim();
+          }
         }
         continue;
       }
 
       const roleText = headerMatch[1]?.toLowerCase() ?? '';
-      const role = roleText === 'you' ? 'user' : (roleText === 'hermes' || roleText === 'enodios') ? 'assistant' : 'system';
+      const role = roleText === 'you'
+        ? 'user'
+        : roleText === 'hermes' || roleText === 'enodios'
+        ? 'assistant'
+        : 'system';
 
       // Extract message id if present
       const idMatch = /^id:\s*([a-f0-9\-]+)\n\n/m.exec(trimmed);
       const messageId = idMatch?.[1] ?? generateMessageId();
 
-      const contentText = trimmed.slice(headerMatch[0].length + (idMatch?.[0]?.length ?? 0));
+      const contentText = trimmed.slice(
+        headerMatch[0].length + (idMatch?.[0]?.length ?? 0)
+      );
 
       messages.push({
         content: contentText.trim(),
@@ -508,11 +560,15 @@ export class VaultManager {
   /**
    * Convert messages to markdown content with frontmatter.
    */
-  private messagesToMarkdown(messages: ChatMessage[], title: string, allowedTools: null | string[]): string {
+  private messagesToMarkdown(
+    messages: ChatMessage[],
+    title: string,
+    allowedTools: null | string[]
+  ): string {
     const now = Date.now();
     const metadata: ConversationMetadata = {
       createdAt: messages[0]?.timestamp ?? now,
-      id: `conv-${now}`,
+      id: `conv-${String(now)}`,
       title,
       updatedAt: now
     };
@@ -521,19 +577,27 @@ export class VaultManager {
       '---',
       `id: ${metadata.id}`,
       `title: ${metadata.title}`,
-      `createdAt: ${metadata.createdAt}`,
-      `updatedAt: ${metadata.updatedAt}`,
-      ...(allowedTools ? [`allowedTools: ${JSON.stringify(allowedTools)}`] : []),
+      `createdAt: ${String(metadata.createdAt)}`,
+      `updatedAt: ${String(metadata.updatedAt)}`,
+      ...(allowedTools
+        ? [`allowedTools: ${JSON.stringify(allowedTools)}`]
+        : []),
       'type: enodios-conversation',
       '---',
       ''
     ].join('\n');
 
-    const body = messages.map((msg) => {
-      const time = new Date(msg.timestamp).toLocaleString();
-      const roleLabel = msg.role === 'user' ? '**You**' : msg.role === 'assistant' ? '**Hermes**' : '**System**';
-      return `## ${roleLabel} — ${time}\n\nid: ${msg.id}\n\n${msg.content}\n`;
-    }).join('\n---\n\n');
+    const body = messages
+      .map((msg) => {
+        const time = new Date(msg.timestamp).toLocaleString();
+        const roleLabel = msg.role === 'user'
+          ? '**You**'
+          : msg.role === 'assistant'
+          ? '**Hermes**'
+          : '**System**';
+        return `## ${roleLabel} — ${time}\n\nid: ${msg.id}\n\n${msg.content}\n`;
+      })
+      .join('\n---\n\n');
 
     return `${frontmatter}\n${body}`;
   }

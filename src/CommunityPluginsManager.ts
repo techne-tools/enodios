@@ -1,9 +1,68 @@
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
 import {
   MarkdownView,
   TFile
 } from 'obsidian';
 import type { Plugin } from './Plugin.ts';
+
+/** Timeout for git operations (ms) to prevent the UI from hanging. */
+const GIT_TIMEOUT_MS = 15000;
+
+/**
+ * Run a git command asynchronously with a timeout and a sanitized environment.
+ * Returns the trimmed stdout, or throws on non-zero exit.
+ */
+async function runGit(basePath: string, args: string[]): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    execFile(
+      'git',
+      args,
+      {
+        cwd: basePath,
+        encoding: 'utf-8',
+        env: buildSanitizedEnv(),
+        timeout: GIT_TIMEOUT_MS
+      },
+      (error, stdout) => {
+        if (error) {
+          reject(new Error(error.message));
+          return;
+        }
+        resolve(stdout.trim());
+      }
+    );
+  });
+}
+
+/**
+ * Build a minimal, sanitized environment for child processes.
+ * Only safe, non-secret variables are passed.
+ */
+function buildSanitizedEnv(): Record<string, string> {
+  const env: Record<string, string> = {};
+  const source = process.env;
+  const safeKeys = [
+    'HOME',
+    'PATH',
+    'LANG',
+    'LC_ALL',
+    'LC_CTYPE',
+    'TERM',
+    'SHELL',
+    'USER',
+    'LOGNAME',
+    'TMPDIR',
+    'TZ',
+    'PWD'
+  ];
+  for (const key of safeKeys) {
+    const value = source[key];
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+  return env;
+}
 
 interface DataviewQueryResult {
   error?: string;
@@ -42,7 +101,7 @@ interface PathCapableAdapter {
 }
 
 interface AppCommands {
-  executeCommandById(id: string): boolean | void;
+  executeCommandById(id: string): boolean | undefined;
 }
 
 interface ObsidianAppWithCommands {
@@ -98,7 +157,7 @@ export class CommunityPluginsManager {
       const result = await dv.queryMarkdown(query, sourcePath);
       return result.successful
         ? (result.value ?? 'No results.')
-        : `Dataview query error: ${result.error}`;
+        : `Dataview query error: ${result.error ?? 'unknown'}`;
     } catch (err) {
       return `Dataview execution failed: ${err instanceof Error ? err.message : String(err)}`;
     }
@@ -117,7 +176,7 @@ export class CommunityPluginsManager {
     }
 
     try {
-      const templatesFolder = templaterPlugin.settings?.templates_folder || '';
+      const templatesFolder = templaterPlugin.settings?.templates_folder ?? '';
       const templatePath = templatesFolder
         ? `${templatesFolder}/${templateName}.md`
         : `${templateName}.md`;
@@ -154,14 +213,14 @@ export class CommunityPluginsManager {
 
     try {
       const results = await omnisearch.search(query);
-      if (!results || results.length === 0) {
+      if (results.length === 0) {
         return `No Omnisearch results found for "${query}".`;
       }
 
       let list = `### 🔍 Omnisearch Results for "${query}"\n\n`;
       const topResults = results.slice(0, 5);
       for (const res of topResults) {
-        list += `* **[[${res.path}]]** (Score: ${Math.round(res.score)})\n`;
+        list += `* **[[${res.path}]]** (Score: ${String(Math.round(res.score))})\n`;
         if (res.excerpt) {
           list += `  > ${res.excerpt}\n`;
         }
@@ -194,7 +253,7 @@ export class CommunityPluginsManager {
       }
 
       const excalidrawData = JSON.parse(match[1]) as ExcalidrawFileData;
-      const elements = excalidrawData.elements || [];
+      const elements = excalidrawData.elements ?? [];
       const textElements = elements.filter(
         (element) => element.type === 'text' && Boolean(element.text)
       );
@@ -205,7 +264,7 @@ export class CommunityPluginsManager {
 
       let list = `### 🎨 Excalidraw Text from **${file.basename}**\n\n`;
       for (const el of textElements) {
-        list += `- ${el.text}\n`;
+        list += `- ${el.text ?? ''}\n`;
       }
 
       return list;
@@ -215,7 +274,7 @@ export class CommunityPluginsManager {
   }
 
   // --- Templater (Deep) ---
-  public async getTemplaterUserScripts(): Promise<string> {
+  public getTemplaterUserScripts(): string {
     const templaterPlugin = this.getCommunityPlugin('templater-obsidian') as
       | TemplaterPluginInstance
       | undefined;
@@ -251,7 +310,9 @@ export class CommunityPluginsManager {
       .filter(
         (file) => file.path.includes('System/Registry') && file.extension === 'md'
       );
-    return `### 🛠️ Forge Registry\n\nFound ${files.length} schema files in \`System/Registry\`. Tell Hermes to use the \`read_file\` tool on them to understand your vault's structural rules.`;
+    return `### 🛠️ Forge Registry\n\nFound ${
+      String(files.length)
+    } schema files in \`System/Registry\`. Tell Hermes to use the \`read_file\` tool on them to understand your vault's structural rules.`;
   }
 
   // --- Lazy Loader ---
@@ -287,15 +348,11 @@ export class CommunityPluginsManager {
   }
 
   // --- Obsidian Git ---
-  public getGitStatus(): string {
+  public async getGitStatus(): Promise<string> {
     try {
-      const adapter = this.plugin.app.vault.adapter as PathCapableAdapter;
-      const basePath = adapter.getBasePath ? adapter.getBasePath() : '';
+      const basePath = this.getVaultBasePath();
       if (!basePath) return 'Unable to determine vault path for git execution.';
-      const status = execSync('git status -s', {
-        cwd: basePath,
-        encoding: 'utf-8'
-      });
+      const status = await runGit(basePath, ['status', '-s']);
       return status
         ? `### 📦 Git Status\n\n\`\`\`text\n${status}\n\`\`\``
         : 'Git working tree is clean.';
@@ -304,17 +361,15 @@ export class CommunityPluginsManager {
     }
   }
 
-  public getGitCommitPrompt(message?: string): string {
+  public async getGitCommitPrompt(message?: string): Promise<string> {
     try {
-      const adapter = this.plugin.app.vault.adapter as PathCapableAdapter;
-      const basePath = adapter.getBasePath ? adapter.getBasePath() : '';
+      const basePath = this.getVaultBasePath();
       if (!basePath) return 'Unable to determine vault path for git execution.';
 
-      const diff = execSync('git diff', { cwd: basePath, encoding: 'utf-8' });
-      const cachedDiff = execSync('git diff --cached', {
-        cwd: basePath,
-        encoding: 'utf-8'
-      });
+      const [diff, cachedDiff] = await Promise.all([
+        runGit(basePath, ['diff']),
+        runGit(basePath, ['diff', '--cached'])
+      ]);
       const fullDiff = `${cachedDiff}\n${diff}`.trim();
 
       if (!fullDiff) return 'No changes detected. The working tree is clean.';
@@ -334,19 +389,20 @@ export class CommunityPluginsManager {
     }
   }
 
-  public runGitPush(): string {
+  public async runGitPush(): Promise<string> {
     try {
-      const adapter = this.plugin.app.vault.adapter as PathCapableAdapter;
-      const basePath = adapter.getBasePath ? adapter.getBasePath() : '';
+      const basePath = this.getVaultBasePath();
       if (!basePath) return 'Unable to determine vault path for git execution.';
-      const output = execSync('git push', {
-        cwd: basePath,
-        encoding: 'utf-8'
-      });
+      const output = await runGit(basePath, ['push']);
       return `### 🚀 Git Push\n\n\`\`\`text\n${output || 'Success (no output)'}\n\`\`\``;
     } catch (e) {
       return `Git push failed: ${e instanceof Error ? e.message : String(e)}`;
     }
+  }
+
+  private getVaultBasePath(): string {
+    const adapter = this.plugin.app.vault.adapter as PathCapableAdapter;
+    return adapter.getBasePath ? adapter.getBasePath() : '';
   }
 
   // --- Admonitions ---
@@ -368,7 +424,7 @@ export class CommunityPluginsManager {
     if (!activeFile) return 'No active file to lint.';
 
     const commands = (this.plugin.app as ObsidianAppWithCommands).commands;
-    if (commands && commands.executeCommandById) {
+    if (commands) {
       commands.executeCommandById('obsidian-linter:lint-file');
       return `Triggered Linter on **${activeFile.basename}**.`;
     }
@@ -381,7 +437,7 @@ export class CommunityPluginsManager {
     if (!activeFile) return 'No active file to format.';
 
     const commands = (this.plugin.app as ObsidianAppWithCommands).commands;
-    if (commands && commands.executeCommandById) {
+    if (commands) {
       // Common command IDs for obsidian-prettier
       commands.executeCommandById('obsidian-prettier:format');
       return `Triggered Prettier formatting on **${activeFile.basename}**.`;
@@ -395,8 +451,8 @@ export class CommunityPluginsManager {
     if (!activeView) {
       return 'No active note editor found. Open a note first.';
     }
-    const parsedCols = parseInt(colsStr || '3', 10);
-    const parsedRows = parseInt(rowsStr || '2', 10);
+    const parsedCols = parseInt(colsStr ?? '3', 10);
+    const parsedRows = parseInt(rowsStr ?? '2', 10);
     const cols = isNaN(parsedCols) ? 3 : parsedCols;
     const rows = isNaN(parsedRows) ? 2 : parsedRows;
 
@@ -411,7 +467,7 @@ export class CommunityPluginsManager {
 
     const table = `${headerRow}\n${separatorRow}\n${dataRows}\n`;
     activeView.editor.replaceSelection(table);
-    return `Generated a ${cols}x${rows} table at cursor in **${activeView.file?.basename ?? 'active note'}**.`;
+    return `Generated a ${String(cols)}x${String(rows)} table at cursor in **${activeView.file?.basename ?? 'active note'}**.`;
   }
 
   public formatTable(): string {
@@ -421,10 +477,12 @@ export class CommunityPluginsManager {
     }
 
     const commands = (this.plugin.app as ObsidianAppWithCommands).commands;
-    if (commands && commands.executeCommandById) {
-      const executed = commands.executeCommandById('table-editor-obsidian:format-table');
+    if (commands) {
+      const executed = commands.executeCommandById(
+        'table-editor-obsidian:format-table'
+      );
       if (executed !== false) {
-        return `Triggered Advanced Tables formatting in **${activeView.file?.basename}**.`;
+        return `Triggered Advanced Tables formatting in **${activeView.file?.basename ?? 'active note'}**.`;
       }
     }
     return 'Failed to trigger Advanced Tables formatting. Make sure the plugin is enabled and your cursor is inside a table.';

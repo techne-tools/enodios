@@ -18,9 +18,9 @@ import { createRoot } from "react-dom/client";
 import type { PendingPermission, PromptContextItem } from "../AcpClient.ts";
 import type { AuditEntry } from "../AuditLog.ts";
 import type {
-    AcpConnectionStatus,
-    ChatSessionUpdate,
-    TokenUsageStats
+  AcpConnectionStatus,
+  ChatSessionUpdate,
+  TokenUsageStats,
 } from "../ChatClient.ts";
 import type { PendingFileChange } from "../FileChangeManager.ts";
 import type { Plugin } from "../Plugin.ts";
@@ -29,13 +29,13 @@ import { useAutocomplete } from "./Hooks/useAutocomplete.ts";
 import { useSlashCommands } from "./Hooks/useSlashCommands.ts";
 
 import {
-    getSlashCommands,
-    parseSlashCommand,
-    setCachedToolCommands
+  getSlashCommands,
+  parseSlashCommand,
+  setCachedToolCommands,
 } from "../SlashCommands.ts";
 import {
-    parseBlockReferences,
-    resolveBlockReference
+  parseBlockReferences,
+  resolveBlockReference,
 } from "../utils/blockReferences.ts";
 import { generateMessageId } from "../utils/uuid.ts";
 import { useStreamBuffer } from "./useStreamBuffer.ts";
@@ -56,8 +56,8 @@ function escapeHtml(str: string): string {
         "<": "&lt;",
         ">": "&gt;",
         "'": "&#39;",
-        '"': "&quot;"
-      })[tag] || tag
+        '"': "&quot;",
+      })[tag] ?? tag,
   );
 }
 
@@ -65,7 +65,7 @@ function escapeHtml(str: string): string {
  * Map file extensions to Prism languages.
  */
 function getLanguageForPath(path: string): string {
-  const ext = path.split(".").pop()?.toLowerCase() || "";
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
   const map: Record<string, string> = {
     js: "javascript",
     ts: "typescript",
@@ -88,9 +88,9 @@ function getLanguageForPath(path: string): string {
     h: "cpp",
     hpp: "cpp",
     c: "c",
-    cs: "csharp"
+    cs: "csharp",
   };
-  return map[ext] || "markdown";
+  return map[ext] ?? "markdown";
 }
 
 /**
@@ -100,7 +100,7 @@ function highlightLine(line: string, path: string): string {
   const lang = getLanguageForPath(path);
   if (languages[lang]) {
     try {
-      return highlight(line, languages[lang]!, lang);
+      return highlight(line, languages[lang], lang);
     } catch {
       /* ignore */
     }
@@ -155,7 +155,7 @@ export class EnodiosChatView extends ItemView {
 
   constructor(
     leaf: WorkspaceLeaf,
-    private readonly pluginInstance: Plugin
+    private readonly pluginInstance: Plugin,
   ) {
     super(leaf);
   }
@@ -200,13 +200,24 @@ export class EnodiosChatView extends ItemView {
     return ENODIOS_CHAT_VIEW_TYPE;
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- base class requires Promise<void>
   public override async onClose(): Promise<void> {
+    this.destroyRoot();
+  }
+
+  /**
+   * Unmount the React root and clear the reference.
+   * Called both on view close and on plugin unload (so open views don't leak
+   * DOM nodes, event listeners, or subscriptions when the plugin is disabled).
+   */
+  public destroyRoot(): void {
     if (this.root) {
       this.root.unmount();
       this.root = null;
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- base class requires Promise<void>
   public override async onOpen(): Promise<void> {
     this.contentEl.empty();
     this.root = createRoot(this.contentEl);
@@ -216,7 +227,7 @@ export class EnodiosChatView extends ItemView {
   public async sendPrompt(
     text: string,
     contextItems: PromptContextItem[] = [],
-    options?: { allowedTools?: null | string[] }
+    options?: { allowedTools?: null | string[] },
   ): Promise<void> {
     const client = this.pluginInstance.getChatClient();
     if (!client.isReady()) {
@@ -226,19 +237,22 @@ export class EnodiosChatView extends ItemView {
   }
 
   public subscribeToAvailableCommands(
-    callback: (commands: { description: string; name: string }[]) => void
+    callback: (commands: { description: string; name: string }[]) => void,
   ): () => void {
     return this.pluginInstance.getChatClient().onAvailableCommands(callback);
   }
 
   public subscribeToConnectionStatus(
-    callback: (status: AcpConnectionStatus) => void
+    callback: (status: AcpConnectionStatus) => void,
   ): () => void {
     const client = this.pluginInstance.getChatClient();
     if (client.onConnectionStatus) {
       return client.onConnectionStatus(callback);
     }
-    return () => {};
+    // No connection-status subscription available; return a no-op unsubscribe.
+    return () => {
+      // No-op: nothing to unsubscribe.
+    };
   }
 
   public subscribeToErrors(callback: (error: string) => void): () => void {
@@ -246,7 +260,7 @@ export class EnodiosChatView extends ItemView {
   }
 
   public subscribeToUpdates(
-    callback: (update: ChatSessionUpdate) => void
+    callback: (update: ChatSessionUpdate) => void,
   ): () => void {
     return this.pluginInstance.getChatClient().onUpdate(callback);
   }
@@ -269,7 +283,7 @@ function StarterIcon({ icon, id }: StarterIconProps): React.JSX.Element {
     strokeWidth: "2",
     viewBox: "0 0 24 24",
     width: "24",
-    className: "svg-icon"
+    className: "svg-icon",
   };
 
   if (id === "lit-review" || icon === "📚") {
@@ -317,7 +331,7 @@ function StarterIcon({ icon, id }: StarterIconProps): React.JSX.Element {
 }
 
 export function EnodiosChatViewComponent({
-  view
+  view,
 }: EnodiosChatViewComponentProps): ReactElement {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -340,7 +354,7 @@ export function EnodiosChatViewComponent({
     setIsAutocompleteOpen,
     autocompleteSelectionIndex,
     setAutocompleteSelectionIndex,
-    cycleSuggestions
+    cycleSuggestions,
   } = useAutocomplete();
 
   const {
@@ -353,7 +367,7 @@ export function EnodiosChatViewComponent({
     handleSlashInput,
     handleSlashKeyDown,
     setIsSlashOpen,
-    setSlashSuggestions
+    setSlashSuggestions,
   } = useSlashCommands(setInput, textareaRef);
 
   const [allowedTools, setAllowedTools] = useState<null | string[]>(null);
@@ -365,7 +379,7 @@ export function EnodiosChatViewComponent({
     { id: "write_file", name: "Write Files" },
     { id: "terminal", name: "Terminal Commands" },
     { id: "web_search", name: "Web Search" },
-    { id: "web_extract", name: "Web Extract" }
+    { id: "web_extract", name: "Web Extract" },
   ]);
   const isSlashOpenRef = useRef(false);
   const inputRef = useRef("");
@@ -409,8 +423,8 @@ export function EnodiosChatViewComponent({
   // Listen for custom event to load template prompts
   useEffect(() => {
     const handleLoadTemplate = (e: Event) => {
-      const prompt = (e as CustomEvent).detail;
-      setInput(prompt);
+      const prompt = (e as CustomEvent<unknown>).detail;
+      setInput(typeof prompt === "string" ? prompt : "");
       setTimeout(() => {
         textareaRef.current?.focus();
       }, 0);
@@ -449,7 +463,7 @@ export function EnodiosChatViewComponent({
   const settings = view.getSettings();
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [showReasoningSession, setShowReasoningSession] = useState(
-    settings.showReasoning
+    settings.showReasoning,
   );
 
   useEffect(() => {
@@ -466,7 +480,7 @@ export function EnodiosChatViewComponent({
     activeCommand,
     allowedTools,
     contextItems,
-    isTyping
+    isTyping,
   });
   useEffect(() => {
     stateRef.current = { activeCommand, allowedTools, contextItems, isTyping };
@@ -477,19 +491,19 @@ export function EnodiosChatViewComponent({
     appendReasoning,
     flushNow,
     reasoningMessageIdRef,
-    streamingMessageIdRef
+    streamingMessageIdRef,
   } = useStreamBuffer(
     setMessages,
     settings.showReasoning,
     settings.enableTypingSound,
-    settings.enableHapticFeedback
+    settings.enableHapticFeedback,
   );
 
   const saveConversation = useCallback(
     async (
       currentMessages: ChatMessage[],
       currentTitle?: string,
-      currentAllowedTools: null | string[] = allowedTools
+      currentAllowedTools: null | string[] = allowedTools,
     ): Promise<void> => {
       if (currentMessages.length === 0) {
         return;
@@ -506,7 +520,7 @@ export function EnodiosChatViewComponent({
           const filePath = await plugin.vaultManager.saveConversation(
             currentMessages,
             title,
-            currentAllowedTools
+            currentAllowedTools,
           );
           if (filePath) {
             setConversationFilePath(filePath);
@@ -517,12 +531,12 @@ export function EnodiosChatViewComponent({
             conversationFilePath,
             currentMessages,
             title,
-            currentAllowedTools
+            currentAllowedTools,
           );
           if (!success) {
             console.warn(
               "[Hermes] updateConversation returned false for",
-              conversationFilePath
+              conversationFilePath,
             );
           }
         }
@@ -532,7 +546,7 @@ export function EnodiosChatViewComponent({
         setIsSaving(false);
       }
     },
-    [conversationFilePath, conversationTitle, plugin, allowedTools]
+    [conversationFilePath, conversationTitle, plugin, allowedTools],
   );
 
   const clearTypingTimeout = useCallback((): void => {
@@ -548,14 +562,14 @@ export function EnodiosChatViewComponent({
     lastSaveTime: number;
   }>({
     timeoutId: null,
-    lastSaveTime: 0
+    lastSaveTime: 0,
   });
 
   const scheduleSave = useCallback(
     (
       currentMessages: ChatMessage[],
       currentTitle?: string,
-      currentAllowedTools?: null | string[]
+      currentAllowedTools?: null | string[],
     ): void => {
       const now = Date.now();
       const MIN_SAVE_INTERVAL = 500; // Minimum 500ms between saves
@@ -575,7 +589,7 @@ export function EnodiosChatViewComponent({
             void saveConversation(
               currentMessages,
               currentTitle,
-              currentAllowedTools
+              currentAllowedTools,
             );
           }, MIN_SAVE_INTERVAL);
         } else {
@@ -583,13 +597,13 @@ export function EnodiosChatViewComponent({
           void saveConversation(
             currentMessages,
             currentTitle,
-            currentAllowedTools
+            currentAllowedTools,
           );
         }
         debouncedSaveRef.current.timeoutId = null;
       }, 100); // 100ms debounce window
     },
-    [saveConversation]
+    [saveConversation],
   );
 
   const resetTypingTimeout = useCallback((): void => {
@@ -633,11 +647,11 @@ export function EnodiosChatViewComponent({
               return {
                 ...m,
                 isRunning: false,
-                toolStatus: m.toolStatus === "error" ? "error" : "complete"
+                toolStatus: m.toolStatus === "error" ? "error" : "complete",
               };
             }
             return m;
-          })
+          }),
         );
         // Save conversation after response completes (debounced)
         setMessages((currentMessages) => {
@@ -662,13 +676,13 @@ export function EnodiosChatViewComponent({
         // - permission confirmations always show as compact status indicators regardless
         const isBackgrounded = !settings.showToolUse;
         if (update.toolCall) {
+          const toolCall = update.toolCall;
           // Force isRunning false on tool_complete regardless of backend status
           const isRunning =
-            update.type !== "tool_complete" &&
-            update.toolCall.status === "running";
-          const currentCallId = update.toolCall.callId;
+            update.type !== "tool_complete" && toolCall.status === "running";
+          const currentCallId = toolCall.callId;
           const currentToolStatus =
-            update.toolCall.status === "error"
+            toolCall.status === "error"
               ? "error"
               : isRunning
                 ? "running"
@@ -676,33 +690,35 @@ export function EnodiosChatViewComponent({
 
           setMessages((prev) => {
             const toolIndex = prev.findIndex(
-              (m) => m.role === "tool" && m.toolCallId === currentCallId
+              (m) => m.role === "tool" && m.toolCallId === currentCallId,
             );
 
             // Reconcile tool name to avoid overwriting with "other" on partial updates
-            let resolvedToolName = update.toolCall!.name;
+            let resolvedToolName = toolCall.name;
             if (
               toolIndex >= 0 &&
               (resolvedToolName === "other" ||
                 resolvedToolName === "unknown-tool")
             ) {
-              resolvedToolName = prev[toolIndex]?.toolName || resolvedToolName;
+              resolvedToolName = prev[toolIndex]?.toolName ?? resolvedToolName;
             }
 
             let toolMsg = "";
-            if (update.toolCall!.result) {
-              toolMsg = `**Result:**\n\`\`\`text\n${update.toolCall!.result}\n\`\`\``;
+            if (toolCall.result) {
+              toolMsg = `**Result:**\n\`\`\`text\n${toolCall.result}\n\`\`\``;
             }
 
             if (toolIndex >= 0) {
+              const existing = prev[toolIndex];
+              if (!existing) return prev;
               const updated = [...prev];
               updated[toolIndex] = {
-                ...prev[toolIndex]!,
+                ...existing,
                 content: toolMsg,
                 isBackgrounded,
                 isRunning,
                 toolName: resolvedToolName,
-                toolStatus: currentToolStatus
+                toolStatus: currentToolStatus,
               };
               return updated;
             }
@@ -717,11 +733,11 @@ export function EnodiosChatViewComponent({
               timestamp: Date.now(),
               toolCallId: currentCallId,
               toolName: resolvedToolName,
-              toolStatus: currentToolStatus
+              toolStatus: currentToolStatus,
             };
 
             const assistantIndex = prev.findIndex(
-              (m) => m.id === streamingMessageIdRef.current
+              (m) => m.id === streamingMessageIdRef.current,
             );
             if (assistantIndex >= 0) {
               const updated = [...prev];
@@ -732,33 +748,33 @@ export function EnodiosChatViewComponent({
           });
         }
       } else if (update.type === "terminal_output" && update.terminal) {
+        const terminal = update.terminal;
         flushNow();
         setMessages((prev) => {
           const index = prev.findIndex(
-            (m) =>
-              m.role === "terminal" && m.terminalId === update.terminal!.id
+            (m) => m.role === "terminal" && m.terminalId === terminal.id,
           );
           if (index >= 0) {
+            const existing = prev[index];
+            if (!existing) return prev;
             const updated = [...prev];
             updated[index] = {
-              ...updated[index]!,
-              content: updated[index]!.content + update.terminal!.output,
-              isExited:
-                (updated[index]!.isExited ?? false) ||
-                (update.terminal!.isExited ?? false)
+              ...existing,
+              content: existing.content + terminal.output,
+              isExited: existing.isExited || terminal.isExited === true,
             };
             return updated;
           }
           return [
             ...prev,
             {
-              content: update.terminal!.output,
+              content: terminal.output,
               id: generateMessageId(),
-              isExited: update.terminal!.isExited ?? false,
+              isExited: terminal.isExited ?? false,
               role: "terminal",
-              terminalId: update.terminal!.id,
-              timestamp: Date.now()
-            }
+              terminalId: terminal.id,
+              timestamp: Date.now(),
+            },
           ];
         });
       } else if (
@@ -768,11 +784,11 @@ export function EnodiosChatViewComponent({
         // Update cached tool commands from ACP
         const toolCmds = update.availableCommands.map((cmd) => ({
           description: cmd.description,
-          execute: async (): Promise<null | string> => {
+          execute: (): Promise<null | string> => {
             // Tool commands are sent as regular prompts; the agent handles them
-            return null;
+            return Promise.resolve(null);
           },
-          name: cmd.name
+          name: cmd.name,
         }));
         setCachedToolCommands(toolCmds);
       }
@@ -786,7 +802,7 @@ export function EnodiosChatViewComponent({
         if (status.state === "connected") {
           setError(null);
         }
-      }
+      },
     );
 
     const unsubError = view.subscribeToErrors((err: string) => {
@@ -809,22 +825,22 @@ export function EnodiosChatViewComponent({
               isRunning: false,
               content: m.content
                 .replace('<span class="enodios-tool-helix"></span>', "❌")
-                .replace(" *(running...)*", "")
+                .replace(" *(running...)*", ""),
             };
           }
           return m;
-        })
+        }),
       );
     });
 
     const unsubCommands = view.subscribeToAvailableCommands((commands) => {
       const toolCmds = commands.map((cmd) => ({
         description: cmd.description,
-        execute: async (): Promise<null | string> => {
+        execute: (): Promise<null | string> => {
           // Tool commands are sent as regular prompts; the agent handles them
-          return null;
+          return Promise.resolve(null);
         },
-        name: cmd.name
+        name: cmd.name,
       }));
       setCachedToolCommands(toolCmds);
       setAvailableTools((_prev) => {
@@ -833,11 +849,11 @@ export function EnodiosChatViewComponent({
           { id: "write_file", name: "Write Files" },
           { id: "terminal", name: "Terminal Commands" },
           { id: "web_search", name: "Web Search" },
-          { id: "web_extract", name: "Web Extract" }
+          { id: "web_extract", name: "Web Extract" },
         ];
         const dynamicTools = commands.map((c) => ({
           id: c.name,
-          name: c.name
+          name: c.name,
         }));
         const all = [...baseTools, ...dynamicTools];
         return Array.from(new Map(all.map((item) => [item.id, item])).values());
@@ -849,13 +865,13 @@ export function EnodiosChatViewComponent({
         const filtered = all.filter(
           (cmd) =>
             cmd.name.toLowerCase().includes(query) ||
-            cmd.description.toLowerCase().includes(query)
+            cmd.description.toLowerCase().includes(query),
         );
         setSlashSuggestions(
           filtered.map((cmd) => ({
             description: cmd.description,
-            name: cmd.name
-          }))
+            name: cmd.name,
+          })),
         );
       }
     });
@@ -866,10 +882,10 @@ export function EnodiosChatViewComponent({
     });
 
     // Subscribe to pending permission requests for approval UI
-    const unsubscribePermissions = plugin.acpClient?.onPermissionsChange(
+    const unsubscribePermissions = plugin.acpClient.onPermissionsChange(
       (permissions) => {
         setPendingPermissions(permissions);
-      }
+      },
     );
 
     // Global Cmd+F shortcut for search
@@ -899,7 +915,7 @@ export function EnodiosChatViewComponent({
         clearTimeout(debouncedSaveRef.current.timeoutId);
       }
       unsubscribeChanges();
-      unsubscribePermissions?.();
+      unsubscribePermissions();
       unsubUpdate();
       unsubStatus();
       unsubError();
@@ -915,7 +931,7 @@ export function EnodiosChatViewComponent({
     appendReasoning,
     flushNow,
     settings.showReasoning,
-    settings.showToolUse
+    settings.showToolUse,
   ]);
 
   const loadAuditLog = useCallback(async (): Promise<void> => {
@@ -947,7 +963,7 @@ export function EnodiosChatViewComponent({
     try {
       const list = await plugin.vaultManager.listConversations();
       setConversations(
-        list.map((c) => ({ filePath: c.filePath, title: c.metadata.title }))
+        list.map((c) => ({ filePath: c.filePath, title: c.metadata.title })),
       );
     } catch {
       setConversations([]);
@@ -963,7 +979,7 @@ export function EnodiosChatViewComponent({
           setConversationFilePath(filePath);
           setConversationTitle(loaded.title);
           setAllowedTools(
-            loaded.allowedTools?.length ? loaded.allowedTools : null
+            loaded.allowedTools?.length ? loaded.allowedTools : null,
           );
           view.clearConversation();
         }
@@ -973,7 +989,7 @@ export function EnodiosChatViewComponent({
         setIsConversationListOpen(false);
       }
     },
-    [plugin, view]
+    [plugin, view],
   );
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -989,13 +1005,19 @@ export function EnodiosChatViewComponent({
 
   const handleNewChat = useCallback((): void => {
     if (conversationFilePath) {
+      // Native confirm is appropriate here: it is a destructive action
+      // (deleting the conversation file) and Obsidian's modal system would be
+      // heavier than warranted for a single yes/no decision.
+      // eslint-disable-next-line no-alert -- Intentional destructive-action confirmation.
       const shouldDelete = window.confirm(
-        "Do you want to delete the current conversation file? Click Cancel to keep it and just start a new chat."
+        "Do you want to delete the current conversation file? Click Cancel to keep it and just start a new chat.",
       );
       if (shouldDelete) {
-        plugin.vaultManager
+        void plugin.vaultManager
           .deleteConversation(conversationFilePath)
-          .catch(() => {});
+          .catch(() => {
+            // Ignore deletion errors — the new chat still starts.
+          });
       }
     }
     setMessages([]);
@@ -1057,7 +1079,7 @@ export function EnodiosChatViewComponent({
           content: newText,
           id: generateMessageId(),
           role: "user",
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
 
         const streamingMessageId = generateMessageId();
@@ -1068,7 +1090,7 @@ export function EnodiosChatViewComponent({
           content: "",
           id: streamingMessageId,
           role: "assistant",
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
 
         return [...truncated, userMessage, assistantPlaceholder];
@@ -1082,11 +1104,11 @@ export function EnodiosChatViewComponent({
       isPromptActiveRef.current = true;
       try {
         await view.sendPrompt(newText, current.contextItems, {
-          allowedTools: current.allowedTools
+          allowedTools: current.allowedTools,
         });
       } catch (err) {
         setError(
-          `Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`
+          `Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`,
         );
       } finally {
         setIsTyping(false);
@@ -1094,7 +1116,7 @@ export function EnodiosChatViewComponent({
         isPromptActiveRef.current = false;
       }
     },
-    [view]
+    [view],
   );
 
   const handleRetry = useCallback(async (): Promise<void> => {
@@ -1112,7 +1134,7 @@ export function EnodiosChatViewComponent({
       content: "",
       id: streamingMessageId,
       role: "assistant",
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
@@ -1121,11 +1143,11 @@ export function EnodiosChatViewComponent({
       await view.sendPrompt(
         lastPromptRef.current,
         lastContextItemsRef.current,
-        { allowedTools: current.allowedTools }
+        { allowedTools: current.allowedTools },
       );
     } catch (err) {
       setError(
-        `Retry failed: ${err instanceof Error ? err.message : String(err)}`
+        `Retry failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
       setIsTyping(false);
@@ -1169,7 +1191,7 @@ export function EnodiosChatViewComponent({
         content: fullText,
         id: generateMessageId(),
         role: "user",
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, userMessage]);
 
@@ -1186,7 +1208,7 @@ export function EnodiosChatViewComponent({
             content: result,
             id: generateMessageId(),
             role: "system",
-            timestamp: Date.now()
+            timestamp: Date.now(),
           };
           setMessages((prev) => [...prev, systemMessage]);
         } else {
@@ -1201,18 +1223,18 @@ export function EnodiosChatViewComponent({
             content: "",
             id: streamingMessageId,
             role: "assistant",
-            timestamp: Date.now()
+            timestamp: Date.now(),
           };
           setMessages((prev) => [...prev, assistantPlaceholder]);
 
           isPromptActiveRef.current = true;
           try {
             await view.sendPrompt(fullText, current.contextItems, {
-              allowedTools: current.allowedTools
+              allowedTools: current.allowedTools,
             });
           } catch (err) {
             setError(
-              `Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`
+              `Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`,
             );
           } finally {
             setIsTyping(false);
@@ -1225,7 +1247,7 @@ export function EnodiosChatViewComponent({
           content: `Error executing /${slashCmd.command.name}: ${err instanceof Error ? err.message : String(err)}`,
           id: generateMessageId(),
           role: "system",
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, errorMessage]);
         setIsTyping(false);
@@ -1238,7 +1260,7 @@ export function EnodiosChatViewComponent({
       content: fullText,
       id: generateMessageId(),
       role: "user",
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -1257,18 +1279,18 @@ export function EnodiosChatViewComponent({
       content: "",
       id: streamingMessageId,
       role: "assistant",
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
     isPromptActiveRef.current = true;
     try {
       await view.sendPrompt(fullText, current.contextItems, {
-        allowedTools: current.allowedTools
+        allowedTools: current.allowedTools,
       });
     } catch (err) {
       setError(
-        `Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`
+        `Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`,
       );
     } finally {
       setIsTyping(false);
@@ -1317,9 +1339,9 @@ export function EnodiosChatViewComponent({
 
       if (e.key === "ArrowUp" && inputRef.current === "") {
         const userMsgs = messages.filter((m) => m.role === "user");
-        if (userMsgs.length > 0) {
+        const lastUser = userMsgs[userMsgs.length - 1];
+        if (lastUser) {
           e.preventDefault();
-          const lastUser = userMsgs[userMsgs.length - 1]!;
           setEditingMessageId(lastUser.id);
         }
         return;
@@ -1339,8 +1361,8 @@ export function EnodiosChatViewComponent({
       autocompleteSelectionIndex,
       handleSend,
       messages,
-      setEditingMessageId
-    ]
+      setEditingMessageId,
+    ],
   );
 
   const insertAutocomplete = useCallback(
@@ -1357,8 +1379,8 @@ export function EnodiosChatViewComponent({
             {
               id: contextId,
               text: suggestion.text.split("/").pop() || suggestion.text, // show basename
-              type: contextType
-            }
+              type: contextType,
+            },
           ]);
         }
 
@@ -1366,14 +1388,15 @@ export function EnodiosChatViewComponent({
         const value = input;
         const lastOpen = Math.max(
           value.lastIndexOf("[["),
-          value.lastIndexOf("{")
+          value.lastIndexOf("{"),
         );
         if (lastOpen !== -1) {
           setInput(value.substring(0, lastOpen));
         } else {
           setInput("");
         }
-      } else if (suggestion.type === "citation") {
+      } else {
+        // suggestion.type === "citation"
         // For citations, we want to insert the text `[@citationKey]` into the textarea
         const value = input;
         const lastOpen = value.lastIndexOf("[@");
@@ -1381,7 +1404,7 @@ export function EnodiosChatViewComponent({
           const key = suggestion.id.replace(/^citation-/, "");
           const before = value.substring(0, lastOpen);
           const after = value.substring(
-            lastOpen + 2 + autocompleteQuery.length
+            lastOpen + 2 + autocompleteQuery.length,
           );
           setInput(before + `[@${key}]` + after);
         }
@@ -1396,7 +1419,7 @@ export function EnodiosChatViewComponent({
         textareaRef.current?.focus();
       }, 0);
     },
-    [input, contextItems, autocompleteQuery]
+    [input, contextItems, autocompleteQuery],
   );
 
   const resolveActiveFile = useCallback((): TFile | null => {
@@ -1446,7 +1469,7 @@ export function EnodiosChatViewComponent({
             (item) =>
               item.type === "note" &&
               item.id ===
-                `block-${resolved.path}-${blockRefMatch[2] ?? "full"}`
+                `block-${resolved.path}-${blockRefMatch[2] ?? "full"}`,
           );
           if (isDuplicate) {
             return;
@@ -1457,8 +1480,8 @@ export function EnodiosChatViewComponent({
             {
               id: `block-${resolved.path}-${blockRefMatch[2] ?? "full"}`,
               text: `${activeFile.basename}${blockRefMatch[2] ? ` #${blockRefMatch[2]}` : ""}`,
-              type: "note"
-            }
+              type: "note",
+            },
           ]);
           return;
         }
@@ -1478,7 +1501,7 @@ export function EnodiosChatViewComponent({
 
           // Find the block that contains the selection
           const containingBlock = blocks.find(
-            (b) => b.startLine <= startLine && b.endLine >= endLine
+            (b) => b.startLine <= startLine && b.endLine >= endLine,
           );
 
           if (containingBlock && containingBlock.type !== "paragraph") {
@@ -1486,7 +1509,7 @@ export function EnodiosChatViewComponent({
               (item) =>
                 item.type === "note" &&
                 item.id ===
-                  `block-${activeFile.path}-${containingBlock.startLine}`
+                  `block-${activeFile.path}-${containingBlock.startLine}`,
             );
             if (isDuplicate) {
               return;
@@ -1497,8 +1520,8 @@ export function EnodiosChatViewComponent({
               {
                 id: `block-${activeFile.path}-${containingBlock.startLine}`,
                 text: `${activeFile.basename} (${containingBlock.type})`,
-                type: "note"
-              }
+                type: "note",
+              },
             ]);
             return;
           }
@@ -1506,7 +1529,7 @@ export function EnodiosChatViewComponent({
       }
 
       const isDuplicate = contextItems.some(
-        (item) => item.type === "selection" && item.text === selectedText
+        (item) => item.type === "selection" && item.text === selectedText,
       );
       if (isDuplicate) {
         return;
@@ -1517,12 +1540,12 @@ export function EnodiosChatViewComponent({
         {
           id: `selection-${Date.now()}`,
           text: selectedText,
-          type: "selection"
-        }
+          type: "selection",
+        },
       ]);
     } else if (activeFile && !autoAddEnabled) {
       const isDuplicate = contextItems.some(
-        (item) => item.type === "note" && item.id === `note-${activeFile.path}`
+        (item) => item.type === "note" && item.id === `note-${activeFile.path}`,
       );
       if (isDuplicate) {
         return;
@@ -1533,8 +1556,8 @@ export function EnodiosChatViewComponent({
         {
           id: `note-${activeFile.path}`,
           text: activeFile.basename,
-          type: "note"
-        }
+          type: "note",
+        },
       ]);
     }
   }, [plugin, settings, contextItems, resolveActiveFile]);
@@ -1549,17 +1572,27 @@ export function EnodiosChatViewComponent({
       const targetFolder = activeFile?.parent?.path ?? "";
       const copied: string[] = [];
 
+      // Sanitize file names to prevent path traversal / unexpected nesting.
+      const sanitizeFileName = (name: string): string => {
+        const base = name.split(/[\\/]/).pop() ?? name;
+        return base.replace(/[\x00-\x1f]/g, "").trim();
+      };
+
       for (const file of Array.from(files)) {
         if (file.size > 5 * 1024 * 1024) {
           new Notice(
-            `File "${file.name}" exceeds the 5MB limit and was skipped. Please process large files in another app.`
+            `File "${file.name}" exceeds the 5MB limit and was skipped. Please process large files in another app.`,
           );
           continue;
         }
 
         try {
           const arrayBuffer = await file.arrayBuffer();
-          const fileName = file.name;
+          const fileName = sanitizeFileName(file.name);
+          if (!fileName) {
+            new Notice(`Skipped file with invalid name: "${file.name}"`);
+            continue;
+          }
           const targetPath = targetFolder
             ? `${targetFolder}/${fileName}`
             : fileName;
@@ -1572,7 +1605,7 @@ export function EnodiosChatViewComponent({
 
           const newFile = await plugin.app.vault.createBinary(
             targetPath,
-            arrayBuffer
+            arrayBuffer,
           );
           copied.push(fileName);
 
@@ -1588,8 +1621,8 @@ export function EnodiosChatViewComponent({
                 id: `pdf-${targetPath}`,
                 mimeType: "application/pdf",
                 text: fileName,
-                type: "pdf"
-              }
+                type: "pdf",
+              },
             ]);
 
             if (settings.autoExtractPdfAnnotations) {
@@ -1600,21 +1633,21 @@ export function EnodiosChatViewComponent({
                   const markdown =
                     plugin.pdfAnnotationManager.formatAnnotationsMarkdown(
                       annots,
-                      fileName
+                      fileName,
                     );
                   setContextItems((prev) => [
                     ...prev,
                     {
                       id: `pdf-annotations-${targetPath}`,
                       text: markdown, // The actual text content is the markdown summary
-                      type: "selection"
-                    }
+                      type: "selection",
+                    },
                   ]);
                 }
               } catch (err) {
                 plugin.debug.error(
                   "Auto-extraction of PDF annotations failed",
-                  err
+                  err,
                 );
               }
             }
@@ -1635,8 +1668,8 @@ export function EnodiosChatViewComponent({
                 id: `image-${targetPath}`,
                 mimeType,
                 text: fileName,
-                type: "image"
-              }
+                type: "image",
+              },
             ]);
           } else if (fileName.endsWith(".md")) {
             setContextItems((prev) => [
@@ -1644,8 +1677,8 @@ export function EnodiosChatViewComponent({
               {
                 id: `note-${targetPath}`,
                 text: fileName.replace(/\.md$/, ""),
-                type: "note"
-              }
+                type: "note",
+              },
             ]);
           }
         } catch {
@@ -1657,7 +1690,7 @@ export function EnodiosChatViewComponent({
         new Notice(`Copied ${copied.length} file(s) to vault`);
       }
     },
-    [plugin, settings, contextItems, resolveActiveFile]
+    [plugin, settings, contextItems, resolveActiveFile],
   );
 
   // Auto-scroll to bottom
@@ -1668,9 +1701,6 @@ export function EnodiosChatViewComponent({
     }
 
     const handleScroll = () => {
-      if (!container) {
-        return;
-      }
       // Check if user is scrolled to the bottom. The +5 is a buffer for fractional pixels and borders.
       isAtBottomRef.current =
         container.scrollHeight - container.clientHeight <=
@@ -1721,8 +1751,8 @@ export function EnodiosChatViewComponent({
           {
             id: `note-${currentActiveFile.path}`,
             text: currentActiveFile.basename,
-            type: "note"
-          }
+            type: "note",
+          },
         ];
       });
     };
@@ -1732,7 +1762,7 @@ export function EnodiosChatViewComponent({
 
     const eventRef = plugin.app.workspace.on(
       "active-leaf-change",
-      handleActiveLeafChange
+      handleActiveLeafChange,
     );
 
     return () => {
@@ -1762,7 +1792,7 @@ export function EnodiosChatViewComponent({
       const lastOpen = Math.max(
         input.lastIndexOf("[["),
         input.lastIndexOf("{"),
-        input.lastIndexOf("[@")
+        input.lastIndexOf("[@"),
       );
       if (lastOpen >= 0) {
         const isCitation = input.substring(lastOpen, lastOpen + 2) === "[@";
@@ -1787,7 +1817,7 @@ export function EnodiosChatViewComponent({
     const lastOpen = Math.max(
       inputRef.current.lastIndexOf("[["),
       inputRef.current.lastIndexOf("{"),
-      inputRef.current.lastIndexOf("[@")
+      inputRef.current.lastIndexOf("[@"),
     );
     const isCitation =
       lastOpen !== -1 &&
@@ -1803,7 +1833,7 @@ export function EnodiosChatViewComponent({
             .map((item) => ({
               id: `citation-${item.key}`,
               text: item.key,
-              type: "citation"
+              type: "citation",
             }));
           setAutocompleteSuggestions(suggestions);
         } catch {
@@ -1824,7 +1854,7 @@ export function EnodiosChatViewComponent({
         : files.filter(
             (file) =>
               file.path.toLowerCase().includes(queryLower) ||
-              file.basename.toLowerCase().includes(queryLower)
+              file.basename.toLowerCase().includes(queryLower),
           );
 
     const recentFiles = matches
@@ -1836,8 +1866,8 @@ export function EnodiosChatViewComponent({
       ({ file }) => ({
         id: `note-${file.path}`,
         text: file.path,
-        type: "note"
-      })
+        type: "note",
+      }),
     );
 
     if (autocompleteQuery.includes("/")) {
@@ -1857,7 +1887,7 @@ export function EnodiosChatViewComponent({
         .map((folder) => ({
           id: `folder-${folder}`,
           text: folder,
-          type: "folder" as const
+          type: "folder" as const,
         }));
 
       suggestions.push(...folderSuggestions);
@@ -1882,8 +1912,8 @@ export function EnodiosChatViewComponent({
       setSlashSuggestions(
         commands.map((cmd) => ({
           description: cmd.description,
-          name: cmd.name
-        }))
+          name: cmd.name,
+        })),
       );
       return;
     }
@@ -1894,14 +1924,14 @@ export function EnodiosChatViewComponent({
       const filtered = commands.filter(
         (cmd) =>
           cmd.name.toLowerCase().includes(query) ||
-          cmd.description.toLowerCase().includes(query)
+          cmd.description.toLowerCase().includes(query),
       );
       if (filtered.length > 0) {
         setSlashSuggestions(
           filtered.map((cmd) => ({
             description: cmd.description,
-            name: cmd.name
-          }))
+            name: cmd.name,
+          })),
         );
         setIsSlashOpen(true);
       } else {
@@ -1910,8 +1940,8 @@ export function EnodiosChatViewComponent({
         setSlashSuggestions([
           {
             description: "Send command to Enodios",
-            name: syntheticName
-          }
+            name: syntheticName,
+          },
         ]);
         setIsSlashOpen(true);
       }
@@ -1931,7 +1961,7 @@ export function EnodiosChatViewComponent({
       target.style.height = "auto";
       target.style.height = `${target.scrollHeight}px`;
     },
-    [setInput, handleSlashInput]
+    [setInput, handleSlashInput],
   );
 
   // Conversation search handlers
@@ -1952,7 +1982,7 @@ export function EnodiosChatViewComponent({
       setSearchMatches(indices);
       setCurrentMatchIndex(indices.length > 0 ? 0 : 0);
     },
-    [messages]
+    [messages],
   );
 
   const jumpToMatch = useCallback(
@@ -1979,7 +2009,7 @@ export function EnodiosChatViewComponent({
         }
       }
     },
-    [searchMatches, currentMatchIndex, messages]
+    [searchMatches, currentMatchIndex, messages],
   );
 
   const handleSearchKeyDown = useCallback(
@@ -1993,7 +2023,7 @@ export function EnodiosChatViewComponent({
         setSearchMatches([]);
       }
     },
-    [jumpToMatch]
+    [jumpToMatch],
   );
 
   return (
@@ -2060,7 +2090,7 @@ export function EnodiosChatViewComponent({
       {isAuditLogOpen && (
         <AuditLogPanel
           entries={auditEntries}
-          onClear={handleClearAuditLog}
+          onClear={() => void handleClearAuditLog()}
           onClose={() => {
             setIsAuditLogOpen(false);
           }}
@@ -2082,13 +2112,11 @@ export function EnodiosChatViewComponent({
               ✕
             </button>
           </div>
-          {conversations.length === 0
-? (
+          {conversations.length === 0 ? (
             <div className="enodios-conversation-empty">
               No saved conversations
             </div>
-          )
-: (
+          ) : (
             <ul>
               {conversations.slice(0, 5).map((conv) => (
                 <li key={conv.filePath}>
@@ -2166,9 +2194,7 @@ export function EnodiosChatViewComponent({
             agentName={settings.chatAgentName || "Hermes"}
             hasSeenOnboarding={settings.hasSeenOnboarding}
             onDismiss={() => {
-              // @ts-expect-error - settings are mutable at runtime
-              plugin.settings.hasSeenOnboarding = true;
-              void plugin.settingsManager.saveToFile();
+              void plugin.setSetting("hasSeenOnboarding", true);
             }}
             onLoadTemplate={onLoadTemplate}
             templates={templates}
@@ -2205,7 +2231,7 @@ export function EnodiosChatViewComponent({
             </button>
             <button
               className="enodios-error-retry"
-              onClick={handleRetry}
+              onClick={() => void handleRetry()}
               title="Retry"
               type="button"
             >
@@ -2221,29 +2247,30 @@ export function EnodiosChatViewComponent({
         <PendingChangesPanel
           changes={fileChanges}
           onApprove={(id, contentOverride) =>
-            void plugin.fileChangeManager.approveChange(id, contentOverride)}
+            void plugin.fileChangeManager.approveChange(id, contentOverride)
+          }
           onApproveAll={() => void plugin.fileChangeManager.approveAll()}
           onClearResolved={() => {
             plugin.fileChangeManager.clearResolved();
           }}
           onReject={(id) => {
-            plugin.fileChangeManager.rejectChange(id);
+            void plugin.fileChangeManager.rejectChange(id);
           }}
           onRejectAll={() => {
-            plugin.fileChangeManager.rejectAll();
+            void plugin.fileChangeManager.rejectAll();
           }}
         />
       )}
       {pendingPermissions.length > 0 && (
         <PendingPermissionsPanel
           onApprove={(permissionId, optionId) => {
-            plugin.acpClient?.resolvePermission(permissionId, optionId);
+            plugin.acpClient.resolvePermission(permissionId, optionId);
           }}
           onApproveAll={() => {
-            plugin.acpClient?.resolveAllPermissions();
+            plugin.acpClient.resolveAllPermissions();
           }}
           onRejectAll={() => {
-            plugin.acpClient?.cancelAllPermissions();
+            plugin.acpClient.cancelAllPermissions();
           }}
           permissions={pendingPermissions}
         />
@@ -2259,8 +2286,8 @@ export function EnodiosChatViewComponent({
         isAutocompleteOpen={isAutocompleteOpen}
         isSlashOpen={isSlashOpen}
         isTyping={isTyping}
-        onAttachFiles={handleAttachFiles}
-        onContextClick={handleContextClick}
+        onAttachFiles={(files) => void handleAttachFiles(files)}
+        onContextClick={() => void handleContextClick()}
         onInputChange={handleTextareaChange}
         onInputKeyDown={handleInputKeyDown}
         onRemoveCommand={() => {
@@ -2276,9 +2303,9 @@ export function EnodiosChatViewComponent({
           setSlashSuggestions([]);
           setTimeout(() => textareaRef.current?.focus(), 0);
         }}
-        onSend={handleSend}
+        onSend={() => void handleSend()}
         onStop={() => {
-          view.cancelPrompt();
+          void view.cancelPrompt();
         }}
         rateLimitSeconds={rateLimitSeconds}
         slashSelectionIndex={slashSelectionIndex}
@@ -2301,7 +2328,7 @@ const SessionSettingsPanel = memo(
     allowedTools,
     availableTools,
     onClose,
-    onToolsChange
+    onToolsChange,
   }: SessionSettingsPanelProps): ReactElement => {
     const isAllAllowed = allowedTools === null;
 
@@ -2309,7 +2336,7 @@ const SessionSettingsPanel = memo(
       if (isAllAllowed) {
         // If previously using default, start an explicit list excluding the toggled tool
         onToolsChange(
-          availableTools.map((t) => t.id).filter((id) => id !== toolId)
+          availableTools.map((t) => t.id).filter((id) => id !== toolId),
         );
       } else {
         const newTools = allowedTools.includes(toolId)
@@ -2382,7 +2409,7 @@ const SessionSettingsPanel = memo(
         </div>
       </div>
     );
-  }
+  },
 );
 
 interface ChatInputProps {
@@ -2434,7 +2461,7 @@ const ChatInput = memo(
     rateLimitSeconds,
     slashSelectionIndex,
     slashSuggestions,
-    textareaRef
+    textareaRef,
   }: ChatInputProps): ReactElement => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const autocompleteRef = useRef<HTMLDivElement>(null);
@@ -2714,7 +2741,7 @@ const ChatInput = memo(
         )}
       </div>
     );
-  }
+  },
 );
 
 interface DiffLine {
@@ -2740,30 +2767,30 @@ function computeDiffLines(original: string, updated: string): DiffLine[] {
 
   while (oi < origLines.length || ni < newLines.length) {
     if (oi >= origLines.length) {
-      result.push({ line: newLines[ni]!, type: "added" });
+      result.push({ line: newLines[ni] as string, type: "added" });
       ni++;
     } else if (ni >= newLines.length) {
-      result.push({ line: origLines[oi]!, type: "removed" });
+      result.push({ line: origLines[oi] as string, type: "removed" });
       oi++;
     } else if (origLines[oi] === newLines[ni]) {
-      result.push({ line: origLines[oi]!, type: "unchanged" });
+      result.push({ line: origLines[oi] as string, type: "unchanged" });
       oi++;
       ni++;
     } else {
       // Simple heuristic: if next original matches next new, this new is an addition
       if (ni + 1 < newLines.length && origLines[oi] === newLines[ni + 1]) {
-        result.push({ line: newLines[ni]!, type: "added" });
+        result.push({ line: newLines[ni] as string, type: "added" });
         ni++;
       } else if (
         oi + 1 < origLines.length &&
         origLines[oi + 1] === newLines[ni]
       ) {
-        result.push({ line: origLines[oi]!, type: "removed" });
+        result.push({ line: origLines[oi] as string, type: "removed" });
         oi++;
       } else {
         // Treat as replacement: remove old, add new
-        result.push({ line: origLines[oi]!, type: "removed" });
-        result.push({ line: newLines[ni]!, type: "added" });
+        result.push({ line: origLines[oi] as string, type: "removed" });
+        result.push({ line: newLines[ni] as string, type: "added" });
         oi++;
         ni++;
       }
@@ -2780,7 +2807,7 @@ const PendingChangesPanel = memo(
     onApproveAll,
     onClearResolved,
     onReject,
-    onRejectAll
+    onRejectAll,
   }: PendingChangesPanelProps): ReactElement => {
     const [expandedId, setExpandedId] = useState<null | string>(null);
     const [selectedLines, setSelectedLines] = useState<
@@ -2807,14 +2834,15 @@ const PendingChangesPanel = memo(
 
     const getPartialContent = (
       change: PendingFileChange,
-      selected: Set<number>
+      selected: Set<number>,
     ): string => {
       const diffLines =
         change.diffSnapshot ??
         computeDiffLines(change.originalContent, change.newContent ?? "");
       const result: string[] = [];
       for (let i = 0; i < diffLines.length; i++) {
-        const dl = diffLines[i]!;
+        const dl = diffLines[i];
+        if (!dl) continue;
         const isSelected = selected.has(i);
         if (dl.type === "unchanged") {
           result.push(dl.line);
@@ -2873,7 +2901,7 @@ const PendingChangesPanel = memo(
       onApprove,
       onApproveAll,
       onReject,
-      onRejectAll
+      onRejectAll,
     ]);
 
     return (
@@ -2967,7 +2995,7 @@ const PendingChangesPanel = memo(
                         diffLines
                           .map(
                             (dl) =>
-                              `${dl.type === "added" ? "+" : dl.type === "removed" ? "-" : " "}${dl.line}`
+                              `${dl.type === "added" ? "+" : dl.type === "removed" ? "-" : " "}${dl.line}`,
                           )
                           .join("\n");
                       navigator.clipboard
@@ -2975,7 +3003,9 @@ const PendingChangesPanel = memo(
                         .then(() => {
                           new Notice("Copied diff to clipboard");
                         })
-                        .catch(() => {});
+                        .catch(() => {
+                          // Ignore clipboard write errors (e.g. permission denied).
+                        });
                     }}
                     onDragStart={(e) => {
                       e.stopPropagation();
@@ -2984,7 +3014,7 @@ const PendingChangesPanel = memo(
                         diffLines
                           .map(
                             (dl) =>
-                              `${dl.type === "added" ? "+" : dl.type === "removed" ? "-" : " "}${dl.line}`
+                              `${dl.type === "added" ? "+" : dl.type === "removed" ? "-" : " "}${dl.line}`,
                           )
                           .join("\n");
                       e.dataTransfer.setData("text/plain", text);
@@ -3046,7 +3076,7 @@ const PendingChangesPanel = memo(
                           <span
                             className="enodios-diff-text"
                             dangerouslySetInnerHTML={{
-                              __html: highlightLine(dl.line, change.path)
+                              __html: highlightLine(dl.line, change.path),
                             }}
                           />
                         </div>
@@ -3089,7 +3119,7 @@ const PendingChangesPanel = memo(
         })}
       </div>
     );
-  }
+  },
 );
 
 // --- Permission Request Components ---
@@ -3111,7 +3141,7 @@ const TOOL_KIND_ICONS: Record<string, string> = {
   read: "📖",
   search: "🔍",
   switch_mode: "🔄",
-  think: "💭"
+  think: "💭",
 };
 
 const TOOL_KIND_LABELS: Record<string, string> = {
@@ -3124,7 +3154,7 @@ const TOOL_KIND_LABELS: Record<string, string> = {
   read: "Read",
   search: "Search",
   switch_mode: "Switch Mode",
-  think: "Think"
+  think: "Think",
 };
 
 const PendingPermissionsPanel = memo(
@@ -3132,7 +3162,7 @@ const PendingPermissionsPanel = memo(
     onApprove,
     onApproveAll,
     onRejectAll,
-    permissions
+    permissions,
   }: PendingPermissionsPanelProps): ReactElement => {
     return (
       <div className="enodios-pending-permissions">
@@ -3165,8 +3195,10 @@ const PendingPermissionsPanel = memo(
           const toolCall = (
             permission.params as unknown as Record<string, unknown>
           )["toolCall"] as Record<string, unknown> | undefined;
-          const toolTitle = String(toolCall?.["title"] || "");
-          const toolKind = String(toolCall?.["kind"] || "other");
+          const rawTitle = toolCall?.["title"];
+          const rawKind = toolCall?.["kind"];
+          const toolTitle = typeof rawTitle === "string" ? rawTitle : "";
+          const toolKind = typeof rawKind === "string" ? rawKind : "other";
           const rawInput = toolCall?.["rawInput"];
           const locations = toolCall?.["locations"] as
             | Array<Record<string, unknown>>
@@ -3178,7 +3210,7 @@ const PendingPermissionsPanel = memo(
           let parsedInput: Record<string, unknown> | undefined = undefined;
           if (typeof rawInput === "string") {
             try {
-              const parsed = JSON.parse(rawInput);
+              const parsed: unknown = JSON.parse(rawInput);
               if (typeof parsed === "object" && parsed !== null) {
                 parsedInput = parsed as Record<string, unknown>;
               }
@@ -3250,21 +3282,31 @@ const PendingPermissionsPanel = memo(
           let actionDesc = "";
           if (parsedInput) {
             const path =
-              parsedInput["path"] ||
-              parsedInput["file"] ||
+              parsedInput["path"] ??
+              parsedInput["file"] ??
               parsedInput["filename"];
-            const command = parsedInput["command"] || parsedInput["cmd"];
-            const query = parsedInput["query"] || parsedInput["search"];
-            const url = parsedInput["url"] || parsedInput["uri"];
+            const command = parsedInput["command"] ?? parsedInput["cmd"];
+            const query = parsedInput["query"] ?? parsedInput["search"];
+            const url = parsedInput["url"] ?? parsedInput["uri"];
+
+            const toDisplay = (value: unknown): string => {
+              if (typeof value === "string") {
+                return value;
+              }
+              if (typeof value === "number" || typeof value === "boolean") {
+                return String(value);
+              }
+              return JSON.stringify(value) || "";
+            };
 
             if (path) {
-              actionDesc = `Target: \`${String(path)}\``;
+              actionDesc = `Target: \`${toDisplay(path)}\``;
             } else if (command) {
-              actionDesc = `Command: \`${String(command)}\``;
+              actionDesc = `Command: \`${toDisplay(command)}\``;
             } else if (query) {
-              actionDesc = `Query: "${String(query)}"`;
+              actionDesc = `Query: "${toDisplay(query)}"`;
             } else if (url) {
-              actionDesc = `URL: ${String(url)}`;
+              actionDesc = `URL: ${toDisplay(url)}`;
             } else {
               // Fallback: show all keys except patch/content if we are rendering it
               const keys = Object.keys(parsedInput)
@@ -3272,10 +3314,7 @@ const PendingPermissionsPanel = memo(
                 .slice(0, 3);
               if (keys.length > 0) {
                 actionDesc = keys
-                  .map(
-                    (k) =>
-                      `${k}: ${(JSON.stringify(parsedInput![k]) ?? "").slice(0, 50)}`
-                  )
+                  .map((k) => `${k}: ${toDisplay(parsedInput[k]).slice(0, 50)}`)
                   .join(", ");
               }
             }
@@ -3286,8 +3325,16 @@ const PendingPermissionsPanel = memo(
           // Show affected locations if available
           const locationPaths =
             locations
-              ?.map((l) => String(l["path"] || l["uri"] || ""))
-              .filter(Boolean) || [];
+              ?.map((l) => {
+                const p = l["path"];
+                const u = l["uri"];
+                return typeof p === "string"
+                  ? p
+                  : typeof u === "string"
+                    ? u
+                    : "";
+              })
+              .filter(Boolean) ?? [];
 
           return (
             <div className="enodios-pending-permission" key={permission.id}>
@@ -3351,14 +3398,7 @@ const PendingPermissionsPanel = memo(
                     onClick={() => {
                       onApprove(permission.id, option.optionId);
                     }}
-                    title={
-                      option.kind === "allow_always" ||
-                      option.kind === "allow_once" ||
-                      option.kind === "reject_once" ||
-                      option.kind === "reject_always"
-                        ? option.name
-                        : option.name
-                    }
+                    title={option.name}
                     type="button"
                   >
                     {option.name}
@@ -3370,7 +3410,7 @@ const PendingPermissionsPanel = memo(
         })}
       </div>
     );
-  }
+  },
 );
 
 // --- Token Usage Footer ---
@@ -3385,7 +3425,7 @@ const TokenUsageFooter = memo(
       estimatedCost: 0,
       inputTokens: 0,
       outputTokens: 0,
-      totalTokens: 0
+      totalTokens: 0,
     });
     const [isVisible, setIsVisible] = useState(false);
 
@@ -3398,12 +3438,12 @@ const TokenUsageFooter = memo(
 
       window.addEventListener(
         "enodios-usage-update",
-        handleUsageUpdate as EventListener
+        handleUsageUpdate as EventListener,
       );
       return () => {
         window.removeEventListener(
           "enodios-usage-update",
-          handleUsageUpdate as EventListener
+          handleUsageUpdate as EventListener,
         );
       };
     }, []);
@@ -3461,7 +3501,7 @@ const TokenUsageFooter = memo(
         </span>
       </div>
     );
-  }
+  },
 );
 
 // --- Onboarding Panel ---
@@ -3480,7 +3520,7 @@ const OnboardingPanel = memo(
     hasSeenOnboarding,
     onDismiss,
     templates,
-    onLoadTemplate
+    onLoadTemplate,
   }: OnboardingPanelProps): ReactElement => {
     const [isVisible, setIsVisible] = useState(!hasSeenOnboarding);
 
@@ -3511,7 +3551,7 @@ const OnboardingPanel = memo(
             padding: "30px 20px",
             alignItems: "center",
             height: "100%",
-            justifyContent: "center"
+            justifyContent: "center",
           }}
         >
           <div
@@ -3519,7 +3559,7 @@ const OnboardingPanel = memo(
             style={{
               fontSize: "1.2em",
               fontWeight: "bold",
-              color: "var(--text-muted)"
+              color: "var(--text-muted)",
             }}
           >
             Start a conversation with {agentName}
@@ -3535,7 +3575,7 @@ const OnboardingPanel = memo(
                   textAlign: "center",
                   textTransform: "uppercase",
                   letterSpacing: "0.05em",
-                  fontWeight: "600"
+                  fontWeight: "600",
                 }}
               >
                 Conversation Starters
@@ -3547,14 +3587,16 @@ const OnboardingPanel = memo(
                   gap: "10px",
                   justifyContent: "center",
                   alignItems: "stretch",
-                  width: "100%"
+                  width: "100%",
                 }}
               >
                 {templates.map((tpl) => (
                   <button
                     className="btn"
                     key={tpl.id}
-                    onClick={() => onLoadTemplate(tpl.prompt)}
+                    onClick={() => {
+                      onLoadTemplate(tpl.prompt);
+                    }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = "var(--text-accent)";
                       e.currentTarget.style.backgroundColor =
@@ -3581,7 +3623,7 @@ const OnboardingPanel = memo(
                       height: "100%",
                       width: "100%",
                       margin: 0,
-                      boxSizing: "border-box"
+                      boxSizing: "border-box",
                     }}
                     title={tpl.description}
                     type="button"
@@ -3592,7 +3634,7 @@ const OnboardingPanel = memo(
                         alignItems: "center",
                         justifyContent: "center",
                         color: "var(--text-accent)",
-                        marginBottom: "4px"
+                        marginBottom: "4px",
                       }}
                     >
                       <StarterIcon icon={tpl.icon} id={tpl.id} />
@@ -3601,7 +3643,7 @@ const OnboardingPanel = memo(
                       style={{
                         fontSize: "0.85em",
                         fontWeight: "600",
-                        color: "var(--text-normal)"
+                        color: "var(--text-normal)",
                       }}
                     >
                       {tpl.name}
@@ -3680,5 +3722,5 @@ const OnboardingPanel = memo(
         </button>
       </div>
     );
-  }
+  },
 );

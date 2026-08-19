@@ -11,6 +11,56 @@ export interface AnnotationData {
 }
 
 /**
+ * Minimal typed surface for the PDF.js API used by this manager.
+ * Obsidian exposes `window.pdfjsLib` at runtime; we model only the members
+ * we actually consume so the rest stays `unknown` and safe.
+ */
+interface PdfJsLib {
+  getDocument(params: { data: ArrayBuffer | Uint8Array }): PdfLoadingTask;
+}
+
+interface PdfLoadingTask {
+  promise: Promise<PdfDocument>;
+}
+
+interface PdfDocument {
+  numPages: number;
+  getPage(pageNumber: number): Promise<PdfPage>;
+  getMetadata(): Promise<PdfMetadata>;
+}
+
+interface PdfPage {
+  getAnnotations(): Promise<unknown[]>;
+  getTextContent(): Promise<PdfTextContent>;
+}
+
+interface PdfTextContent {
+  items: PdfTextItem[];
+}
+
+interface PdfTextItem {
+  str: string;
+  width?: number | undefined;
+  transform?: number[] | undefined;
+}
+
+interface PdfMetadata {
+  info?: Record<string, unknown> | undefined;
+}
+
+interface PdfAnnotation {
+  subtype?: unknown;
+  id?: unknown;
+  contents?: unknown;
+  color?: unknown;
+  rect?: unknown;
+}
+
+interface PdfJsGlobal {
+  pdfjsLib?: PdfJsLib | undefined;
+}
+
+/**
  * Manages PDF annotation extraction using Obsidian's built-in PDF.js.
  */
 export class PDFAnnotationManager {
@@ -21,6 +71,22 @@ export class PDFAnnotationManager {
   }
 
   /**
+   * Resolve the built-in PDF.js library exposed by Obsidian.
+   */
+  private getPdfJs(): PdfJsLib {
+    const globalObj = (typeof window !== 'undefined'
+      ? window
+      : globalThis) as unknown as PdfJsGlobal;
+    const pdfjs = globalObj.pdfjsLib;
+    if (!pdfjs) {
+      throw new Error(
+        'Obsidian PDF.js library is not available in this environment.'
+      );
+    }
+    return pdfjs;
+  }
+
+  /**
    * Extract annotations from a PDF file in the vault.
    */
   public async extractAnnotations(file: TFile): Promise<AnnotationData[]> {
@@ -28,13 +94,7 @@ export class PDFAnnotationManager {
       throw new Error('File is not a PDF');
     }
 
-    // Access the built-in PDF.js library in Obsidian
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfjs: any = typeof window !== 'undefined' ? (window as any).pdfjsLib : (global as any).pdfjsLib;
-    if (!pdfjs) {
-      throw new Error('Obsidian PDF.js library is not available in this environment.');
-    }
-
+    const pdfjs = this.getPdfJs();
     const binaryData = await this.plugin.app.vault.readBinary(file);
     const loadingTask = pdfjs.getDocument({ data: binaryData });
     const pdfDoc = await loadingTask.promise;
@@ -44,70 +104,76 @@ export class PDFAnnotationManager {
       try {
         const page = await pdfDoc.getPage(pNum);
         const rawAnnots = await page.getAnnotations();
-        if (!rawAnnots || rawAnnots.length === 0) continue;
+        if (rawAnnots.length === 0) continue;
 
         // Retrieve text content to map coordinates for highlights/underlines
         const textContent = await page.getTextContent();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const textItems = textContent.items.map((item: any) => {
-          const transform = item.transform as number[]; // [scaleX, skewX, skewY, scaleY, x, y]
-          const x = transform[4]!;
-          const y = transform[5]!;
-          const fontSize = Math.abs(transform[3]!) || 10;
+        const textItems = textContent.items.map((item) => {
+          const transform = item.transform ?? [];
+          const x = transform[4] ?? 0;
+          const y = transform[5] ?? 0;
+          const fontSize = Math.abs(transform[3] ?? 0) || 10;
           return {
             x,
             y,
-            width: (item.width as number) || ((item.str as string).length * fontSize * 0.6),
+            width: item.width ?? item.str.length * fontSize * 0.6,
             height: fontSize,
-            str: item.str as string
+            str: item.str
           };
         });
 
-        for (const annot of rawAnnots) {
+        for (const rawAnnot of rawAnnots) {
+          const annot = rawAnnot as PdfAnnotation;
           const type = annot.subtype; // e.g. 'Highlight', 'Underline', 'StrikeOut', 'Text'
-          if (!['Highlight', 'StrikeOut', 'Text', 'Underline'].includes(type)) {
+          if (
+            typeof type !== 'string'
+            || !['Highlight', 'StrikeOut', 'Text', 'Underline'].includes(type)
+          ) {
             continue;
           }
 
-          const id = annot.id || `annot-${pNum}-${Math.random().toString(36).slice(2, 9)}`;
-          const comment = annot.contents ? String(annot.contents).trim() : undefined;
+          const id = typeof annot.id === 'string' && annot.id
+            ? annot.id
+            : `annot-${String(pNum)}-${Math.random().toString(36).slice(2, 9)}`;
+          const comment = typeof annot.contents === 'string'
+            ? annot.contents.trim()
+            : undefined;
           const color = this.formatColor(annot.color);
 
           let text = '';
-          if (type !== 'Text' && annot.rect) {
+          if (type !== 'Text' && Array.isArray(annot.rect)) {
             // Rect is [minX, minY, maxX, maxY]
             const rect = annot.rect as number[];
             const tolerance = 2.0;
 
             // Find overlapping text items
-            const overlapping = textItems.filter((item: { x: number; y: number; width: number; height: number; str: string }) => {
+            const overlapping = textItems.filter((item) => {
               const itemMinX = item.x;
               const itemMaxX = item.x + item.width;
               const itemMinY = item.y;
               const itemMaxY = item.y + item.height;
 
               return (
-                itemMinX < rect[2]! + tolerance
-                && itemMaxX > rect[0]! - tolerance
-                && itemMinY < rect[3]! + tolerance
-                && itemMaxY > rect[1]! - tolerance
+                itemMinX < (rect[2] ?? 0) + tolerance
+                && itemMaxX > (rect[0] ?? 0) - tolerance
+                && itemMinY < (rect[3] ?? 0) + tolerance
+                && itemMaxY > (rect[1] ?? 0) - tolerance
               );
             });
 
             // Sort text items: vertical position descending, then horizontal ascending
-            overlapping.sort(
-              (
-                a: { x: number; y: number; width: number; height: number; str: string },
-                b: { x: number; y: number; width: number; height: number; str: string }
-              ) => {
-                if (Math.abs(a.y - b.y) > tolerance) {
-                  return b.y - a.y; // top to bottom
-                }
-                return a.x - b.x; // left to right
+            overlapping.sort((a, b) => {
+              if (Math.abs(a.y - b.y) > tolerance) {
+                return b.y - a.y; // top to bottom
               }
-            );
+              return a.x - b.x; // left to right
+            });
 
-            text = overlapping.map((it: { x: number; y: number; width: number; height: number; str: string }) => it.str).join(' ').replace(/\s+/g, ' ').trim();
+            text = overlapping
+              .map((it) => it.str)
+              .join(' ')
+              .replace(/\s+/g, ' ')
+              .trim();
           }
 
           annotations.push({
@@ -120,7 +186,10 @@ export class PDFAnnotationManager {
           });
         }
       } catch (err) {
-        this.plugin.debug.error(`Failed to parse annotations on page ${pNum} of ${file.path}`, err);
+        this.plugin.debug.error(
+          `Failed to parse annotations on page ${String(pNum)} of ${file.path}`,
+          err
+        );
       }
     }
 
@@ -130,7 +199,10 @@ export class PDFAnnotationManager {
   /**
    * Formats extracted annotations into a markdown block.
    */
-  public formatAnnotationsMarkdown(annotations: AnnotationData[], filename: string): string {
+  public formatAnnotationsMarkdown(
+    annotations: AnnotationData[],
+    filename: string
+  ): string {
     if (annotations.length === 0) {
       return `No annotations found in **${filename}**.`;
     }
@@ -141,7 +213,7 @@ export class PDFAnnotationManager {
     for (const annot of annotations) {
       if (annot.page !== currentPage) {
         currentPage = annot.page;
-        markdown += `#### Page ${currentPage}\n\n`;
+        markdown += `#### Page ${String(currentPage)}\n\n`;
       }
 
       const typeLabel = annot.type.toUpperCase();
@@ -192,28 +264,28 @@ export class PDFAnnotationManager {
   /**
    * Extract plain text from a specific page of a PDF file.
    */
-  public async extractPageText(file: TFile, pageNumber: number): Promise<string> {
+  public async extractPageText(
+    file: TFile,
+    pageNumber: number
+  ): Promise<string> {
     if (file.extension !== 'pdf') {
       throw new Error('File is not a PDF');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfjs: any = typeof window !== 'undefined' ? (window as any).pdfjsLib : (global as any).pdfjsLib;
-    if (!pdfjs) {
-      throw new Error('Obsidian PDF.js library is not available in this environment.');
-    }
-
+    const pdfjs = this.getPdfJs();
     const arrayBuffer = await this.plugin.app.vault.readBinary(file);
-    const pdf = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) })
+      .promise;
 
     if (pageNumber < 1 || pageNumber > pdf.numPages) {
-      throw new Error(`Page number ${pageNumber} is out of bounds (1-${pdf.numPages})`);
+      throw new Error(
+        `Page number ${String(pageNumber)} is out of bounds (1-${String(pdf.numPages)})`
+      );
     }
 
     const page = await pdf.getPage(pageNumber);
     const textContent = await page.getTextContent();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const textItems = textContent.items.map((item: any) => item.str as string);
+    const textItems = textContent.items.map((item) => item.str);
     return textItems.join(' ').replace(/\s+/g, ' ').trim();
   }
 
@@ -225,22 +297,32 @@ export class PDFAnnotationManager {
       throw new Error('File is not a PDF');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfjs: any = typeof window !== 'undefined' ? (window as any).pdfjsLib : (global as any).pdfjsLib;
-    if (!pdfjs) {
-      throw new Error('Obsidian PDF.js library is not available in this environment.');
-    }
-
+    const pdfjs = this.getPdfJs();
     const arrayBuffer = await this.plugin.app.vault.readBinary(file);
-    const pdf = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) })
+      .promise;
     const meta = await pdf.getMetadata();
 
     const info: Record<string, string> = {};
-    if (meta?.info) {
-      const keys = ['Title', 'Author', 'Subject', 'Keywords', 'Creator', 'Producer', 'CreationDate', 'ModDate'];
+    if (meta.info) {
+      const keys = [
+        'Title',
+        'Author',
+        'Subject',
+        'Keywords',
+        'Creator',
+        'Producer',
+        'CreationDate',
+        'ModDate'
+      ];
       keys.forEach((key) => {
-        if (meta.info[key]) {
-          info[key] = String(meta.info[key]);
+        const value = meta.info?.[key];
+        if (
+          typeof value === 'string'
+          || typeof value === 'number'
+          || typeof value === 'boolean'
+        ) {
+          info[key] = String(value);
         }
       });
     }

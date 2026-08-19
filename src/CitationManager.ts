@@ -17,6 +17,34 @@ export interface CitationItem {
   url?: string | undefined;
 }
 
+interface CslAuthor {
+  family?: string | undefined;
+  given?: string | undefined;
+  literal?: string | undefined;
+  name?: string | undefined;
+}
+
+interface CslJsonItem {
+  id?: unknown;
+  key?: unknown;
+  type?: unknown;
+  title?: unknown;
+  author?: CslAuthor[] | string | undefined;
+  issued?:
+    | {
+      'date-parts'?: unknown[][] | undefined;
+      raw?: unknown;
+    }
+    | undefined;
+  'container-title'?: unknown;
+  DOI?: unknown;
+  issue?: unknown;
+  number?: unknown;
+  page?: unknown;
+  publisher?: unknown;
+  URL?: unknown;
+}
+
 /**
  * Manages citation loading, searching, and formatting (APA, MLA, Chicago, IEEE).
  */
@@ -47,7 +75,10 @@ export class CitationManager {
     }
 
     // Cache hit check
-    if (this.lastLoadedPath === file.path && this.lastLoadedMtime === file.stat.mtime) {
+    if (
+      this.lastLoadedPath === file.path
+      && this.lastLoadedMtime === file.stat.mtime
+    ) {
       return this.bibliographyCache;
     }
 
@@ -60,9 +91,14 @@ export class CitationManager {
       }
       this.lastLoadedPath = file.path;
       this.lastLoadedMtime = file.stat.mtime;
-      this.plugin.debug.info(`Loaded ${this.bibliographyCache.length} citations from ${bibPath}`);
+      this.plugin.debug.info(
+        `Loaded ${String(this.bibliographyCache.length)} citations from ${bibPath}`
+      );
     } catch (err) {
-      this.plugin.debug.error(`Failed to load bibliography from ${bibPath}`, err);
+      this.plugin.debug.error(
+        `Failed to load bibliography from ${bibPath}`,
+        err
+      );
       this.bibliographyCache = [];
     }
 
@@ -76,11 +112,12 @@ export class CitationManager {
     const term = query.toLowerCase().trim();
     if (!term) return this.bibliographyCache.slice(0, 10);
 
-    return this.bibliographyCache.filter((item) =>
-      item.key.toLowerCase().includes(term)
-      || item.title.toLowerCase().includes(term)
-      || item.author.toLowerCase().includes(term)
-      || item.year.includes(term)
+    return this.bibliographyCache.filter(
+      (item) =>
+        item.key.toLowerCase().includes(term)
+        || item.title.toLowerCase().includes(term)
+        || item.author.toLowerCase().includes(term)
+        || item.year.includes(term)
     );
   }
 
@@ -102,7 +139,7 @@ export class CitationManager {
         return `(${authorStr} ${year})`;
       }
       case 'ieee':
-        return `[${index}]`;
+        return `[${String(index)}]`;
       case 'mla': {
         const authorStr = this.formatMlaAuthors(authors);
         return `(${authorStr})`;
@@ -149,13 +186,16 @@ export class CitationManager {
   /**
    * Scans document text for `[@citation-key]` references, formats them and appends a bibliography.
    */
-  public generateBibliographyForContent(content: string, style: string): string {
+  public generateBibliographyForContent(
+    content: string,
+    style: string
+  ): string {
     const citationRegex = /\[\s*@([^\]]+)\s*\]/g;
     const keys: string[] = [];
     let match;
 
     while ((match = citationRegex.exec(content)) !== null) {
-      const rawKey = match[1]!;
+      const rawKey = match[1] ?? '';
       // Split by semicolon if multiple citations like [@key1; @key2]
       const parts = rawKey.split(';').map((p) => p.replace(/^\s*@/, '').trim());
       keys.push(...parts);
@@ -178,8 +218,8 @@ export class CitationManager {
     let match;
 
     while ((match = entryRegex.exec(content)) !== null) {
-      const type = match[1]!.toLowerCase();
-      const key = match[2]!;
+      const type = (match[1] ?? '').toLowerCase();
+      const key = match[2] ?? '';
 
       let braceCount = 1;
       let pos = entryRegex.lastIndex;
@@ -193,7 +233,7 @@ export class CitationManager {
           braceCount--;
         }
         if (braceCount > 0) {
-          entryText += char!;
+          entryText += char ?? '';
         }
         pos++;
       }
@@ -204,36 +244,46 @@ export class CitationManager {
         const eqIdx = entryText.indexOf('=', fieldPos);
         if (eqIdx === -1) break;
 
-        const fieldName = entryText.substring(fieldPos, eqIdx).trim().toLowerCase();
+        const fieldName = entryText
+          .substring(fieldPos, eqIdx)
+          .trim()
+          .toLowerCase();
         let valStart = eqIdx + 1;
-        while (valStart < entryText.length && /\s/.test(entryText[valStart]!)) {
+        while (
+          valStart < entryText.length
+          && /\s/.test(entryText[valStart] ?? '')
+        ) {
           valStart++;
         }
 
         let val = '';
         let valEnd: number;
-        const valStartChar = entryText[valStart]!;
+        const valStartChar = entryText[valStart];
         if (valStartChar === '{') {
           let bCount = 1;
           valEnd = valStart + 1;
           while (valEnd < entryText.length && bCount > 0) {
-            const c = entryText[valEnd]!;
+            const c = entryText[valEnd];
             if (c === '{') bCount++;
             else if (c === '}') bCount--;
-            if (bCount > 0) val += c;
+            if (bCount > 0) val += c ?? '';
             valEnd++;
           }
         } else if (valStartChar === '"') {
           valEnd = valStart + 1;
           while (valEnd < entryText.length && entryText[valEnd] !== '"') {
-            val += entryText[valEnd]!;
+            val += entryText[valEnd] ?? '';
             valEnd++;
           }
           valEnd++;
         } else {
           valEnd = valStart;
-          while (valEnd < entryText.length && entryText[valEnd] !== ',' && entryText[valEnd] !== '\n') {
-            val += entryText[valEnd]!;
+          while (
+            valEnd < entryText.length
+            && entryText[valEnd] !== ','
+            && entryText[valEnd] !== '\n'
+          ) {
+            val += entryText[valEnd] ?? '';
             valEnd++;
           }
         }
@@ -250,21 +300,39 @@ export class CitationManager {
         }
       }
 
-      const author = fields['author'] ? this.cleanBibTeXString(fields['author']) : '';
-      const title = fields['title'] ? this.cleanBibTeXString(fields['title']) : '';
+      const author = fields['author']
+        ? this.cleanBibTeXString(fields['author'])
+        : '';
+      const title = fields['title']
+        ? this.cleanBibTeXString(fields['title'])
+        : '';
       const year = fields['year'] ? this.cleanBibTeXString(fields['year']) : '';
       const journal = fields['journal']
         ? this.cleanBibTeXString(fields['journal'])
         : fields['journaltitle']
         ? this.cleanBibTeXString(fields['journaltitle'])
         : undefined;
-      const publisher = fields['publisher'] ? this.cleanBibTeXString(fields['publisher']) : undefined;
-      const booktitle = fields['booktitle'] ? this.cleanBibTeXString(fields['booktitle']) : undefined;
-      const volume = fields['volume'] ? this.cleanBibTeXString(fields['volume']) : undefined;
-      const number = fields['number'] ? this.cleanBibTeXString(fields['number']) : undefined;
-      const pages = fields['pages'] ? this.cleanBibTeXString(fields['pages']) : undefined;
-      const doi = fields['doi'] ? this.cleanBibTeXString(fields['doi']) : undefined;
-      const url = fields['url'] ? this.cleanBibTeXString(fields['url']) : undefined;
+      const publisher = fields['publisher']
+        ? this.cleanBibTeXString(fields['publisher'])
+        : undefined;
+      const booktitle = fields['booktitle']
+        ? this.cleanBibTeXString(fields['booktitle'])
+        : undefined;
+      const volume = fields['volume']
+        ? this.cleanBibTeXString(fields['volume'])
+        : undefined;
+      const number = fields['number']
+        ? this.cleanBibTeXString(fields['number'])
+        : undefined;
+      const pages = fields['pages']
+        ? this.cleanBibTeXString(fields['pages'])
+        : undefined;
+      const doi = fields['doi']
+        ? this.cleanBibTeXString(fields['doi'])
+        : undefined;
+      const url = fields['url']
+        ? this.cleanBibTeXString(fields['url'])
+        : undefined;
 
       items.push({
         author,
@@ -290,11 +358,11 @@ export class CitationManager {
 
   private cleanBibTeXString(str: string): string {
     let val = str;
-    val = val.replace(/\\"[{}a-zA-Z]/g, (m) => m[m.length - 1]!);
-    val = val.replace(/\\'[{}a-zA-Z]/g, (m) => m[m.length - 1]!);
-    val = val.replace(/\\`[{}a-zA-Z]/g, (m) => m[m.length - 1]!);
-    val = val.replace(/\\^[{}a-zA-Z]/g, (m) => m[m.length - 1]!);
-    val = val.replace(/\\~[{}a-zA-Z]/g, (m) => m[m.length - 1]!);
+    val = val.replace(/\\"[{}a-zA-Z]/g, (m) => m[m.length - 1] ?? '');
+    val = val.replace(/\\'[{}a-zA-Z]/g, (m) => m[m.length - 1] ?? '');
+    val = val.replace(/\\`[{}a-zA-Z]/g, (m) => m[m.length - 1] ?? '');
+    val = val.replace(/\\^[{}a-zA-Z]/g, (m) => m[m.length - 1] ?? '');
+    val = val.replace(/\\~[{}a-zA-Z]/g, (m) => m[m.length - 1] ?? '');
     val = val.replace(/\\=/g, '');
     val = val.replace(/\\./g, '');
     val = val.replace(/[\{\}]/g, '');
@@ -306,22 +374,21 @@ export class CitationManager {
    */
   private parseCSLJson(content: string): CitationItem[] {
     try {
-      const data = JSON.parse(content);
+      const data: unknown = JSON.parse(content);
       if (!Array.isArray(data)) return [];
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return data.map((item: any) => {
-        const key = String(item.id || item.key || '');
-        const type = String(item.type || '');
-        const title = String(item.title || '');
+      return data.map((rawItem) => {
+        const item = rawItem as CslJsonItem;
+        const key = toSafeString(item.id ?? item.key);
+        const type = toSafeString(item.type);
+        const title = toSafeString(item.title);
 
         let author = '';
         if (Array.isArray(item.author)) {
           author = item.author
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .map((a: any) => {
+            .map((a) => {
               if (a.family && a.given) return `${a.family}, ${a.given}`;
-              return a.literal || a.family || a.name || '';
+              return a.literal ?? a.family ?? a.name ?? '';
             })
             .filter(Boolean)
             .join(' and ');
@@ -330,8 +397,12 @@ export class CitationManager {
         }
 
         let year = '';
-        if (item.issued && Array.isArray(item.issued['date-parts']) && item.issued['date-parts'][0]) {
-          year = String(item.issued['date-parts'][0][0] || '');
+        if (
+          item.issued
+          && Array.isArray(item.issued['date-parts'])
+          && item.issued['date-parts'][0]
+        ) {
+          year = toSafeString(item.issued['date-parts'][0][0]);
         } else if (item.issued && typeof item.issued.raw === 'string') {
           const m = /\b\d{4}\b/.exec(item.issued.raw);
           if (m) year = m[0];
@@ -339,16 +410,22 @@ export class CitationManager {
 
         return {
           author,
-          booktitle: item['container-title'] && type !== 'article-journal' ? String(item['container-title']) : undefined,
-          doi: item.DOI ? String(item.DOI) : undefined,
-          journal: item['container-title'] && type === 'article-journal' ? String(item['container-title']) : undefined,
+          booktitle: item['container-title'] && type !== 'article-journal'
+            ? toSafeString(item['container-title'])
+            : undefined,
+          doi: item.DOI ? toSafeString(item.DOI) : undefined,
+          journal: item['container-title'] && type === 'article-journal'
+            ? toSafeString(item['container-title'])
+            : undefined,
           key,
-          number: item.issue || item.number ? String(item.issue || item.number) : undefined,
-          pages: item.page ? String(item.page) : undefined,
-          publisher: item.publisher ? String(item.publisher) : undefined,
+          number: (item.issue ?? item.number)
+            ? toSafeString(item.issue ?? item.number)
+            : undefined,
+          pages: item.page ? toSafeString(item.page) : undefined,
+          publisher: item.publisher ? toSafeString(item.publisher) : undefined,
           title,
           type,
-          url: item.URL ? String(item.URL) : undefined,
+          url: item.URL ? toSafeString(item.URL) : undefined,
           year
         };
       });
@@ -360,7 +437,9 @@ export class CitationManager {
   /**
    * Parse authors string (e.g. "Smith, John and Doe, Jane") into array of objects.
    */
-  private parseAuthorNames(authorStr: string): { first: string; last: string }[] {
+  private parseAuthorNames(
+    authorStr: string
+  ): { first: string; last: string }[] {
     if (!authorStr) return [];
     return authorStr.split(/\s+and\s+/i).map((part) => {
       const commaIdx = part.indexOf(',');
@@ -371,7 +450,7 @@ export class CitationManager {
         };
       }
       const parts = part.trim().split(/\s+/);
-      const last = parts.pop() || '';
+      const last = parts.pop() ?? '';
       const first = parts.join(' ');
       return { first, last };
     });
@@ -379,26 +458,36 @@ export class CitationManager {
 
   private formatApaAuthors(authors: { first: string; last: string }[]): string {
     if (authors.length === 0) return 'n.a.';
-    if (authors.length === 1) return authors[0]!.last;
-    if (authors.length === 2) return `${authors[0]!.last} & ${authors[1]!.last}`;
-    return `${authors[0]!.last} et al.`;
+    if (authors.length === 1) return authors[0]?.last ?? '';
+    if (authors.length === 2) {
+      return `${authors[0]?.last ?? ''} & ${authors[1]?.last ?? ''}`;
+    }
+    return `${authors[0]?.last ?? ''} et al.`;
   }
 
   private formatMlaAuthors(authors: { first: string; last: string }[]): string {
     if (authors.length === 0) return 'n.a.';
-    if (authors.length === 1) return authors[0]!.last;
-    if (authors.length === 2) return `${authors[0]!.last} and ${authors[1]!.last}`;
-    return `${authors[0]!.last} et al.`;
+    if (authors.length === 1) return authors[0]?.last ?? '';
+    if (authors.length === 2) {
+      return `${authors[0]?.last ?? ''} and ${authors[1]?.last ?? ''}`;
+    }
+    return `${authors[0]?.last ?? ''} et al.`;
   }
 
-  private formatChicagoAuthors(authors: { first: string; last: string }[]): string {
+  private formatChicagoAuthors(
+    authors: { first: string; last: string }[]
+  ): string {
     return this.formatMlaAuthors(authors); // Chicago author-date is identical to MLA for short citations
   }
 
   /**
    * Formats a single bibliography item.
    */
-  private formatBibliographyItem(item: CitationItem, style: string, index: number): string {
+  private formatBibliographyItem(
+    item: CitationItem,
+    style: string,
+    index: number
+  ): string {
     const authors = this.parseAuthorNames(item.author);
     const year = item.year || 'n.d.';
     const title = item.title;
@@ -416,21 +505,30 @@ export class CitationManager {
       if (authors.length === 0) return 'Unknown Author';
       if (styleName === 'apa') {
         const formatted = authors.map((a) => {
-          const init = a.first ? a.first.split(/\s+/).map((n) => (n[0] || '') + '.').join(' ') : '';
+          const init = a.first
+            ? a.first
+              .split(/\s+/)
+              .map((n) => (n[0] ?? '') + '.')
+              .join(' ')
+            : '';
           return `${a.last}, ${init}`;
         });
-        if (formatted.length === 1) return formatted[0]!;
-        if (formatted.length === 2) return `${formatted[0]!}, & ${formatted[1]!}`;
-        return `${formatted.slice(0, -1).join(', ')}, & ${formatted[formatted.length - 1]!}`;
+        if (formatted.length === 1) return formatted[0] ?? '';
+        if (formatted.length === 2) {
+          return `${formatted[0] ?? ''}, & ${formatted[1] ?? ''}`;
+        }
+        return `${formatted.slice(0, -1).join(', ')}, & ${formatted[formatted.length - 1] ?? ''}`;
       }
       // MLA / Chicago / IEEE style full authors
       const formatted = authors.map((a, i) => {
         if (i === 0) return `${a.last}, ${a.first}`;
         return `${a.first} ${a.last}`;
       });
-      if (formatted.length === 1) return formatted[0]!;
-      if (formatted.length === 2) return `${formatted[0]!} and ${formatted[1]!}`;
-      return `${formatted.slice(0, -1).join(', ')}, and ${formatted[formatted.length - 1]!}`;
+      if (formatted.length === 1) return formatted[0] ?? '';
+      if (formatted.length === 2) {
+        return `${formatted[0] ?? ''} and ${formatted[1] ?? ''}`;
+      }
+      return `${formatted.slice(0, -1).join(', ')}, and ${formatted[formatted.length - 1] ?? ''}`;
     };
 
     switch (style.toLowerCase()) {
@@ -460,18 +558,26 @@ export class CitationManager {
       case 'ieee': {
         // IEEE bibliography item format: [1] F. M. Last, "Title," Journal, vol. X, no. Y, pp. Z, Year.
         const formattedIEEE = authors.map((a) => {
-          const init = a.first ? a.first.split(/\s+/).map((n) => (n[0] || '') + '.').join(' ') : '';
+          const init = a.first
+            ? a.first
+              .split(/\s+/)
+              .map((n) => (n[0] ?? '') + '.')
+              .join(' ')
+            : '';
           return `${init} ${a.last}`;
         });
         let ieeeAuthors = '';
-        if (formattedIEEE.length === 1) ieeeAuthors = formattedIEEE[0]!;
-        else if (formattedIEEE.length === 2) ieeeAuthors = `${formattedIEEE[0]!} and ${formattedIEEE[1]!}`;
-        else if (formattedIEEE.length > 2) ieeeAuthors = `${formattedIEEE.slice(0, -1).join(', ')}, and ${formattedIEEE[formattedIEEE.length - 1]!}`;
-        let main = `[${index}] ${ieeeAuthors || 'Unknown Author'}, "${title}," `;
+        if (formattedIEEE.length === 1) ieeeAuthors = formattedIEEE[0] ?? '';
+        else if (formattedIEEE.length === 2) {
+          ieeeAuthors = `${formattedIEEE[0] ?? ''} and ${formattedIEEE[1] ?? ''}`;
+        } else if (formattedIEEE.length > 2) {
+          ieeeAuthors = `${formattedIEEE.slice(0, -1).join(', ')}, and ${formattedIEEE[formattedIEEE.length - 1] ?? ''}`;
+        }
+        let main = `[${String(index)}] ${ieeeAuthors || 'Unknown Author'}, "${title}," `;
         if (journal) main += `*${journal}*, `;
         else if (booktitle) main += `in *${booktitle}*, `;
-        if (volume) main += `vol. ${String(volume)}, `;
-        if (number) main += `no. ${String(number)}, `;
+        if (volume) main += `vol. ${volume}, `;
+        if (number) main += `no. ${number}, `;
         if (pages) main += `pp. ${pages}, `;
         main += `${year}.`;
         if (doi) main += ` DOI: ${doi}.`;
@@ -526,4 +632,16 @@ export class CitationManager {
       }
     }
   }
+}
+
+/**
+ * Safely stringify an unknown value, returning '' for null/undefined/objects.
+ */
+function toSafeString(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return '';
 }

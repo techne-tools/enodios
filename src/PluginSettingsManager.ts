@@ -27,15 +27,63 @@ export class PluginSettingsManager extends PluginSettingsManagerBase<PluginTypes
     return new PluginSettings();
   }
 
-  protected override async onLoadRecord(record: Record<string, unknown>): Promise<void> {
+  protected override async onLoadRecord(
+    record: Record<string, unknown>
+  ): Promise<void> {
     await super.onLoadRecord(record);
   }
 
-  protected override async onSavingRecord(record: Record<string, unknown>): Promise<void> {
+  protected override async onSavingRecord(
+    record: Record<string, unknown>
+  ): Promise<void> {
     await super.onSavingRecord(record);
   }
 
   protected override registerValidators(): void {
     super.registerValidators();
+
+    // Validate enum settings so a manually-edited data.json can't corrupt the
+    // save-folder layout or citation behavior.
+    this.registerValidator('connectionMode', (value) => {
+      const mode: string = value;
+      if (mode !== 'acp' && mode !== 'api') {
+        return 'connectionMode must be "acp" or "api"';
+      }
+      return undefined;
+    });
+
+    this.registerValidator('conversationOrganization', (value) => {
+      const org: string = value;
+      if (org !== 'flat' && org !== 'by-date' && org !== 'by-project') {
+        return 'conversationOrganization must be "flat", "by-date", or "by-project"';
+      }
+      return undefined;
+    });
+
+    this.registerValidator('citationStyle', (value) => {
+      const style: string = value;
+      if (
+        style !== 'apa'
+        && style !== 'mla'
+        && style !== 'chicago'
+        && style !== 'ieee'
+      ) {
+        return 'citationStyle must be "apa", "mla", "chicago", or "ieee"';
+      }
+      return undefined;
+    });
+
+    // Validate the API URL is a well-formed http(s) URL.
+    this.registerValidator('hermesApiUrl', (value) => {
+      try {
+        const url = new URL(value);
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+          return 'hermesApiUrl must be an http(s) URL';
+        }
+      } catch {
+        return 'hermesApiUrl must be a valid URL';
+      }
+      return undefined;
+    });
   }
 }

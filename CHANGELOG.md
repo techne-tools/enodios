@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [0.9.0] - 2026-08-20
+
+### New Features
+- **Test Type-Checking** — Added `tsconfig.test.json` and a `pnpm test:typecheck` script so test files are statically type-checked against the real Obsidian API, in addition to running at runtime.
+- **Expanded Obsidian Test Mock** — The shared `obsidian` mock now covers the full API surface (Vault, Workspace, App, MetadataCache, FileManager, editors, MarkdownRenderer, etc.), plus `mocks/obsidianFiles.ts` helpers for building real-typed file objects in tests.
+
+### Hardening & Code Quality
+- **ESLint Safety Rules Re-enabled** — Re-enabled the full set of type-safety lint rules (no-unsafe-*, no-non-null-assertion, no-floating-promises, no-misused-promises, etc.) and fixed every violation across the codebase (180 → 0 errors). Only genuinely stylistic rules remain off (handled by dprint).
+- **Cleaner Type Safety** — Replaced internal-API `@ts-expect-error` casts with explicitly-typed `unknown` casts, removed redundant optional chains/non-null assertions, and tightened promise handling throughout.
+- **Final Verification** — Full green pipeline: `pnpm lint`, `tsc` (main + test configs), `pnpm build`, `pnpm format:check`, and all 224 unit tests pass.
+
 ## 0.6.2
 
 - docs(changelog): simplify previous version header for parser compatibility

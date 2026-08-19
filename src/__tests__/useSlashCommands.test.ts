@@ -13,7 +13,7 @@ vi.mock("../SlashCommands.ts", () => ({
     { name: "save", description: "Save the conversation" },
   ],
   parseSlashCommand: (text: string) => {
-    const name = text.slice(1).split(" ")[0];
+    const name = text.slice(1).split(" ")[0] ?? "";
     return { args: text.slice(name.length + 1).trim(), name };
   },
 }));

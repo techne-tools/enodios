@@ -40,26 +40,31 @@ export class NoteTemplateManager {
    */
   public getTemplatesFolder(): null | string {
     // User-defined override in Hermes settings
-    const override = this.plugin.settings.noteTemplatesFolder?.trim();
+    const override = this.plugin.settings.noteTemplatesFolder.trim();
     if (override) {
       return override;
     }
 
     // Read from Obsidian's internal Templates plugin config
     try {
-      const internalPlugins = (this.plugin.app as unknown as {
-        internalPlugins?: {
-          plugins?: {
-            templates?: {
-              enabled?: boolean;
-              instance?: { options?: { folder?: string } };
+      const internalPlugins = (
+        this.plugin.app as unknown as {
+          internalPlugins?: {
+            plugins?: {
+              templates?: {
+                enabled?: boolean;
+                instance?: { options?: { folder?: string } };
+              };
             };
           };
-        };
-      }).internalPlugins;
+        }
+      ).internalPlugins;
 
       const templatesPlugin = internalPlugins?.plugins?.templates;
-      if (templatesPlugin?.enabled && templatesPlugin.instance?.options?.folder) {
+      if (
+        templatesPlugin?.enabled
+        && templatesPlugin.instance?.options?.folder
+      ) {
         return templatesPlugin.instance.options.folder;
       }
     } catch {
@@ -119,7 +124,9 @@ export class NoteTemplateManager {
       targetContent + separator + templateContent.trim() + '\n'
     );
 
-    new Notice(`Template "${template.basename}" inserted into ${target.basename}.`);
+    new Notice(
+      `Template "${template.basename}" inserted into ${target.basename}.`
+    );
   }
 
   /**
@@ -130,11 +137,16 @@ export class NoteTemplateManager {
       return 'No note templates found. Configure the Templates folder in Settings → Core plugins → Templates.';
     }
 
-    const lines = [`--- Obsidian Note Templates (${templates.length}) ---`];
+    const lines = [
+      `--- Obsidian Note Templates (${String(templates.length)}) ---`
+    ];
     for (const t of templates) {
       lines.push(`  • ${t.basename} (${t.path})`);
     }
-    lines.push('', 'Use `/note-template insert <name>` to insert into the active note.');
+    lines.push(
+      '',
+      'Use `/note-template insert <name>` to insert into the active note.'
+    );
     lines.push('------------------------------');
     return lines.join('\n');
   }

@@ -1,12 +1,8 @@
-import {
- useCallback,
-useEffect,
-useRef
-} from 'react';
+import { useCallback, useEffect, useRef } from "react";
 
-import type { ChatMessage } from './EnodiosChatView.tsx';
+import type { ChatMessage } from "./EnodiosChatView.tsx";
 
-import { generateMessageId } from '../utils/uuid.ts';
+import { generateMessageId } from "../utils/uuid.ts";
 
 /**
  * Custom hook to buffer rapid Server-Sent Events or ACP stream chunks
@@ -45,12 +41,13 @@ export function useStreamBuffer(
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
   showReasoning: boolean,
   enableTypingSound = false,
-  enableHaptic = false
+  enableHaptic = false,
+  options?: { disableAnimationFrame?: boolean },
 ) {
   const streamingMessageIdRef = useRef<null | string>(null);
   const reasoningMessageIdRef = useRef<null | string>(null);
-  const pendingContentRef = useRef<string>('');
-  const pendingReasoningRef = useRef<string>('');
+  const pendingContentRef = useRef<string>("");
+  const pendingReasoningRef = useRef<string>("");
   const flushAnimationFrameRef = useRef<null | number>(null);
   const lastSoundTimeRef = useRef<number>(0);
 
@@ -77,39 +74,45 @@ export function useStreamBuffer(
       const latestReasoning = pendingReasoningRef.current;
 
       // Clear the refs atomically with the state update
-      pendingContentRef.current = '';
-      pendingReasoningRef.current = '';
+      pendingContentRef.current = "";
+      pendingReasoningRef.current = "";
       flushAnimationFrameRef.current = null;
 
       let updated = prev;
 
       if (latestContent && currentStreamingId) {
         const assistantIndex = updated.findIndex(
-          (m) => m.role === 'assistant' && m.id === currentStreamingId
+          (m) => m.role === "assistant" && m.id === currentStreamingId,
         );
         if (assistantIndex >= 0) {
           const newArray = [...updated];
-          newArray[assistantIndex] = {
-            ...newArray[assistantIndex]!,
-            content: newArray[assistantIndex]!.content + latestContent
-          };
-          updated = newArray;
+          const existing = newArray[assistantIndex];
+          if (existing !== undefined) {
+            newArray[assistantIndex] = {
+              ...existing,
+              content: existing.content + latestContent,
+            };
+            updated = newArray;
+          }
         }
       }
 
       if (latestReasoning && showReasoning) {
         const reasoningIndex = currentReasoningId
           ? updated.findIndex(
-              (m) => m.role === 'reasoning' && m.id === currentReasoningId
+              (m) => m.role === "reasoning" && m.id === currentReasoningId,
             )
           : -1;
         if (reasoningIndex >= 0) {
           const newArray = [...updated];
-          newArray[reasoningIndex] = {
-            ...newArray[reasoningIndex]!,
-            content: newArray[reasoningIndex]!.content + latestReasoning
-          };
-          updated = newArray;
+          const existing = newArray[reasoningIndex];
+          if (existing !== undefined) {
+            newArray[reasoningIndex] = {
+              ...existing,
+              content: existing.content + latestReasoning,
+            };
+            updated = newArray;
+          }
         } else {
           const newId = generateMessageId();
           reasoningMessageIdRef.current = newId;
@@ -117,20 +120,20 @@ export function useStreamBuffer(
             content: latestReasoning,
             id: newId,
             isCollapsed: true, // Reasoning starts collapsed by default
-            role: 'reasoning',
-            timestamp: Date.now()
+            role: "reasoning",
+            timestamp: Date.now(),
           };
           // Insert reasoning BEFORE the assistant placeholder so it appears above the response
           const assistantIndex = currentStreamingId
             ? updated.findIndex(
-                (m) => m.role === 'assistant' && m.id === currentStreamingId
+                (m) => m.role === "assistant" && m.id === currentStreamingId,
               )
             : -1;
           if (assistantIndex >= 0) {
             updated = [
               ...updated.slice(0, assistantIndex),
               reasoningMsg,
-              ...updated.slice(assistantIndex)
+              ...updated.slice(assistantIndex),
             ];
           } else {
             updated = [...updated, reasoningMsg];
@@ -144,9 +147,18 @@ export function useStreamBuffer(
 
   const scheduleFlush = useCallback(() => {
     if (flushAnimationFrameRef.current === null) {
-      flushAnimationFrameRef.current = requestAnimationFrame(flushBuffer);
+      if (options?.disableAnimationFrame) {
+        // Test mode: flush synchronously via microtask instead of rAF.
+        flushAnimationFrameRef.current = 0;
+        queueMicrotask(() => {
+          flushAnimationFrameRef.current = null;
+          flushBuffer();
+        });
+      } else {
+        flushAnimationFrameRef.current = requestAnimationFrame(flushBuffer);
+      }
     }
-  }, [flushBuffer]);
+  }, [flushBuffer, options?.disableAnimationFrame]);
 
   const flushNow = useCallback(() => {
     if (flushAnimationFrameRef.current !== null) {
@@ -155,27 +167,39 @@ export function useStreamBuffer(
     flushBuffer();
   }, [flushBuffer]);
 
-  const appendContent = useCallback((content: string) => {
-    pendingContentRef.current += content;
-    scheduleFlush();
+  const appendContent = useCallback(
+    (content: string) => {
+      pendingContentRef.current += content;
+      scheduleFlush();
 
-    // Throttled sound/haptic feedback
-    const now = Date.now();
-    if (now - lastSoundTimeRef.current > 50) { // Max ~20 sounds per second
-      lastSoundTimeRef.current = now;
-      if (enableTypingSound) {
-        playTypingSound();
+      // Throttled sound/haptic feedback (disabled in test mode)
+      const now = Date.now();
+      if (now - lastSoundTimeRef.current > 50) {
+        // Max ~20 sounds per second
+        lastSoundTimeRef.current = now;
+        if (enableTypingSound && !options?.disableAnimationFrame) {
+          playTypingSound();
+        }
+        if (enableHaptic && !options?.disableAnimationFrame) {
+          triggerHaptic();
+        }
       }
-      if (enableHaptic) {
-        triggerHaptic();
-      }
-    }
-  }, [scheduleFlush, enableTypingSound, enableHaptic]);
+    },
+    [
+      scheduleFlush,
+      enableTypingSound,
+      enableHaptic,
+      options?.disableAnimationFrame,
+    ],
+  );
 
-  const appendReasoning = useCallback((reasoning: string) => {
-    pendingReasoningRef.current += reasoning;
-    scheduleFlush();
-  }, [scheduleFlush]);
+  const appendReasoning = useCallback(
+    (reasoning: string) => {
+      pendingReasoningRef.current += reasoning;
+      scheduleFlush();
+    },
+    [scheduleFlush],
+  );
 
   useEffect(() => {
     return () => {
@@ -190,7 +214,7 @@ export function useStreamBuffer(
     appendReasoning,
     flushNow,
     reasoningMessageIdRef,
-    streamingMessageIdRef
+    streamingMessageIdRef,
   };
 }
 
@@ -200,7 +224,7 @@ export function useStreamBuffer(
  */
 function playTypingSound(): void {
   try {
-    const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const audioCtx = new AudioContext();
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
 
@@ -209,9 +233,12 @@ function playTypingSound(): void {
 
     // Soft high-frequency click
     oscillator.frequency.value = 800 + Math.random() * 400;
-    oscillator.type = 'sine';
+    oscillator.type = "sine";
     gainNode.gain.setValueAtTime(0.03, audioCtx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.001,
+      audioCtx.currentTime + 0.05,
+    );
 
     oscillator.start(audioCtx.currentTime);
     oscillator.stop(audioCtx.currentTime + 0.05);
@@ -220,7 +247,9 @@ function playTypingSound(): void {
     setTimeout(() => {
       oscillator.disconnect();
       gainNode.disconnect();
-      audioCtx.close().catch(() => {});
+      audioCtx.close().catch(() => {
+        // Ignore close errors
+      });
     }, 100);
   } catch {
     // Audio not available
@@ -231,7 +260,5 @@ function playTypingSound(): void {
  * Trigger haptic feedback if supported.
  */
 function triggerHaptic(): void {
-  if (navigator.vibrate) {
-    navigator.vibrate(5);
-  }
+  navigator.vibrate(5);
 }

@@ -49,26 +49,61 @@ import type {
 } from './ChatClient.ts';
 import type { Plugin } from './Plugin.ts';
 
+import { isPathSafe } from './utils/pathSafety.ts';
 import { generateMessageId } from './utils/uuid.ts';
 
 const MAX_TERMINAL_OUTPUT = 1024 * 1024; // 1MB cap on terminal output to prevent memory exhaustion
 const ACP_STARTUP_TIMEOUT_MS = 90000; // Hermes can take ~55s to initialize MCP servers
 
+/**
+ * SECURITY: Allowlisted shell commands.
+ *
+ * Only read-only or strictly-scoped utilities are permitted. High-risk
+ * commands that enable arbitrary file/network/action execution (`git`,
+ * `curl`, `wget`, `find`, `rm`, `cp`, `mv`) are deliberately EXCLUDED.
+ * `rm`/`cp`/`mv` are destructive; `git`/`curl`/`wget`/`find` can be
+ * abused for exfiltration or arbitrary execution via option injection.
+ */
 const ALLOWED_SHELL_COMMANDS = new Set([
   'cat',
-  'cp',
-  'curl',
   'echo',
-  'find',
-  'git',
   'grep',
   'ls',
   'mkdir',
-  'mv',
-  'rm',
-  'touch',
-  'wget'
+  'touch'
 ]);
+
+/**
+ * Per-command argument allowlists.
+ *
+ * Each command maps to a set of allowed argument prefixes. Any argument that
+ * does not start with an allowed prefix is rejected. This prevents option
+ * injection (e.g. `grep --include=...` or `cat --help` are fine, but
+ * `grep -e '...'` is blocked because `-e` enables arbitrary patterns).
+ *
+ * The empty set `[]` means NO arguments are allowed for that command.
+ */
+const ALLOWED_COMMAND_ARGS: Record<string, string[]> = {
+  cat: ['-n', '-b', '-s', '-A', '-E', '-T'],
+  echo: ['-n', '-e', '-E'],
+  grep: [
+    '-i',
+    '-n',
+    '-r',
+    '-w',
+    '-l',
+    '-c',
+    '-v',
+    '-E',
+    '-F',
+    '--include=',
+    '--exclude=',
+    '--color'
+  ],
+  ls: ['-a', '-l', '-h', '-t', '-r', '-S', '-1', '-F', '--color'],
+  mkdir: ['-p', '-v', '-m'],
+  touch: ['-a', '-c', '-m', '-t', '-r']
+};
 
 // Argument patterns that enable arbitrary code execution even in "safe" commands
 const DANGEROUS_ARG_PATTERNS = [
@@ -87,6 +122,95 @@ const DANGEROUS_ARG_PATTERNS = [
   '>>',
   '<('
 ];
+
+/**
+ * Environment variable names that must never be passed to child processes.
+ * These commonly hold API keys and other secrets in the user's shell.
+ */
+const SENSITIVE_ENV_KEYS = [
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'AWS_ACCESS_KEY_ID',
+  'AWS_SECRET_ACCESS_KEY',
+  'AZURE_OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'GOOGLE_API_KEY',
+  'HF_TOKEN',
+  'HUGGING_FACE_HUB_TOKEN',
+  'OPENROUTER_API_KEY',
+  'REPLICATE_API_TOKEN',
+  'TOGETHER_API_KEY',
+  'GROQ_API_KEY',
+  'MISTRAL_API_KEY',
+  'COHERE_API_KEY',
+  'PERPLEXITY_API_KEY',
+  'DEEPSEEK_API_KEY',
+  'XAI_API_KEY',
+  'GITHUB_TOKEN',
+  'GITLAB_TOKEN',
+  'NPM_TOKEN',
+  'DATABASE_URL',
+  'DB_PASSWORD',
+  'PGPASSWORD',
+  'MYSQL_PWD',
+  'REDIS_URL'
+];
+
+/**
+ * Build a sanitized environment object for child processes.
+ * Only a minimal allowlist of safe variables is passed, and known secret
+ * names are always stripped. This prevents a compromised Hermes binary or
+ * terminal command from exfiltrating shell environment secrets.
+ */
+function buildSanitizedEnv(): Record<string, string> {
+  const env: Record<string, string> = {};
+  const source = process.env;
+
+  // Allowlist of safe, non-secret variables.
+  const safeKeys = [
+    'HOME',
+    'PATH',
+    'LANG',
+    'LC_ALL',
+    'LC_CTYPE',
+    'TERM',
+    'SHELL',
+    'USER',
+    'LOGNAME',
+    'TMPDIR',
+    'TZ',
+    'PWD',
+    'XDG_CONFIG_HOME',
+    'XDG_DATA_HOME',
+    'XDG_CACHE_HOME'
+  ];
+
+  for (const key of safeKeys) {
+    const value = source[key];
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+
+  // Defense-in-depth: strip any known sensitive keys that might have been
+  // added to the allowlist or injected by the environment.
+  for (const key of SENSITIVE_ENV_KEYS) {
+    Reflect.deleteProperty(env, key);
+  }
+
+  return env;
+}
+
+/**
+ * Extract the permission type from a permission request for audit logging.
+ * The ACP SDK does not expose `permissionType` on the typed request, so we
+ * read it defensively from the raw payload and fall back to a generic label.
+ */
+function getPermissionType(params: RequestPermissionRequest): string {
+  const raw = (params as unknown as Record<string, unknown>)['permissionType'];
+  return typeof raw === 'string' ? raw : 'permission';
+}
 
 export interface AcpMessage {
   content: string;
@@ -165,9 +289,13 @@ export class AcpClient implements ChatClient {
   private readonly BASE_RECONNECT_DELAY_MS = 1000;
   private childProcess: ChildProcess | null = null;
   private clientConnection: ClientSideConnection | null = null;
-  private commandsCallbacks: ((commands: { description: string; name: string }[]) => void)[] = [];
+  private commandsCallbacks: ((
+    commands: { description: string; name: string }[]
+  ) => void)[] = [];
+
   private connectPromise: null | Promise<void> = null;
   private connectionStatusCallbacks: ((status: AcpConnectionStatus) => void)[] = [];
+
   private currentAllowedTools: null | string[] = null;
   private currentSessionId: null | string = null;
   // Rate limiting: prevent accidental or malicious prompt flooding
@@ -204,7 +332,11 @@ export class AcpClient implements ChatClient {
     if (terminal && !terminal.process.killed && terminal.exitCode === null) {
       terminal.process.kill('SIGINT');
       this.emitUpdate({
-        terminal: { id: terminalId, isExited: true, output: '\n[Process aborted by user]\n' },
+        terminal: {
+          id: terminalId,
+          isExited: true,
+          output: '\n[Process aborted by user]\n'
+        },
         type: 'terminal_output'
       });
     }
@@ -233,9 +365,11 @@ export class AcpClient implements ChatClient {
     const pending = [...this.pendingPermissions];
     this.pendingPermissions = [];
     for (const p of pending) {
-      const permType = String((p.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+      const permType = getPermissionType(p.params);
       this.plugin.auditLog.recordPermission(permType, 'cancelled', 'failure');
-      p.resolve({ outcome: { outcome: 'cancelled' } } as RequestPermissionResponse);
+      p.resolve({
+        outcome: { outcome: 'cancelled' }
+      });
     }
     this.notifyPermissions();
   }
@@ -246,12 +380,14 @@ export class AcpClient implements ChatClient {
   public cancelPermission(permissionId: string): void {
     const pending = this.pendingPermissions.find((p) => p.id === permissionId);
     if (pending) {
-      const permType = String((pending.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+      const permType = getPermissionType(pending.params);
       this.plugin.auditLog.recordPermission(permType, 'cancelled', 'failure');
       pending.resolve({
         outcome: { outcome: 'cancelled' }
-      } as RequestPermissionResponse);
-      this.pendingPermissions = this.pendingPermissions.filter((p) => p.id !== permissionId);
+      });
+      this.pendingPermissions = this.pendingPermissions.filter(
+        (p) => p.id !== permissionId
+      );
       this.notifyPermissions();
     }
   }
@@ -314,7 +450,9 @@ export class AcpClient implements ChatClient {
 
     // Cancel web streams
     if (this.webReadable) {
-      this.webReadable.cancel().catch(() => {});
+      this.webReadable.cancel().catch(() => {
+        // Ignore cancellation errors during teardown.
+      });
       this.webReadable = null;
     }
     this.webWritable = null;
@@ -362,7 +500,11 @@ export class AcpClient implements ChatClient {
   /**
    * Get current reconnection state for UI display.
    */
-  public getConnectionState(): { isReconnecting: boolean; maxAttempts: number; reconnectAttempt: number } {
+  public getConnectionState(): {
+    isReconnecting: boolean;
+    maxAttempts: number;
+    reconnectAttempt: number;
+  } {
     return {
       isReconnecting: this.isReconnecting,
       maxAttempts: this.MAX_RECONNECT_ATTEMPTS,
@@ -388,16 +530,20 @@ export class AcpClient implements ChatClient {
    * Check if the ACP client is connected and has an active session.
    */
   public isReady(): boolean {
-    return this.childProcess !== null
+    return (
+      this.childProcess !== null
       && this.clientConnection !== null
       && this.currentSessionId !== null
-      && !this.childProcess.killed;
+      && !this.childProcess.killed
+    );
   }
 
   /**
    * Subscribe to available commands updates from the agent.
    */
-  public onAvailableCommands(callback: (commands: { description: string; name: string }[]) => void): () => void {
+  public onAvailableCommands(
+    callback: (commands: { description: string; name: string }[]) => void
+  ): () => void {
     this.commandsCallbacks.push(callback);
     // Immediately notify with cached commands if available
     if (this.lastAvailableCommands.length > 0) {
@@ -431,7 +577,9 @@ export class AcpClient implements ChatClient {
   /**
    * Subscribe to connection status updates (connecting, loading, connected, error).
    */
-  public onConnectionStatus(callback: (status: AcpConnectionStatus) => void): () => void {
+  public onConnectionStatus(
+    callback: (status: AcpConnectionStatus) => void
+  ): () => void {
     this.connectionStatusCallbacks.push(callback);
     // Immediately notify with current state if available
     if (this.childProcess) {
@@ -453,7 +601,9 @@ export class AcpClient implements ChatClient {
   /**
    * Subscribe to pending permission requests.
    */
-  public onPermissionsChange(callback: (permissions: PendingPermission[]) => void): () => void {
+  public onPermissionsChange(
+    callback: (permissions: PendingPermission[]) => void
+  ): () => void {
     this.permissionCallbacks.push(callback);
     callback(this.getPendingPermissions()); // Immediately notify with current state
     return () => {
@@ -488,24 +638,26 @@ export class AcpClient implements ChatClient {
     const pending = [...this.pendingPermissions];
     this.pendingPermissions = [];
     for (const p of pending) {
-      const options = p.params.options ?? [];
-      const allowOptions = options.filter((o: Record<string, unknown>) => String(o['kind']).startsWith('allow_'));
-      const permType = String((p.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+      const options = p.params.options;
+      const allowOptions = options.filter((o) => o.kind.startsWith('allow_'));
+      const permType = getPermissionType(p.params);
 
-      const targetOption = allowOptions[0] || options[0];
+      const targetOption = allowOptions[0] ?? options[0];
 
       if (targetOption) {
-        const outcome = String(targetOption.kind || targetOption.optionId);
+        const outcome = targetOption.kind;
         this.plugin.auditLog.recordPermission(permType, outcome, 'success');
         p.resolve({
           outcome: {
-            optionId: String(targetOption.optionId),
+            optionId: targetOption.optionId,
             outcome: 'selected'
           }
-        } as RequestPermissionResponse);
+        });
       } else {
         this.plugin.auditLog.recordPermission(permType, 'cancelled', 'failure');
-        p.resolve({ outcome: { outcome: 'cancelled' } } as RequestPermissionResponse);
+        p.resolve({
+          outcome: { outcome: 'cancelled' }
+        });
       }
     }
     this.notifyPermissions();
@@ -517,17 +669,21 @@ export class AcpClient implements ChatClient {
   public resolvePermission(permissionId: string, optionId: string): void {
     const pending = this.pendingPermissions.find((p) => p.id === permissionId);
     if (pending) {
-      const option = pending.params.options?.find((o: Record<string, unknown>) => String(o['optionId']) === optionId);
-      const outcome = option ? String(option.kind || optionId) : optionId;
-      const permType = String((pending.params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+      const option = pending.params.options.find(
+        (o) => o.optionId === optionId
+      );
+      const outcome = option ? option.kind : optionId;
+      const permType = getPermissionType(pending.params);
       this.plugin.auditLog.recordPermission(permType, outcome, 'success');
       pending.resolve({
         outcome: {
           optionId,
           outcome: 'selected'
         }
-      } as RequestPermissionResponse);
-      this.pendingPermissions = this.pendingPermissions.filter((p) => p.id !== permissionId);
+      });
+      this.pendingPermissions = this.pendingPermissions.filter(
+        (p) => p.id !== permissionId
+      );
       this.notifyPermissions();
     }
   }
@@ -535,11 +691,17 @@ export class AcpClient implements ChatClient {
   /**
    * Send a prompt to the ACP session.
    */
-  public async sendPrompt(text: string, contextItems: PromptContextItem[] = [], options?: { allowedTools?: null | string[] }): Promise<void> {
+  public async sendPrompt(
+    text: string,
+    contextItems: PromptContextItem[] = [],
+    options?: { allowedTools?: null | string[] }
+  ): Promise<void> {
     // Normalize empty array to null: [] means "no restrictions" (same as null),
     // not "no tools allowed". An empty array causes checkToolAllowed to reject
     // everything while the system prompt tells the agent nothing useful.
-    this.currentAllowedTools = options?.allowedTools?.length ? options.allowedTools : null;
+    this.currentAllowedTools = options?.allowedTools?.length
+      ? options.allowedTools
+      : null;
 
     // Rate limiting: prevent accidental or malicious prompt flooding
     const now = Date.now();
@@ -593,8 +755,8 @@ export class AcpClient implements ChatClient {
         const blockMatch = /^block-(.+)-(\d+)$/.exec(item.id);
         try {
           if (blockMatch) {
-            const blockPath = blockMatch[1]!;
-            const startLine = parseInt(blockMatch[2]!, 10);
+            const blockPath = blockMatch[1] ?? '';
+            const startLine = parseInt(blockMatch[2] ?? '0', 10);
             const file = this.plugin.app.vault.getAbstractFileByPath(blockPath);
             if (file instanceof TFile) {
               const content = await this.plugin.app.vault.read(file);
@@ -608,7 +770,7 @@ export class AcpClient implements ChatClient {
                   resource: {
                     mimeType: 'text/markdown',
                     text: `--- Block from ${blockPath} (${block.type}) ---\n${block.content}`,
-                    uri: `vault://${blockPath}#block-${startLine}`
+                    uri: `vault://${blockPath}#block-${String(startLine)}`
                   },
                   type: 'resource'
                 });
@@ -618,7 +780,7 @@ export class AcpClient implements ChatClient {
                   resource: {
                     mimeType: 'text/markdown',
                     text: lines[startLine] ?? '',
-                    uri: `vault://${blockPath}#L${startLine}`
+                    uri: `vault://${blockPath}#L${String(startLine)}`
                   },
                   type: 'resource'
                 });
@@ -655,7 +817,8 @@ export class AcpClient implements ChatClient {
         promptBlocks.push({
           resource: {
             blob: item.data,
-            mimeType: item.mimeType ?? (item.type === 'pdf' ? 'application/pdf' : 'image/jpeg'),
+            mimeType: item.mimeType
+              ?? (item.type === 'pdf' ? 'application/pdf' : 'image/jpeg'),
             uri: `data:${item.mimeType ?? (item.type === 'pdf' ? 'application/pdf' : 'image/jpeg')};base64,${item.data}`
           },
           type: 'resource'
@@ -707,7 +870,11 @@ export class AcpClient implements ChatClient {
 
     // Add terminal condition
     if (!this.plugin.settings.allowTerminal) {
-      toolNote.push('', '### Terminal restriction', 'Terminal access is DISABLED in settings. Do not use terminal, bash, or process tools.');
+      toolNote.push(
+        '',
+        '### Terminal restriction',
+        'Terminal access is DISABLED in settings. Do not use terminal, bash, or process tools.'
+      );
     }
 
     // Add session-level tool restrictions on top, if any
@@ -738,9 +905,9 @@ export class AcpClient implements ChatClient {
         this.emitUpdate({
           type: 'usage',
           usage: {
-            inputTokens: Number(promptResponse.usage.inputTokens ?? 0),
-            outputTokens: Number(promptResponse.usage.outputTokens ?? 0),
-            totalTokens: Number(promptResponse.usage.totalTokens ?? 0)
+            inputTokens: promptResponse.usage.inputTokens,
+            outputTokens: promptResponse.usage.outputTokens,
+            totalTokens: promptResponse.usage.totalTokens
           }
         });
       }
@@ -755,36 +922,51 @@ export class AcpClient implements ChatClient {
   }
 
   private checkToolAllowed(toolName: string): void {
-    if (this.currentAllowedTools !== null && !this.currentAllowedTools.includes(toolName)) {
-      throw new Error(`Tool execution rejected: '${toolName}' is disabled for this specific chat session.`);
+    if (
+      this.currentAllowedTools !== null
+      && !this.currentAllowedTools.includes(toolName)
+    ) {
+      throw new Error(
+        `Tool execution rejected: '${toolName}' is disabled for this specific chat session.`
+      );
     }
   }
 
   private createClientHandler(): Client {
     return {
-      createTerminal: async (params: { arguments?: string[]; command?: string } & CreateTerminalRequest): Promise<CreateTerminalResponse> => {
+      // eslint-disable-next-line @typescript-eslint/require-await -- The ACP Client interface requires an async handler; this method is synchronous.
+      createTerminal: async (
+        params: {
+          arguments?: string[];
+          command?: string;
+        } & CreateTerminalRequest
+      ): Promise<CreateTerminalResponse> => {
         this.checkToolAllowed('terminal');
         if (!this.plugin.settings.allowTerminal) {
-          this.plugin.auditLog.recordTerminal(params.command || 'bash', 'blocked');
-          throw new Error('Terminal access is disabled in Hermes settings. Enable "Allow Terminal Access" to use terminal tools.');
+          this.plugin.auditLog.recordTerminal(
+            params.command || 'bash',
+            'blocked'
+          );
+          throw new Error(
+            'Terminal access is disabled in Hermes settings. Enable "Allow Terminal Access" to use terminal tools.'
+          );
         }
 
-        const terminalId = `terminal-${Date.now()}`;
-        const rawCommand = params.command || (process.platform === 'win32' ? 'cmd.exe' : 'bash');
-        const args = params.arguments || [];
+        const terminalId = `terminal-${String(Date.now())}`;
+        const rawCommand = params.command;
+        const args = params.arguments ?? [];
 
         // SECURITY: Sanitize the command to prevent injection.
         // We only allow known-safe base commands and reject shell metacharacters.
         const command = sanitizeShellCommand(rawCommand);
 
-        // SECURITY: Validate all arguments for dangerous patterns before spawning.
-        // Some "safe" commands have configuration options that enable arbitrary
-        // code execution (e.g., git --config core.sshCommand=...).
-        sanitizeShellArguments(args);
+        // SECURITY: Validate all arguments for dangerous patterns AND enforce
+        // the per-command argument allowlist before spawning.
+        sanitizeShellArguments(command, args);
 
         const child = spawn(command, args, {
           cwd: this.plugin.app.vault.getRoot().path,
-          env: { ...process.env, PATH: process.env['PATH'] ?? '' },
+          env: buildSanitizedEnv(),
           shell: false // Shell: false is required for security — we pass args directly
         });
 
@@ -809,25 +991,38 @@ export class AcpClient implements ChatClient {
           }
         };
 
-        child.stdout?.on('data', (data) => {
+        child.stdout.on('data', (data: Buffer) => {
           const text = data.toString();
           appendOutput(text);
-          this.emitUpdate({ terminal: { id: terminalId, output: text }, type: 'terminal_output' });
+          this.emitUpdate({
+            terminal: { id: terminalId, output: text },
+            type: 'terminal_output'
+          });
         });
 
-        child.stderr?.on('data', (data) => {
+        child.stderr.on('data', (data: Buffer) => {
           const text = data.toString();
           appendOutput(text);
-          this.emitUpdate({ terminal: { id: terminalId, output: text }, type: 'terminal_output' });
+          this.emitUpdate({
+            terminal: { id: terminalId, output: text },
+            type: 'terminal_output'
+          });
         });
 
         child.on('close', (code, signal) => {
           terminal.exitCode = code;
           terminal.signal = signal;
-          const exitMsg = `\n[Process exited with code ${code ?? signal}]\n`;
+          const exitMsg = `\n[Process exited with code ${String(code ?? signal)}]\n`;
           appendOutput(exitMsg);
-          this.emitUpdate({ terminal: { id: terminalId, isExited: true, output: exitMsg }, type: 'terminal_output' });
-          this.plugin.auditLog.recordTerminal(`${command} ${args.join(' ')}`, code === 0 ? 'success' : 'failure', code);
+          this.emitUpdate({
+            terminal: { id: terminalId, isExited: true, output: exitMsg },
+            type: 'terminal_output'
+          });
+          this.plugin.auditLog.recordTerminal(
+            `${command} ${args.join(' ')}`,
+            code === 0 ? 'success' : 'failure',
+            code
+          );
 
           // Self-cleanup after 60 seconds to prevent memory leaks if agent forgets to release
           setTimeout(() => {
@@ -836,26 +1031,44 @@ export class AcpClient implements ChatClient {
         });
 
         this.activeTerminals.set(terminalId, terminal);
-        this.plugin.auditLog.recordTerminal(`${command} ${args.join(' ')}`, 'success');
+        this.plugin.auditLog.recordTerminal(
+          `${command} ${args.join(' ')}`,
+          'success'
+        );
 
         return {
           terminalId
         };
       },
 
-      killTerminal: async (params: KillTerminalRequest): Promise<KillTerminalResponse | void> => {
+      // eslint-disable-next-line @typescript-eslint/require-await -- The ACP Client interface requires an async handler; this method is synchronous.
+      killTerminal: async (
+        params: KillTerminalRequest
+        // eslint-disable-next-line @typescript-eslint/no-invalid-void-type -- The ACP Client interface requires `Promise<Response | void>`.
+      ): Promise<KillTerminalResponse | void> => {
         const terminal = this.activeTerminals.get(params.terminalId);
-        if (terminal && !terminal.process.killed && terminal.exitCode === null) {
+        if (
+          terminal
+          && !terminal.process.killed
+          && terminal.exitCode === null
+        ) {
           terminal.process.kill('SIGINT');
         }
         return {};
       },
 
-      readTextFile: async (params: ReadTextFileRequest): Promise<ReadTextFileResponse> => {
+      readTextFile: async (
+        params: ReadTextFileRequest
+      ): Promise<ReadTextFileResponse> => {
         this.checkToolAllowed('read_file');
 
-        if (!isPathSafe(params.path)) {
-          this.plugin.auditLog.recordToolCall('read_file', { path: params.path }, 'blocked', 'Path traversal denied');
+        if (!(await isPathSafe(this.plugin, params.path))) {
+          this.plugin.auditLog.recordToolCall(
+            'read_file',
+            { path: params.path },
+            'blocked',
+            'Path traversal denied'
+          );
           throw new Error(`Path traversal denied: ${params.path}`);
         }
         const normalized = normalizePath(params.path);
@@ -863,20 +1076,38 @@ export class AcpClient implements ChatClient {
         try {
           const file = this.plugin.app.vault.getAbstractFileByPath(normalized);
           if (!(file instanceof TFile)) {
-            this.plugin.auditLog.recordToolCall('read_file', { path: params.path }, 'failure', 'File not found');
+            this.plugin.auditLog.recordToolCall(
+              'read_file',
+              { path: params.path },
+              'failure',
+              'File not found'
+            );
             throw new Error(`File not found: ${params.path}`);
           }
           const content = await this.plugin.app.vault.read(file);
-          this.plugin.auditLog.recordToolCall('read_file', { path: params.path }, 'success');
+          this.plugin.auditLog.recordToolCall(
+            'read_file',
+            { path: params.path },
+            'success'
+          );
           return { content };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          this.plugin.auditLog.recordToolCall('read_file', { path: params.path }, 'failure', message);
+          this.plugin.auditLog.recordToolCall(
+            'read_file',
+            { path: params.path },
+            'failure',
+            message
+          );
           throw new Error(`Failed to read file: ${message}`);
         }
       },
 
-      releaseTerminal: async (params: ReleaseTerminalRequest): Promise<ReleaseTerminalResponse | void> => {
+      // eslint-disable-next-line @typescript-eslint/require-await -- The ACP Client interface requires an async handler; this method is synchronous.
+      releaseTerminal: async (
+        params: ReleaseTerminalRequest
+        // eslint-disable-next-line @typescript-eslint/no-invalid-void-type -- The ACP Client interface requires `Promise<Response | void>`.
+      ): Promise<ReleaseTerminalResponse | void> => {
         const terminal = this.activeTerminals.get(params.terminalId);
         if (terminal) {
           if (!terminal.process.killed && terminal.exitCode === null) {
@@ -887,23 +1118,33 @@ export class AcpClient implements ChatClient {
         return {};
       },
 
-      requestPermission: async (params: RequestPermissionRequest): Promise<RequestPermissionResponse> => {
+      requestPermission: async (
+        params: RequestPermissionRequest
+      ): Promise<RequestPermissionResponse> => {
         // SECURITY: Auto-approval is gated by user setting (default: disabled).
         // Even when enabled, only single-option allow permissions are auto-approved on arrival.
         const autoApproveEnabled = this.plugin.settings.autoApproveSingleOptionPermissions;
-        const options = params.options ?? [];
-        const allowOptions = options.filter((o: Record<string, unknown>) => String(o['kind']).startsWith('allow_'));
-        const permType = String((params as unknown as Record<string, unknown>)['permissionType'] || 'permission');
+        const options = params.options;
+        const allowOptions = options.filter((o) => o.kind.startsWith('allow_'));
+        const permType = getPermissionType(params);
 
-        if (autoApproveEnabled && allowOptions.length === 1 && options.length === 1) {
-          const outcome = String(allowOptions[0]!.kind || allowOptions[0]!.optionId);
+        if (
+          autoApproveEnabled
+          && allowOptions.length === 1
+          && options.length === 1
+        ) {
+          const singleOption = allowOptions[0];
+          if (!singleOption) {
+            throw new Error('Unexpected empty allow options');
+          }
+          const outcome = singleOption.kind;
           this.plugin.auditLog.recordPermission(permType, outcome, 'success');
           return {
             outcome: {
-              optionId: String(allowOptions[0]!.optionId),
+              optionId: singleOption.optionId,
               outcome: 'selected'
             }
-          } as RequestPermissionResponse;
+          };
         }
 
         // Pass permission requests through to the UI for manual user approval.
@@ -919,18 +1160,25 @@ export class AcpClient implements ChatClient {
         });
       },
 
+      // eslint-disable-next-line @typescript-eslint/require-await -- The ACP Client interface requires an async handler; this method is synchronous.
       sessionUpdate: async (params: SessionNotification): Promise<void> => {
         this.handleSessionUpdate(params);
       },
 
-      terminalOutput: async (params: TerminalOutputRequest): Promise<TerminalOutputResponse> => {
+      // eslint-disable-next-line @typescript-eslint/require-await -- The ACP Client interface requires an async handler; this method is synchronous.
+      terminalOutput: async (
+        params: TerminalOutputRequest
+      ): Promise<TerminalOutputResponse> => {
         const terminal = this.activeTerminals.get(params.terminalId);
         if (!terminal) {
           throw new Error(`Terminal not found: ${params.terminalId}`);
         }
 
-        const exitStatus = (terminal.exitCode !== null || terminal.signal !== null)
-          ? { exitCode: terminal.exitCode ?? 0, signal: terminal.signal ?? null }
+        const exitStatus = terminal.exitCode !== null || terminal.signal !== null
+          ? {
+            exitCode: terminal.exitCode ?? 0,
+            signal: terminal.signal ?? null
+          }
           : undefined;
 
         return {
@@ -940,10 +1188,19 @@ export class AcpClient implements ChatClient {
         };
       },
 
-      waitForTerminalExit: async (params: WaitForTerminalExitRequest): Promise<WaitForTerminalExitResponse> => {
+      waitForTerminalExit: async (
+        params: WaitForTerminalExitRequest
+      ): Promise<WaitForTerminalExitResponse> => {
         const terminal = this.activeTerminals.get(params.terminalId);
-        if (!terminal) throw new Error(`Terminal not found: ${params.terminalId}`);
-        if (terminal.exitCode !== null || terminal.signal !== null) return { exitCode: terminal.exitCode ?? 0, signal: terminal.signal ?? null };
+        if (!terminal) {
+          throw new Error(`Terminal not found: ${params.terminalId}`);
+        }
+        if (terminal.exitCode !== null || terminal.signal !== null) {
+          return {
+            exitCode: terminal.exitCode ?? 0,
+            signal: terminal.signal ?? null
+          };
+        }
         return new Promise((resolve) => {
           terminal.process.once('close', (code, signal) => {
             resolve({ exitCode: code ?? 0, signal: signal ?? null });
@@ -951,22 +1208,52 @@ export class AcpClient implements ChatClient {
         });
       },
 
-      writeTextFile: async (params: WriteTextFileRequest): Promise<WriteTextFileResponse> => {
+      writeTextFile: async (
+        params: WriteTextFileRequest
+      ): Promise<WriteTextFileResponse> => {
         // SECURITY: Session-level tool restrictions apply BEFORE queuing.
         this.checkToolAllowed('write_file');
+
+        // SECURITY: Enforce vault containment (including symlink resolution).
+        if (!(await isPathSafe(this.plugin, params.path))) {
+          this.plugin.auditLog.recordToolCall(
+            'write_file',
+            { path: params.path },
+            'blocked',
+            'Path traversal denied'
+          );
+          throw new Error(`Path traversal denied: ${params.path}`);
+        }
+
         return new Promise<WriteTextFileResponse>((resolve, reject) => {
-          this.plugin.fileChangeManager.registerChange(
-            params.path,
-            params.content,
-            () => resolve({}),
-            (err) => reject(err)
-          ).then(() => {
-            this.plugin.auditLog.recordFileChange(params.path, params.content === null ? 'delete' : 'modify', 'pending');
-          }).catch((error) => {
-            const message = error instanceof Error ? error.message : String(error);
-            this.plugin.auditLog.recordToolCall('write_file', { path: params.path }, 'failure', message);
-            reject(new Error(`Failed to queue file change: ${message}`));
-          });
+          this.plugin.fileChangeManager
+            .registerChange(
+              params.path,
+              params.content,
+              () => {
+                resolve({});
+              },
+              (err) => {
+                reject(err);
+              }
+            )
+            .then(() => {
+              this.plugin.auditLog.recordFileChange(
+                params.path,
+                'modify',
+                'pending'
+              );
+            })
+            .catch((error: unknown) => {
+              const message = error instanceof Error ? error.message : String(error);
+              this.plugin.auditLog.recordToolCall(
+                'write_file',
+                { path: params.path },
+                'failure',
+                message
+              );
+              reject(new Error(`Failed to queue file change: ${message}`));
+            });
         });
       }
     };
@@ -998,19 +1285,27 @@ export class AcpClient implements ChatClient {
       // Spawn hermes acp
       const hermesPath = this.resolveHermesPath();
       this.childProcess = spawn(hermesPath, ['acp'], {
-        env: { ...process.env, PATH: process.env['PATH'] ?? '' },
+        env: buildSanitizedEnv(),
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
       if (!this.childProcess.stdin || !this.childProcess.stdout) {
-        throw new Error('Failed to spawn hermes acp: stdio pipes not available');
+        throw new Error(
+          'Failed to spawn hermes acp: stdio pipes not available'
+        );
       }
 
       // Show an immediate status so the user knows something is happening
-      this.emitConnectionStatus({ detail: 'Hermes process started — waiting for MCP servers...', state: 'loading' });
+      this.emitConnectionStatus({
+        detail: 'Hermes process started — waiting for MCP servers...',
+        state: 'loading'
+      });
 
       // Track individual MCP server states for detailed progress reporting
-      const mcpServerStates = new Map<string, 'connected' | 'connecting' | 'failed'>();
+      const mcpServerStates = new Map<
+        string,
+        'connected' | 'connecting' | 'failed'
+      >();
       const recentStderr: string[] = [];
       const MAX_RECENT_STDERR = 20;
       let mcpStatusTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1022,7 +1317,10 @@ export class AcpClient implements ChatClient {
           if (mcpServerStates.size > 0) {
             emitMcpProgress();
           } else {
-            this.emitConnectionStatus({ detail: 'Hermes is starting...', state: 'loading' });
+            this.emitConnectionStatus({
+              detail: 'Hermes is starting...',
+              state: 'loading'
+            });
           }
           heartbeatTimer = setTimeout(beat, 5000);
         };
@@ -1048,9 +1346,11 @@ export class AcpClient implements ChatClient {
           }
           const total = mcpServerStates.size;
           const parts: string[] = [];
-          if (connected > 0) parts.push(`${connected}/${total} connected`);
-          if (failed > 0) parts.push(`${failed} failed`);
-          if (connecting > 0) parts.push(`${connecting} remaining`);
+          if (connected > 0) {
+            parts.push(`${String(connected)}/${String(total)} connected`);
+          }
+          if (failed > 0) parts.push(`${String(failed)} failed`);
+          if (connecting > 0) parts.push(`${String(connecting)} remaining`);
           this.emitConnectionStatus({
             detail: `Initializing MCP servers: ${parts.join(', ')}...`,
             state: 'loading'
@@ -1077,17 +1377,21 @@ export class AcpClient implements ChatClient {
           const lower = stderrText.toLowerCase();
 
           // Detect MCP server registered successfully
-          const registeredMatch = /mcp server '([^']+)' \(stdio\): registered \d+ tool\(s\)/.exec(lower);
-          if (registeredMatch) {
-            mcpServerStates.set(registeredMatch[1]!, 'connected');
+          const registeredMatch = /mcp server '([^']+)' \(stdio\): registered \d+ tool\(s\)/.exec(
+            lower
+          );
+          if (registeredMatch?.[1]) {
+            mcpServerStates.set(registeredMatch[1], 'connected');
             emitMcpProgress();
             return;
           }
 
           // Detect MCP server initial connection attempt (retry)
-          const retryMatch = /mcp server '([^']+)' initial connection failed \(attempt \d+\/\d+\)/.exec(lower);
-          if (retryMatch) {
-            const name = retryMatch[1]!;
+          const retryMatch = /mcp server '([^']+)' initial connection failed \(attempt \d+\/\d+\)/.exec(
+            lower
+          );
+          if (retryMatch?.[1]) {
+            const name = retryMatch[1];
             if (!mcpServerStates.has(name)) {
               mcpServerStates.set(name, 'connecting');
             }
@@ -1096,9 +1400,11 @@ export class AcpClient implements ChatClient {
           }
 
           // Detect MCP server giving up after all retries
-          const giveUpMatch = /mcp server '([^']+)' failed initial connection after \d+ attempts/.exec(lower);
-          if (giveUpMatch) {
-            mcpServerStates.set(giveUpMatch[1]!, 'failed');
+          const giveUpMatch = /mcp server '([^']+)' failed initial connection after \d+ attempts/.exec(
+            lower
+          );
+          if (giveUpMatch?.[1]) {
+            mcpServerStates.set(giveUpMatch[1], 'failed');
             emitMcpProgress();
             return;
           }
@@ -1113,7 +1419,12 @@ export class AcpClient implements ChatClient {
       // Handle spawn errors (e.g., binary not found)
       this.childProcess.on('error', (err) => {
         this.plugin.debug.error('ACP child process error', err);
-        this.plugin.auditLog.recordConnection('connect', 'acp', 'failure', err.message);
+        this.plugin.auditLog.recordConnection(
+          'connect',
+          'acp',
+          'failure',
+          err.message
+        );
         this.emitConnectionStatus({ detail: err.message, state: 'error' });
       });
 
@@ -1121,13 +1432,20 @@ export class AcpClient implements ChatClient {
       this.childProcess.on('close', (code, signal) => {
         this.processExited = true;
         if (this.isIntentionalDisconnect) {
-          this.plugin.debug.info('ACP child process exited cleanly after intentional disconnect');
+          this.plugin.debug.info(
+            'ACP child process exited cleanly after intentional disconnect'
+          );
           return;
         }
         if (code !== null || signal !== null) {
           this.plugin.debug.error('ACP child process exited', { code, signal });
-          this.plugin.auditLog.recordConnection('disconnect', 'acp', 'failure', `exit code ${code}, signal ${signal}`);
-          const exitMessage = `Hermes process exited unexpectedly (code ${code ?? 'null'}, signal ${signal ?? 'null'})`;
+          this.plugin.auditLog.recordConnection(
+            'disconnect',
+            'acp',
+            'failure',
+            `exit code ${String(code)}, signal ${String(signal)}`
+          );
+          const exitMessage = `Hermes process exited unexpectedly (code ${String(code)}, signal ${String(signal)})`;
           const diagnostic = recentStderr.length > 0
             ? `\n\nRecent Hermes output:\n${recentStderr.slice(-5).join('\n')}`
             : '';
@@ -1193,7 +1511,10 @@ export class AcpClient implements ChatClient {
         protocolVersion: 1
       };
 
-      this.emitConnectionStatus({ detail: 'Waiting for Hermes to finish starting...', state: 'loading' });
+      this.emitConnectionStatus({
+        detail: 'Waiting for Hermes to finish starting...',
+        state: 'loading'
+      });
       const initResponse = await this.retryInitialize(initRequest);
 
       // ACP initialized successfully
@@ -1221,22 +1542,40 @@ export class AcpClient implements ChatClient {
           .filter((s) => s.length > 0);
 
         if (mcpServers.length > 0) {
-          this.plugin.auditLog.recordConnection('mcp_servers', 'acp', 'success', `enabled with ${mcpServers.length} server(s)`);
+          this.plugin.auditLog.recordConnection(
+            'mcp_servers',
+            'acp',
+            'success',
+            `enabled with ${String(mcpServers.length)} server(s)`
+          );
         }
       } else {
-        this.plugin.auditLog.recordConnection('mcp_servers', 'acp', 'blocked', 'disabled by user setting');
+        this.plugin.auditLog.recordConnection(
+          'mcp_servers',
+          'acp',
+          'blocked',
+          'disabled by user setting'
+        );
       }
 
       // SECURITY: Validate MCP server paths before passing to the agent.
-      // Reject world-writable files, temporary directories, and non-absolute paths.
+      // Reject world-writable files, temporary directories, non-absolute
+      // paths, and paths inside the current vault.
+      const adapter = this.plugin.app.vault.adapter;
+      const vaultBasePath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : '';
       const validatedMcpServers: string[] = [];
       for (const serverPath of mcpServers) {
         try {
-          validateMcpServerPath(serverPath);
+          validateMcpServerPath(serverPath, vaultBasePath);
           validatedMcpServers.push(serverPath);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          this.plugin.auditLog.recordConnection('mcp_servers', 'acp', 'blocked', `rejected ${serverPath}: ${message}`);
+          this.plugin.auditLog.recordConnection(
+            'mcp_servers',
+            'acp',
+            'blocked',
+            `rejected ${serverPath}: ${message}`
+          );
           this.plugin.debug.warn(`MCP server rejected: ${message}`);
         }
       }
@@ -1257,19 +1596,11 @@ export class AcpClient implements ChatClient {
       // ACP session created successfully
 
       stopHeartbeat();
-      if (this.startupTimeout) {
-        clearTimeout(this.startupTimeout);
-        this.startupTimeout = null;
-      }
 
       this.emitConnectionStatus({ state: 'connected' });
       new Notice('Connected to Hermes via ACP');
     } catch (error) {
       stopHeartbeat();
-      if (this.startupTimeout) {
-        clearTimeout(this.startupTimeout);
-        this.startupTimeout = null;
-      }
 
       const message = error instanceof Error ? error.message : String(error);
       const isConfigError = message.includes('context window')
@@ -1300,7 +1631,9 @@ export class AcpClient implements ChatClient {
    * handshake while it's still loading MCP servers, so we keep trying
    * until it succeeds or the startup timeout expires.
    */
-  private async retryInitialize(initRequest: InitializeRequest): ReturnType<ClientSideConnection['initialize']> {
+  private async retryInitialize(
+    initRequest: InitializeRequest
+  ): ReturnType<ClientSideConnection['initialize']> {
     const deadline = Date.now() + ACP_STARTUP_TIMEOUT_MS;
     let attempt = 0;
     let lastError: Error | null = null;
@@ -1308,19 +1641,30 @@ export class AcpClient implements ChatClient {
     while (Date.now() < deadline) {
       attempt++;
       try {
-        const result = await this.clientConnection!.initialize(initRequest);
+        const connection = this.clientConnection;
+        if (!connection) {
+          throw new Error('ACP client connection is not initialized');
+        }
+        const result = await connection.initialize(initRequest);
         return result;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        this.plugin.debug.warn(`ACP initialize attempt ${attempt} failed`, lastError.message);
+        this.plugin.debug.warn(
+          `ACP initialize attempt ${String(attempt)} failed`,
+          lastError.message
+        );
 
         // If the process died, don't keep retrying
-        if (this.processExited || this.childProcess?.killed || this.childProcess?.exitCode !== null) {
+        if (
+          this.processExited
+          || this.childProcess?.killed
+          || this.childProcess?.exitCode !== null
+        ) {
           throw lastError;
         }
 
         // Exponential backoff: 1s, 2s, 4s, 8s, ... up to 10s max
-        const delay = Math.min(1000 * (2 ** (attempt - 1)), 10000);
+        const delay = Math.min(1000 * 2 ** (attempt - 1), 10000);
         await new Promise<void>((resolve) => {
           setTimeout(resolve, delay);
         });
@@ -1334,12 +1678,15 @@ export class AcpClient implements ChatClient {
     for (const callback of this.messageCallbacks) {
       try {
         callback(update);
-      } catch {}
+      } catch {
+        // Ignore callback errors
+      }
     }
 
     // Dispatch usage events to window for the TokenUsageFooter component
     if (update.type === 'usage' && update.usage) {
-      const estimatedCost = (update.usage.inputTokens * 0.000003) + (update.usage.outputTokens * 0.000015); // Approximate GPT-4 pricing
+      const estimatedCost = update.usage.inputTokens * 0.000003
+        + update.usage.outputTokens * 0.000015; // Approximate GPT-4 pricing
       window.dispatchEvent(
         new CustomEvent('enodios-usage-update', {
           detail: {
@@ -1359,7 +1706,10 @@ export class AcpClient implements ChatClient {
       this.emitUpdate(parsedUpdate);
 
       // Also notify command subscribers when available_commands update arrives
-      if (parsedUpdate.type === 'available_commands' && parsedUpdate.availableCommands) {
+      if (
+        parsedUpdate.type === 'available_commands'
+        && parsedUpdate.availableCommands
+      ) {
         this.lastAvailableCommands = parsedUpdate.availableCommands;
         for (const callback of this.commandsCallbacks) {
           try {
@@ -1377,7 +1727,9 @@ export class AcpClient implements ChatClient {
     for (const callback of this.permissionCallbacks) {
       try {
         callback(current);
-      } catch {}
+      } catch {
+        // Ignore callback errors
+      }
     }
   }
 
@@ -1403,14 +1755,22 @@ export class AcpClient implements ChatClient {
     }
   }
 
-  private parseUpdate(notification: SessionNotification): AcpSessionUpdate | null {
+  private parseUpdate(
+    notification: SessionNotification
+  ): AcpSessionUpdate | null {
     const update = notification.update;
 
     // Content chunks (message streaming)
     if ('sessionUpdate' in update) {
-      if (update.sessionUpdate === 'agent_message_chunk' || update.sessionUpdate === 'user_message_chunk') {
+      if (
+        update.sessionUpdate === 'agent_message_chunk'
+        || update.sessionUpdate === 'user_message_chunk'
+      ) {
         const chunk = update as { content?: { text?: string; type: string } };
-        if (chunk.content?.type === 'text' && typeof chunk.content.text === 'string') {
+        if (
+          chunk.content?.type === 'text'
+          && typeof chunk.content.text === 'string'
+        ) {
           return {
             content: chunk.content.text,
             type: 'message'
@@ -1421,7 +1781,10 @@ export class AcpClient implements ChatClient {
       // Reasoning chunks
       if (update.sessionUpdate === 'agent_thought_chunk') {
         const chunk = update as { content?: { text?: string; type: string } };
-        if (chunk.content?.type === 'text' && typeof chunk.content.text === 'string') {
+        if (
+          chunk.content?.type === 'text'
+          && typeof chunk.content.text === 'string'
+        ) {
           return {
             reasoning: chunk.content.text,
             type: 'reasoning'
@@ -1430,7 +1793,10 @@ export class AcpClient implements ChatClient {
       }
 
       // Tool call updates
-      if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') {
+      if (
+        update.sessionUpdate === 'tool_call'
+        || update.sessionUpdate === 'tool_call_update'
+      ) {
         // The ACP protocol uses `title` (not `name`) for the human-readable tool name,
         // and `toolCallId` (not `callId`) for the unique identifier.
         const toolUpdate = update as {
@@ -1451,19 +1817,21 @@ export class AcpClient implements ChatClient {
 
         const status = statusMap[toolUpdate.status ?? ''] ?? 'running';
         const resultStr = toolUpdate.rawOutput !== undefined
-          ? (typeof toolUpdate.rawOutput === 'string' ? toolUpdate.rawOutput : JSON.stringify(toolUpdate.rawOutput, null, 2))
+          ? typeof toolUpdate.rawOutput === 'string'
+            ? toolUpdate.rawOutput
+            : JSON.stringify(toolUpdate.rawOutput, null, 2)
           : undefined;
 
         // The tool name is in `title` per the ACP spec. `kind` gives the category.
-        const toolName = toolUpdate.title
-          ?? toolUpdate.kind
-          ?? 'unknown-tool';
+        const toolName = toolUpdate.title ?? toolUpdate.kind ?? 'unknown-tool';
 
         const toolCallId = toolUpdate.toolCallId ?? '';
 
         const toolCall: AcpToolCall = {
           args: toolUpdate.rawInput !== undefined
-            ? (typeof toolUpdate.rawInput === 'string' ? toolUpdate.rawInput : JSON.stringify(toolUpdate.rawInput))
+            ? typeof toolUpdate.rawInput === 'string'
+              ? toolUpdate.rawInput
+              : JSON.stringify(toolUpdate.rawInput)
             : undefined,
           callId: toolCallId,
           name: toolName,
@@ -1475,13 +1843,19 @@ export class AcpClient implements ChatClient {
 
         return {
           toolCall,
-          type: status === 'complete' || status === 'error' ? 'tool_complete' : (update.sessionUpdate === 'tool_call_update' ? 'tool_progress' : 'tool_start')
+          type: status === 'complete' || status === 'error'
+            ? 'tool_complete'
+            : update.sessionUpdate === 'tool_call_update'
+            ? 'tool_progress'
+            : 'tool_start'
         };
       }
 
       // Available commands update (Hermes tools/plugins)
       if (update.sessionUpdate === 'available_commands_update') {
-        const commandsUpdate = update as { availableCommands?: { description: string; name: string }[] };
+        const commandsUpdate = update as {
+          availableCommands?: { description: string; name: string }[];
+        };
         if (commandsUpdate.availableCommands) {
           return {
             availableCommands: commandsUpdate.availableCommands,
@@ -1501,9 +1875,9 @@ export class AcpClient implements ChatClient {
         return {
           type: 'usage',
           usage: {
-            inputTokens: Number(usageUpdate.used ?? 0),
+            inputTokens: usageUpdate.used ?? 0,
             outputTokens: 0,
-            totalTokens: Number(usageUpdate.size ?? 0)
+            totalTokens: usageUpdate.size ?? 0
           }
         };
       }
@@ -1513,7 +1887,7 @@ export class AcpClient implements ChatClient {
   }
 
   private resolveHermesPath(): string {
-    const configuredPath = this.plugin.settings.hermesBinaryPath?.trim();
+    const configuredPath = this.plugin.settings.hermesBinaryPath.trim();
     if (configuredPath) {
       return configuredPath;
     }
@@ -1544,8 +1918,16 @@ export class AcpClient implements ChatClient {
   private scheduleReconnect(): void {
     if (this.isReconnecting) return;
     if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-      this.emitUpdate({ content: '🔌 ACP connection lost. Max reconnection attempts reached. Please reconnect manually.', type: 'message' });
-      this.plugin.auditLog.recordConnection('reconnect', 'acp', 'failure', 'Max reconnection attempts reached');
+      this.emitUpdate({
+        content: '🔌 ACP connection lost. Max reconnection attempts reached. Please reconnect manually.',
+        type: 'message'
+      });
+      this.plugin.auditLog.recordConnection(
+        'reconnect',
+        'acp',
+        'failure',
+        'Max reconnection attempts reached'
+      );
       return;
     }
 
@@ -1558,10 +1940,15 @@ export class AcpClient implements ChatClient {
     );
 
     this.emitUpdate({
-      content: `🔌 Reconnecting to Hermes (attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`,
+      content: `🔌 Reconnecting to Hermes (attempt ${String(this.reconnectAttempts)}/${String(this.MAX_RECONNECT_ATTEMPTS)})...`,
       type: 'message'
     });
-    this.plugin.auditLog.recordConnection('reconnect', 'acp', 'pending', `attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS}`);
+    this.plugin.auditLog.recordConnection(
+      'reconnect',
+      'acp',
+      'pending',
+      `attempt ${String(this.reconnectAttempts)}/${String(this.MAX_RECONNECT_ATTEMPTS)}`
+    );
 
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
@@ -1580,35 +1967,6 @@ export class AcpClient implements ChatClient {
 }
 
 /**
- * Strengthened path traversal check.
- * Rejects absolute paths, parent-directory traversal, null bytes, control
- * characters, and Windows drive-letter paths.
- */
-function isPathSafe(filePath: string): boolean {
-  const normalized = normalizePath(filePath);
-  if (normalized.startsWith('..') || normalized.startsWith('/') || normalized.includes('../')) {
-    return false;
-  }
-  // Reject null bytes and control characters
-  if (/[\x00-\x1f]/.test(normalized)) {
-    return false;
-  }
-  // Reject Windows absolute paths
-  if (/^[a-zA-Z]:[\\\/]/.test(normalized)) {
-    return false;
-  }
-  // Reject UNC paths (Windows network shares)
-  if (normalized.startsWith('\\\\')) {
-    return false;
-  }
-  // SECURITY NOTE: Symlink traversal is NOT checked here. If the vault
-  // contains a symlink to a sensitive directory, the agent can traverse it.
-  // This is a known limitation; future versions should resolve symlinks
-  // via fs.realpath() and verify the resolved path is within the vault.
-  return true;
-}
-
-/**
  * Sanitize a shell command to prevent command injection.
  * Only allows known safe commands; rejects metacharacters and dangerous arguments.
  *
@@ -1621,7 +1979,9 @@ function isPathSafe(filePath: string): boolean {
 function sanitizeShellCommand(command: string): string {
   const trimmed = command.trim();
   if (trimmed.includes(' ')) {
-    throw new Error('Command must be a single executable name. Pass arguments in the \'arguments\' field.');
+    throw new Error(
+      'Command must be a single executable name. Pass arguments in the \'arguments\' field.'
+    );
   }
   // Extract the base command (first token before any whitespace)
   const baseMatch = /^([a-zA-Z0-9_\-\.]+)/.exec(trimmed);
@@ -1638,7 +1998,9 @@ function sanitizeShellCommand(command: string): string {
   if (argsString) {
     for (const pattern of DANGEROUS_ARG_PATTERNS) {
       if (argsString.includes(pattern)) {
-        throw new Error(`Shell argument contains disallowed pattern: ${pattern}`);
+        throw new Error(
+          `Shell argument contains disallowed pattern: ${pattern}`
+        );
       }
     }
   }
@@ -1648,14 +2010,19 @@ function sanitizeShellCommand(command: string): string {
 
 /**
  * Validate an MCP server executable path for security concerns.
- * Rejects temporary directories, world-writable files, and relative paths.
+ * Rejects temporary directories, world-writable files, relative paths, and
+ * paths inside the current vault.
  *
  * SECURITY NOTE: This is a best-effort check. A determined attacker with
  * control of the filesystem can bypass these checks (e.g., by changing
  * permissions after validation). The primary defense is user vigilance
- * when configuring MCP servers.
+ * when configuring MCP servers. Rejecting vault-contained paths prevents
+ * an untrusted vault from executing arbitrary binaries via MCP loading.
  */
-function validateMcpServerPath(serverPath: string): void {
+function validateMcpServerPath(
+  serverPath: string,
+  vaultBasePath: string
+): void {
   if (!serverPath.startsWith('/')) {
     throw new Error('MCP server path must be absolute');
   }
@@ -1664,6 +2031,14 @@ function validateMcpServerPath(serverPath: string): void {
     if (serverPath.startsWith(tmp)) {
       throw new Error(`MCP server cannot be in a temporary directory: ${tmp}`);
     }
+  }
+  // Reject paths inside the current vault — an untrusted vault must not be
+  // able to execute binaries it ships with.
+  if (
+    vaultBasePath
+    && (serverPath === vaultBasePath || serverPath.startsWith(`${vaultBasePath}/`))
+  ) {
+    throw new Error('MCP server path cannot be inside the current vault');
   }
   try {
     const stats = statSync(serverPath);
@@ -1675,26 +2050,45 @@ function validateMcpServerPath(serverPath: string): void {
     if (error instanceof Error && error.message.includes('world-writable')) {
       throw error;
     }
-    throw new Error(`Cannot stat MCP server file: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Cannot stat MCP server file: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
 /**
- * Validate shell arguments for dangerous patterns.
- * Each argument is checked individually against DANGEROUS_ARG_PATTERNS.
- * This prevents option injection attacks where a "safe" command like `git`
- * is passed a dangerous argument like `--config core.sshCommand=rm -rf /`.
+ * Validate shell arguments for dangerous patterns AND enforce the per-command
+ * argument allowlist.
+ *
+ * Each argument is checked individually against DANGEROUS_ARG_PATTERNS, then
+ * against the command's allowlist. Any argument that does not start with an
+ * allowed prefix is rejected. This prevents option injection attacks where a
+ * "safe" command is passed a dangerous argument.
  *
  * SECURITY NOTE: This is a defense-in-depth measure. With `shell: false`,
  * arguments are passed directly to the executable, but some commands have
  * configuration options that enable arbitrary code execution.
  */
-function sanitizeShellArguments(args: string[]): void {
+function sanitizeShellArguments(command: string, args: string[]): void {
+  const allowedArgs = ALLOWED_COMMAND_ARGS[command] ?? [];
+
   for (const arg of args) {
     for (const pattern of DANGEROUS_ARG_PATTERNS) {
       if (arg.includes(pattern)) {
-        throw new Error(`Shell argument contains disallowed pattern: ${pattern}`);
+        throw new Error(
+          `Shell argument contains disallowed pattern: ${pattern}`
+        );
       }
+    }
+
+    // Enforce the per-command argument allowlist.
+    const isAllowed = allowedArgs.some(
+      (prefix) => arg === prefix || arg.startsWith(prefix)
+    );
+    if (!isAllowed) {
+      throw new Error(
+        `Shell argument not allowed for '${command}': ${arg}. Allowed: ${allowedArgs.join(', ') || 'none'}`
+      );
     }
   }
 }

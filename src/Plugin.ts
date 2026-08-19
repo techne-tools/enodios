@@ -26,6 +26,7 @@ import { NoteComposerManager } from './NoteComposerManager.ts';
 import { NoteTemplateManager } from './NoteTemplateManager.ts';
 import { OutlineManager } from './OutlineManager.ts';
 import { PDFAnnotationManager } from './PDFAnnotationManager.ts';
+import type { PluginSettings } from './PluginSettings.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
 import { PluginSettingsTab } from './PluginSettingsTab.ts';
 import { SecretsManager } from './SecretsManager.ts';
@@ -64,7 +65,7 @@ export class Plugin extends PluginBase<PluginTypes> {
   public pdfAnnotationManager!: PDFAnnotationManager;
   public tagManager!: TagManager;
   public templateManager!: TemplateManager;
-  public activeEditorView?: EditorView;
+  public activeEditorView: EditorView | null = null;
   private ribbonBadgeEl?: HTMLElement;
   private statusBarItemEl?: HTMLElement;
 
@@ -72,7 +73,9 @@ export class Plugin extends PluginBase<PluginTypes> {
    * Get the active chat client based on connection mode.
    */
   public getChatClient(): ChatClient {
-    return this.settings.connectionMode === 'api' ? this.apiClient : this.acpClient;
+    return this.settings.connectionMode === 'api'
+      ? this.apiClient
+      : this.acpClient;
   }
 
   /**
@@ -85,9 +88,24 @@ export class Plugin extends PluginBase<PluginTypes> {
    * the public API surface.
    */
   public openSettings(): void {
-    const appWithSettings = this.app as unknown as { setting: { open(): void; openTabById(id: string): void } };
+    const appWithSettings = this.app as unknown as {
+      setting: { open(): void; openTabById(id: string): void };
+    };
     appWithSettings.setting.open();
     appWithSettings.setting.openTabById(this.manifest.id);
+  }
+
+  /**
+   * Set a single settings property and persist it.
+   * This is the typed, safe way to mutate settings at runtime (avoids
+   * `@ts-expect-error` casts and bypassing the settings manager's
+   * validation/normalization path).
+   */
+  public async setSetting<K extends keyof PluginSettings>(
+    key: K,
+    value: PluginSettings[K]
+  ): Promise<void> {
+    await this.settingsManager.setProperty(key, value);
   }
 
   protected override createSettingsManager(): PluginSettingsManager {
@@ -141,11 +159,14 @@ export class Plugin extends PluginBase<PluginTypes> {
 
     // Connect on load using the configured mode
     const client = this.getChatClient();
-    client.connect().catch((err) => {
+    client.connect().catch((err: unknown) => {
       this.debug.error('Initial connection failed', err);
     });
 
-    this.registerView(ENODIOS_CHAT_VIEW_TYPE, (leaf) => new EnodiosChatView(leaf, this));
+    this.registerView(
+      ENODIOS_CHAT_VIEW_TYPE,
+      (leaf) => new EnodiosChatView(leaf, this)
+    );
 
     // Register CodeMirror 6 extensions for inline ghost text and diff
     this.registerEditorExtension(ghostTextExtension);
@@ -158,14 +179,20 @@ export class Plugin extends PluginBase<PluginTypes> {
     );
 
     // Add ribbon icon for Enodios chat
-    const ribbonIconEl = this.addRibbonIcon('message-square', 'Open Enodios Chat', () => {
-      this.openView(ENODIOS_CHAT_VIEW_TYPE).catch((err) => {
-        this.debug.error('Failed to open view', err);
-      });
-    });
+    const ribbonIconEl = this.addRibbonIcon(
+      'message-square',
+      'Open Enodios Chat',
+      () => {
+        this.openView(ENODIOS_CHAT_VIEW_TYPE).catch((err: unknown) => {
+          this.debug.error('Failed to open view', err);
+        });
+      }
+    );
 
     ribbonIconEl.classList.add('enodios-ribbon-icon');
-    this.ribbonBadgeEl = ribbonIconEl.createSpan({ cls: 'enodios-ribbon-badge' });
+    this.ribbonBadgeEl = ribbonIconEl.createSpan({
+      cls: 'enodios-ribbon-badge'
+    });
     this.ribbonBadgeEl.style.display = 'none';
 
     const updateBadge = (): void => {
@@ -184,7 +211,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Add command to open Enodios chat view
     this.addCommand({
       callback: () => {
-        this.openView(ENODIOS_CHAT_VIEW_TYPE).catch((err) => {
+        this.openView(ENODIOS_CHAT_VIEW_TYPE).catch((err: unknown) => {
           this.debug.error('Failed to open view', err);
         });
       },
@@ -195,7 +222,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Add command to toggle Enodios chat view
     this.addCommand({
       callback: () => {
-        this.toggleView(ENODIOS_CHAT_VIEW_TYPE).catch((err) => {
+        this.toggleView(ENODIOS_CHAT_VIEW_TYPE).catch((err: unknown) => {
           this.debug.error('Failed to toggle view', err);
         });
       },
@@ -212,7 +239,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Add command to focus Enodios chat input (when chat is open)
     this.addCommand({
       callback: () => {
-        this.focusChatInput().catch((err) => {
+        this.focusChatInput().catch((err: unknown) => {
           this.debug.error('Failed to focus input', err);
         });
       },
@@ -229,8 +256,8 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Add command to trigger inline completion (Ghost Text)
     this.addCommand({
       editorCallback: async (editor) => {
-        // @ts-expect-error - Accessing internal CodeMirror 6 view from Obsidian's Editor wrapper
-        const cmView = editor.cm;
+        // Access internal CodeMirror 6 view from Obsidian's Editor wrapper.
+        const cmView = (editor as unknown as { cm?: EditorView }).cm;
         if (!cmView) return;
 
         // Store the active editor view for use by FileChangeManager
@@ -238,7 +265,11 @@ export class Plugin extends PluginBase<PluginTypes> {
 
         const pos = editor.posToOffset(editor.getCursor());
         cmView.dispatch({
-          effects: setGhostTextEffect.of({ alternatives: [' ...Hermes is thinking...'], currentIndex: 0, pos })
+          effects: setGhostTextEffect.of({
+            alternatives: [' ...Hermes is thinking...'],
+            currentIndex: 0,
+            pos
+          })
         });
 
         try {
@@ -250,13 +281,22 @@ export class Plugin extends PluginBase<PluginTypes> {
             'You are an inline auto-completion assistant. Continue the text naturally based on the prefix and suffix context. Do NOT repeat the prefix. ONLY output the exact text that should be inserted at the cursor position. Keep it concise.';
           const userText = `<PREFIX>\n${prefix}\n</PREFIX>\n<SUFFIX>\n${suffix}\n</SUFFIX>`;
 
-          const completions = await this.apiClient.getInlineCompletions(systemPrompt, userText);
+          const completions = await this.apiClient.getInlineCompletions(
+            systemPrompt,
+            userText
+          );
 
           if (completions && completions.length > 0) {
             // Only show if the cursor hasn't moved while we were waiting
             const currentPos = editor.posToOffset(editor.getCursor());
             if (currentPos === pos) {
-              cmView.dispatch({ effects: setGhostTextEffect.of({ alternatives: completions, currentIndex: 0, pos }) });
+              cmView.dispatch({
+                effects: setGhostTextEffect.of({
+                  alternatives: completions,
+                  currentIndex: 0,
+                  pos
+                })
+              });
             } else {
               cmView.dispatch({ effects: setGhostTextEffect.of(null) });
             }
@@ -296,19 +336,26 @@ export class Plugin extends PluginBase<PluginTypes> {
         }
 
         await this.openView(ENODIOS_CHAT_VIEW_TYPE);
-        const leaves = this.app.workspace.getLeavesOfType(ENODIOS_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(
+          ENODIOS_CHAT_VIEW_TYPE
+        );
         if (leaves.length === 0) return;
 
-        const chatView = leaves[0]!.view;
+        const chatView = leaves[0]?.view;
         if (!(chatView instanceof EnodiosChatView)) return;
 
-        const contextItems = [{
-          id: `selection-${Date.now()}`,
-          text: selection.slice(0, 50) + (selection.length > 50 ? '...' : ''),
-          type: 'selection' as const
-        }];
+        const contextItems = [
+          {
+            id: `selection-${Date.now()}`,
+            text: selection.slice(0, 50) + (selection.length > 50 ? '...' : ''),
+            type: 'selection' as const
+          }
+        ];
 
-        await chatView.sendPrompt(`Please explain or elaborate on the following:\n\n${selection}`, contextItems);
+        await chatView.sendPrompt(
+          `Please explain or elaborate on the following:\n\n${selection}`,
+          contextItems
+        );
       },
       id: 'enodios-ask-selection',
       name: 'Ask Enodios about selection'
@@ -325,19 +372,26 @@ export class Plugin extends PluginBase<PluginTypes> {
         }
 
         await this.openView(ENODIOS_CHAT_VIEW_TYPE);
-        const leaves = this.app.workspace.getLeavesOfType(ENODIOS_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(
+          ENODIOS_CHAT_VIEW_TYPE
+        );
         if (leaves.length === 0) return;
 
-        const chatView = leaves[0]!.view;
+        const chatView = leaves[0]?.view;
         if (!(chatView instanceof EnodiosChatView)) return;
 
-        const contextItems = [{
-          id: `note-${activeFile.path}`,
-          text: activeFile.basename,
-          type: 'note' as const
-        }];
+        const contextItems = [
+          {
+            id: `note-${activeFile.path}`,
+            text: activeFile.basename,
+            type: 'note' as const
+          }
+        ];
 
-        await chatView.sendPrompt('Please provide a concise summary of this note.', contextItems);
+        await chatView.sendPrompt(
+          'Please provide a concise summary of this note.',
+          contextItems
+        );
       },
       id: 'enodios-summarize-note',
       name: 'Summarize current note with Enodios'
@@ -354,19 +408,26 @@ export class Plugin extends PluginBase<PluginTypes> {
         }
 
         await this.openView(ENODIOS_CHAT_VIEW_TYPE);
-        const leaves = this.app.workspace.getLeavesOfType(ENODIOS_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(
+          ENODIOS_CHAT_VIEW_TYPE
+        );
         if (leaves.length === 0) return;
 
-        const chatView = leaves[0]!.view;
+        const chatView = leaves[0]?.view;
         if (!(chatView instanceof EnodiosChatView)) return;
 
-        const contextItems = [{
-          id: `note-${activeFile.path}`,
-          text: activeFile.basename,
-          type: 'note' as const
-        }];
+        const contextItems = [
+          {
+            id: `note-${activeFile.path}`,
+            text: activeFile.basename,
+            type: 'note' as const
+          }
+        ];
 
-        await chatView.sendPrompt('Generate 3-5 relevant tags for this note. Return them as a comma-separated list.', contextItems);
+        await chatView.sendPrompt(
+          'Generate 3-5 relevant tags for this note. Return them as a comma-separated list.',
+          contextItems
+        );
       },
       id: 'enodios-generate-tags',
       name: 'Generate tags for current note'
@@ -392,9 +453,14 @@ export class Plugin extends PluginBase<PluginTypes> {
         }
         const content = await this.app.vault.read(activeFile);
         const style = this.settings.citationStyle;
-        const bib = this.citationManager.generateBibliographyForContent(content, style);
+        const bib = this.citationManager.generateBibliographyForContent(
+          content,
+          style
+        );
         if (!bib) {
-          new Notice('No citations found in current note to generate bibliography for.');
+          new Notice(
+            'No citations found in current note to generate bibliography for.'
+          );
           return;
         }
 
@@ -448,15 +514,19 @@ export class Plugin extends PluginBase<PluginTypes> {
           return;
         }
         await this.openView(ENODIOS_CHAT_VIEW_TYPE);
-        const leaves = this.app.workspace.getLeavesOfType(ENODIOS_CHAT_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(
+          ENODIOS_CHAT_VIEW_TYPE
+        );
         if (leaves.length === 0) return;
-        const chatView = leaves[0]!.view;
+        const chatView = leaves[0]?.view;
         if (!(chatView instanceof EnodiosChatView)) return;
-        const contextItems = [{
-          id: `note-${activeFile.path}`,
-          text: activeFile.basename,
-          type: 'note' as const
-        }];
+        const contextItems = [
+          {
+            id: `note-${activeFile.path}`,
+            text: activeFile.basename,
+            type: 'note' as const
+          }
+        ];
         await chatView.sendPrompt(
           'Generate a Slides presentation from this note. Use `---` to separate slides. Start with a title slide (`# Title`), then use `##` for each section heading.',
           contextItems
@@ -501,10 +571,24 @@ export class Plugin extends PluginBase<PluginTypes> {
   }
 
   protected override async onunloadImpl(): Promise<void> {
-    this.acpClient?.disconnect();
-    this.apiClient?.disconnect();
-    this.fileChangeManager?.destroy();
+    this.acpClient.disconnect();
+    this.apiClient.disconnect();
+    this.fileChangeManager.destroy();
     clearAllCommands();
+
+    // Clear the cached active editor view reference.
+    this.activeEditorView = null;
+
+    // Destroy any open chat view React roots so we don't leak DOM nodes,
+    // event listeners, or subscriptions when the plugin is disabled/reloaded.
+    const leaves = this.app.workspace.getLeavesOfType(ENODIOS_CHAT_VIEW_TYPE);
+    for (const leaf of leaves) {
+      const view = leaf.view;
+      if (view instanceof EnodiosChatView) {
+        view.destroyRoot();
+      }
+    }
+
     await super.onunloadImpl();
   }
 
@@ -515,12 +599,14 @@ export class Plugin extends PluginBase<PluginTypes> {
       return;
     }
 
-    await this.app.workspace.revealLeaf(leaves[0]!);
+    const firstLeaf = leaves[0];
+    if (!firstLeaf) return;
+    await this.app.workspace.revealLeaf(firstLeaf);
     // Focus the textarea after a short delay to allow the view to render
     setTimeout(() => {
-      const container = leaves[0]!.view.containerEl;
-      const textarea = container.querySelector('.enodios-input') as HTMLElement | null;
-      if (textarea) {
+      const container = firstLeaf.view.containerEl;
+      const textarea = container.querySelector('.enodios-input');
+      if (textarea instanceof HTMLElement) {
         textarea.focus();
       }
     }, 100);
@@ -528,8 +614,9 @@ export class Plugin extends PluginBase<PluginTypes> {
 
   private async openView(viewType: string): Promise<void> {
     const leaves = this.app.workspace.getLeavesOfType(viewType);
-    if (leaves.length > 0) {
-      await this.app.workspace.revealLeaf(leaves[0]!);
+    const existingLeaf = leaves[0];
+    if (existingLeaf) {
+      await this.app.workspace.revealLeaf(existingLeaf);
       return;
     }
 
@@ -545,10 +632,13 @@ export class Plugin extends PluginBase<PluginTypes> {
     if (leaves.length > 0) {
       // If the view is active, close it; otherwise reveal it
       const activeLeaf = this.app.workspace.activeLeaf;
-      if (activeLeaf?.view?.getViewType() === viewType) {
-        await this.app.workspace.detachLeavesOfType(viewType);
+      if (activeLeaf?.view.getViewType() === viewType) {
+        this.app.workspace.detachLeavesOfType(viewType);
       } else if (activeLeaf) {
-        await this.app.workspace.revealLeaf(leaves[0]!);
+        const existingLeaf = leaves[0];
+        if (existingLeaf) {
+          await this.app.workspace.revealLeaf(existingLeaf);
+        }
       }
       return;
     }

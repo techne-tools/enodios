@@ -1,12 +1,5 @@
 import { Component, MarkdownRenderer, Notice, TFile } from "obsidian";
-import {
-    memo,
-    useCallback,
-    useEffect,
-    useRef,
-    useState
-
-} from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { ChatMessage, EnodiosChatView } from "../EnodiosChatView.tsx";
 
@@ -23,7 +16,7 @@ export interface ChatMessageItemProps {
 const HELIX_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 function HelixSpinner({
-  isRunning
+  isRunning,
 }: {
   isRunning: boolean;
 }): React.ReactElement {
@@ -34,7 +27,9 @@ function HelixSpinner({
     const interval = setInterval(() => {
       setFrame((f) => (f + 1) % HELIX_FRAMES.length);
     }, 80);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, [isRunning]);
 
   return (
@@ -51,13 +46,13 @@ export const ChatMessageItem = memo(
     view,
     isEditing,
     onStartEdit,
-    onCancelEdit
+    onCancelEdit,
   }: ChatMessageItemProps): ReactElement => {
     const [isEditingLocal, setIsEditingLocal] = useState(false);
     const [editValue, setEditValue] = useState(message.content);
     const [isCopied, setIsCopied] = useState(false);
 
-    const activeEditing = isEditing !== undefined ? isEditing : isEditingLocal;
+    const activeEditing = isEditing ?? isEditingLocal;
     const setEditing = (val: boolean) => {
       if (val) {
         if (onStartEdit) onStartEdit();
@@ -88,17 +83,16 @@ export const ChatMessageItem = memo(
       system: "System",
       terminal: "Terminal Output",
       tool: "Tool",
-      user: "You"
+      user: "You",
     }[message.role];
 
     if (message.role === "tool") {
       const isError = message.toolStatus === "error";
-      const isRunning = message.isRunning || message.toolStatus === "running";
-      const statusIcon = isError
-? (
+      const isRunning =
+        message.isRunning === true || message.toolStatus === "running";
+      const statusIcon = isError ? (
         "❌ "
-      )
-: (
+      ) : (
         <HelixSpinner isRunning={isRunning} />
       );
       roleLabel = (
@@ -111,7 +105,8 @@ export const ChatMessageItem = memo(
     // Collapsible reasoning and tool messages
     if (message.role === "tool" && message.isBackgrounded) {
       const isError = message.toolStatus === "error";
-      const isRunning = message.isRunning || message.toolStatus === "running";
+      const isRunning =
+        message.isRunning === true || message.toolStatus === "running";
       const statusIcon = isError ? "❌" : isRunning ? "⚙️" : "✅";
       const statusText = isError
         ? "errored"
@@ -150,8 +145,7 @@ export const ChatMessageItem = memo(
                 title={isCopied ? "Copied!" : "Copy or Drag Reasoning"}
                 type="button"
               >
-                {isCopied
-? (
+                {isCopied ? (
                   <svg
                     fill="none"
                     height="12"
@@ -165,8 +159,7 @@ export const ChatMessageItem = memo(
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                )
-: (
+                ) : (
                   <svg
                     fill="none"
                     height="12"
@@ -189,8 +182,7 @@ export const ChatMessageItem = memo(
                 title={isExpanded ? "Collapse reasoning" : "Expand reasoning"}
                 type="button"
               >
-                {isExpanded
-? (
+                {isExpanded ? (
                   <svg
                     fill="none"
                     height="12"
@@ -204,8 +196,7 @@ export const ChatMessageItem = memo(
                   >
                     <polyline points="18 15 12 9 6 15" />
                   </svg>
-                )
-: (
+                ) : (
                   <svg
                     fill="none"
                     height="12"
@@ -251,8 +242,7 @@ export const ChatMessageItem = memo(
                 title={isCopied ? "Copied!" : "Copy or Drag Output"}
                 type="button"
               >
-                {isCopied
-? (
+                {isCopied ? (
                   <svg
                     fill="none"
                     height="12"
@@ -266,8 +256,7 @@ export const ChatMessageItem = memo(
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                )
-: (
+                ) : (
                   <svg
                     fill="none"
                     height="12"
@@ -294,7 +283,9 @@ export const ChatMessageItem = memo(
             <button
               className="enodios-abort-btn"
               onClick={() => {
-                view.abortTerminal(message.terminalId!);
+                if (message.terminalId) {
+                  view.abortTerminal(message.terminalId);
+                }
               }}
               title="Stop the running command"
               type="button"
@@ -366,8 +357,7 @@ export const ChatMessageItem = memo(
               title={isCopied ? "Copied!" : "Copy or Drag Message"}
               type="button"
             >
-              {isCopied
-? (
+              {isCopied ? (
                 <svg
                   fill="none"
                   height="12"
@@ -381,8 +371,7 @@ export const ChatMessageItem = memo(
                 >
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-              )
-: (
+              ) : (
                 <svg
                   fill="none"
                   height="12"
@@ -434,7 +423,7 @@ export const ChatMessageItem = memo(
         </div>
       </div>
     );
-  }
+  },
 );
 
 interface MarkdownContentProps {
@@ -462,7 +451,7 @@ export const MarkdownContent = memo(
             if (file instanceof TFile) {
               e.preventDefault();
               e.stopPropagation();
-              view.app.workspace
+              void view.app.workspace
                 .getLeaf(e.ctrlKey || e.metaKey ? "tab" : false)
                 .openFile(file);
               return;
@@ -473,15 +462,15 @@ export const MarkdownContent = memo(
         // Handle our custom clickable paths in inline code
         const code = target.closest("code.enodios-clickable-path");
         if (code) {
-          const text = code.textContent?.trim();
+          const text = code.textContent;
           if (text) {
             const file =
-              view.app.metadataCache.getFirstLinkpathDest(text, "") ||
+              view.app.metadataCache.getFirstLinkpathDest(text, "") ??
               view.app.vault.getAbstractFileByPath(text);
             if (file instanceof TFile) {
               e.preventDefault();
               e.stopPropagation();
-              view.app.workspace
+              void view.app.workspace
                 .getLeaf(e.ctrlKey || e.metaKey ? "tab" : false)
                 .openFile(file);
             }
@@ -490,7 +479,9 @@ export const MarkdownContent = memo(
       };
 
       container.addEventListener("click", handlePathClick);
-      return () => container.removeEventListener("click", handlePathClick);
+      return () => {
+        container.removeEventListener("click", handlePathClick);
+      };
     }, [view]);
 
     useEffect(() => {
@@ -523,7 +514,7 @@ export const MarkdownContent = memo(
             .replace(/\|/g, "&#124;");
           const langClass = lang ? ` class="language-${lang}"` : "";
           return `${before}<pre><code${langClass}>${fixedCode}</code></pre>${after}`;
-        }
+        },
       );
 
       try {
@@ -532,7 +523,7 @@ export const MarkdownContent = memo(
           processedContent,
           containerRef.current,
           view.app.vault.getRoot().path,
-          renderChild
+          renderChild,
         )
           .then(() => {
             if (!containerRef.current) {
@@ -542,7 +533,7 @@ export const MarkdownContent = memo(
             preElements.forEach((pre) => {
               if (
                 pre.parentElement?.classList.contains(
-                  "enodios-code-block-wrapper"
+                  "enodios-code-block-wrapper",
                 )
               ) {
                 return;
@@ -566,22 +557,24 @@ export const MarkdownContent = memo(
               copyBtn.innerHTML =
                 '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><rect height="13" rx="2" ry="2" width="13" x="9" y="9" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>';
 
-              copyBtn.addEventListener("click", async () => {
+              copyBtn.addEventListener("click", () => {
                 const codeEl = pre.querySelector("code");
                 if (codeEl) {
-                  try {
-                    await navigator.clipboard.writeText(codeEl.innerText);
-                    copyBtn.innerHTML =
-                      '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><polyline points="20 6 9 17 4 12" /></svg>';
-                    copyBtn.classList.add("copied");
-                    setTimeout(() => {
+                  void navigator.clipboard
+                    .writeText(codeEl.innerText)
+                    .then(() => {
                       copyBtn.innerHTML =
-                        '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><rect height="13" rx="2" ry="2" width="13" x="9" y="9" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>';
-                      copyBtn.classList.remove("copied");
-                    }, 2000);
-                  } catch (err) {
-                    // Ignore copy errors
-                  }
+                        '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><polyline points="20 6 9 17 4 12" /></svg>';
+                      copyBtn.classList.add("copied");
+                      setTimeout(() => {
+                        copyBtn.innerHTML =
+                          '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><rect height="13" rx="2" ry="2" width="13" x="9" y="9" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>';
+                        copyBtn.classList.remove("copied");
+                      }, 2000);
+                    })
+                    .catch(() => {
+                      // Ignore copy errors
+                    });
                 }
               });
               wrapper.appendChild(copyBtn);
@@ -594,22 +587,26 @@ export const MarkdownContent = memo(
               if (code.closest("pre")) {
                 return;
               }
-              const text = code.textContent?.trim();
+              const text = code.textContent;
               if (text) {
                 const file =
-                  view.app.metadataCache.getFirstLinkpathDest(text, "") ||
+                  view.app.metadataCache.getFirstLinkpathDest(text, "") ??
                   view.app.vault.getAbstractFileByPath(text);
                 if (file instanceof TFile) {
                   code.classList.add("enodios-clickable-path");
                   code.title = `Click to open ${file.path}\nDrag to insert link`;
                   code.draggable = true;
                   code.addEventListener("dragstart", (e: DragEvent) => {
-                    // @ts-expect-error - Accessing internal Obsidian dragManager API
-                    const dragManager = view.app.dragManager;
-                    if (
-                      dragManager &&
-                      typeof dragManager.dragFile === "function"
-                    ) {
+                    // Access internal Obsidian dragManager API.
+                    // `dragFile` is not in the public typings, so cast through unknown.
+                    const dragManager = (
+                      view.app as unknown as {
+                        dragManager?: {
+                          dragFile: (event: DragEvent, file: TFile) => void;
+                        };
+                      }
+                    ).dragManager;
+                    if (dragManager) {
                       dragManager.dragFile(e, file);
                     } else if (e.dataTransfer) {
                       e.dataTransfer.setData("text/plain", `[[${file.path}]]`);
@@ -632,5 +629,5 @@ export const MarkdownContent = memo(
     }, [content, view]);
 
     return <div className="enodios-markdown-renderer" ref={containerRef} />;
-  }
+  },
 );

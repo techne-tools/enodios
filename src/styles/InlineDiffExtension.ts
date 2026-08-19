@@ -1,17 +1,9 @@
-import type { DecorationSet } from '@codemirror/view';
+import type { DecorationSet } from "@codemirror/view";
 
-import {
- Range,
- StateEffect,
-StateField
-} from '@codemirror/state';
-import {
- Decoration,
-EditorView,
-WidgetType
-} from '@codemirror/view';
+import { Range, StateEffect, StateField } from "@codemirror/state";
+import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 
-import type { DiffLineState, FileChangeManager } from '../FileChangeManager.ts';
+import type { DiffLineState, FileChangeManager } from "../FileChangeManager.ts";
 
 interface InlineDiffState {
   changeId: string;
@@ -20,56 +12,100 @@ interface InlineDiffState {
 }
 
 class FileHeaderWidget extends WidgetType {
-  constructor(private changeId: string, private manager: FileChangeManager) { super(); }
+  constructor(
+    private changeId: string,
+    private manager: FileChangeManager,
+  ) {
+    super();
+  }
 
-  override eq(other: FileHeaderWidget) { return this.changeId === other.changeId; }
+  override eq(other: FileHeaderWidget) {
+    return this.changeId === other.changeId;
+  }
 
   toDOM() {
-    const div = document.createElement('div');
-    div.className = 'enodios-diff-file-header';
+    const div = document.createElement("div");
+    div.className = "enodios-diff-file-header";
     // NOTE: "Approve All" / "Reject All" here refers to ALL hunks within
     // this single file change, not all pending changes globally. The UI
     // presents one file header per pending change, so "All" is scoped
     // to the current file's hunks.
-    div.innerHTML = `
-      <div class="enodios-diff-file-title">Pending Changes</div>
-      <div class="enodios-diff-actions">
-        <button class="enodios-btn-approve">Approve All</button>
-        <button class="enodios-btn-reject">Reject All</button>
-      </div>
-    `;
-    div.querySelector('.enodios-btn-approve')!.addEventListener('click', () => {
-      this.manager.approveChange(this.changeId);
+    const title = document.createElement("div");
+    title.className = "enodios-diff-file-title";
+    title.textContent = "Pending Changes";
+    div.appendChild(title);
+
+    const actions = document.createElement("div");
+    actions.className = "enodios-diff-actions";
+
+    const approveBtn = document.createElement("button");
+    approveBtn.className = "enodios-btn-approve";
+    approveBtn.textContent = "Approve All";
+    approveBtn.addEventListener("click", () => {
+      void this.manager.approveChange(this.changeId);
     });
-    div.querySelector('.enodios-btn-reject')!.addEventListener('click', () => {
-      this.manager.rejectChange(this.changeId);
+
+    const rejectBtn = document.createElement("button");
+    rejectBtn.className = "enodios-btn-reject";
+    rejectBtn.textContent = "Reject All";
+    rejectBtn.addEventListener("click", () => {
+      void this.manager.rejectChange(this.changeId);
     });
+
+    actions.appendChild(approveBtn);
+    actions.appendChild(rejectBtn);
+    div.appendChild(actions);
     return div;
   }
 }
 
 class HunkHeaderWidget extends WidgetType {
-  constructor(private changeId: string, private indices: number[], private manager: FileChangeManager) { super(); }
+  constructor(
+    private changeId: string,
+    private indices: number[],
+    private manager: FileChangeManager,
+  ) {
+    super();
+  }
 
   override eq(other: HunkHeaderWidget) {
-    return this.changeId === other.changeId && this.indices.join(',') === other.indices.join(',');
+    return (
+      this.changeId === other.changeId &&
+      this.indices.join(",") === other.indices.join(",")
+    );
   }
 
   toDOM() {
-    const div = document.createElement('div');
-    div.className = 'enodios-diff-hunk-header';
-    div.innerHTML = `
-      <div class="enodios-diff-actions">
-        <button class="enodios-btn-approve-sm">Approve Hunk</button>
-        <button class="enodios-btn-reject-sm">Reject Hunk</button>
-      </div>
-    `;
-    div.querySelector('.enodios-btn-approve-sm')!.addEventListener('click', () => {
-      this.manager.processPartialChange(this.changeId, this.indices, 'approve');
+    const div = document.createElement("div");
+    div.className = "enodios-diff-hunk-header";
+    const actions = document.createElement("div");
+    actions.className = "enodios-diff-actions";
+
+    const approveBtn = document.createElement("button");
+    approveBtn.className = "enodios-btn-approve-sm";
+    approveBtn.textContent = "Approve Hunk";
+    approveBtn.addEventListener("click", () => {
+      void this.manager.processPartialChange(
+        this.changeId,
+        this.indices,
+        "approve",
+      );
     });
-    div.querySelector('.enodios-btn-reject-sm')!.addEventListener('click', () => {
-      this.manager.processPartialChange(this.changeId, this.indices, 'reject');
+
+    const rejectBtn = document.createElement("button");
+    rejectBtn.className = "enodios-btn-reject-sm";
+    rejectBtn.textContent = "Reject Hunk";
+    rejectBtn.addEventListener("click", () => {
+      void this.manager.processPartialChange(
+        this.changeId,
+        this.indices,
+        "reject",
+      );
     });
+
+    actions.appendChild(approveBtn);
+    actions.appendChild(rejectBtn);
+    div.appendChild(actions);
     return div;
   }
 }
@@ -79,47 +115,69 @@ class InlineDiffWidget extends WidgetType {
     public readonly line: DiffLineState,
     public readonly index: number,
     public readonly changeId: string,
-    public readonly manager: FileChangeManager
-  ) { super(); }
+    public readonly manager: FileChangeManager,
+  ) {
+    super();
+  }
 
   override eq(other: InlineDiffWidget): boolean {
-    return this.line.line === other.line.line && this.line.type === other.line.type && this.index === other.index && this.changeId === other.changeId;
+    return (
+      this.line.line === other.line.line &&
+      this.line.type === other.line.type &&
+      this.index === other.index &&
+      this.changeId === other.changeId
+    );
   }
 
   toDOM(): HTMLElement {
-    const span = document.createElement('div');
-    span.className = 'enodios-diff-line enodios-diff-' + this.line.type;
+    const span = document.createElement("div");
+    span.className = "enodios-diff-line enodios-diff-" + this.line.type;
 
-    const marker = document.createElement('span');
-    marker.className = 'enodios-diff-marker';
-    marker.textContent = this.line.type === 'added' ? '+' : this.line.type === 'removed' ? '-' : ' ';
+    const marker = document.createElement("span");
+    marker.className = "enodios-diff-marker";
+    marker.textContent =
+      this.line.type === "added"
+        ? "+"
+        : this.line.type === "removed"
+          ? "-"
+          : " ";
     span.appendChild(marker);
 
-    const text = document.createElement('span');
-    text.className = 'enodios-diff-text';
-    text.textContent = this.line.line || ' ';
+    const text = document.createElement("span");
+    text.className = "enodios-diff-text";
+    text.textContent = this.line.line || " ";
     span.appendChild(text);
 
     // Add inline action buttons on hover
-    const actions = document.createElement('span');
-    actions.className = 'enodios-diff-line-actions';
+    const actions = document.createElement("span");
+    actions.className = "enodios-diff-line-actions";
 
-    const approveBtn = document.createElement('button');
-    approveBtn.className = 'enodios-btn-approve-line';
-    approveBtn.title = 'Approve change';
-    approveBtn.textContent = '✓';
-    approveBtn.addEventListener('click', (e) => {
+    const approveBtn = document.createElement("button");
+    approveBtn.className = "enodios-btn-approve-line";
+    approveBtn.title = "Approve change";
+    approveBtn.textContent = "✓";
+    approveBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.manager.processPartialChange(this.changeId, [this.index], 'approve');
+
+      void this.manager.processPartialChange(
+        this.changeId,
+        [this.index],
+        "approve",
+      );
     });
 
-    const rejectBtn = document.createElement('button');
-    rejectBtn.className = 'enodios-btn-reject-line';
-    rejectBtn.title = 'Reject change';
-    rejectBtn.textContent = '✗';
-    rejectBtn.addEventListener('click', (e) => {
+    const rejectBtn = document.createElement("button");
+    rejectBtn.className = "enodios-btn-reject-line";
+    rejectBtn.title = "Reject change";
+    rejectBtn.textContent = "✗";
+    rejectBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.manager.processPartialChange(this.changeId, [this.index], 'reject');
+
+      void this.manager.processPartialChange(
+        this.changeId,
+        [this.index],
+        "reject",
+      );
     });
 
     actions.appendChild(approveBtn);
@@ -129,13 +187,17 @@ class InlineDiffWidget extends WidgetType {
     return span;
   }
 
-  override ignoreEvent(): boolean { return false; }
+  override ignoreEvent(): boolean {
+    return false;
+  }
 }
 
 export const setInlineDiffEffect = StateEffect.define<InlineDiffState | null>();
 
 export const inlineDiffStateField = StateField.define<DecorationSet>({
-  create() { return Decoration.none; },
+  create() {
+    return Decoration.none;
+  },
   provide: (f) => EditorView.decorations.from(f),
   update(value, tr) {
     value = value.map(tr.changes);
@@ -157,59 +219,76 @@ export const inlineDiffStateField = StateField.define<DecorationSet>({
             // Find the position. We insert the hunk header above the FIRST changed line.
             // Wait, we can just insert it at the current docLine's start position.
             // Since we increment docLine for unchanged and removed lines, we need to subtract the number of removed lines in this hunk to get to the START of the hunk in the document.
-            const removedLines = currentHunkIndices.filter((i) => lines[i]?.type === 'removed').length;
+            const removedLines = currentHunkIndices.filter(
+              (i) => lines[i]?.type === "removed",
+            ).length;
             const targetLine = Math.max(1, docLine - removedLines);
-            const pos = targetLine <= doc.lines ? doc.line(targetLine).from : doc.length;
+            const pos =
+              targetLine <= doc.lines ? doc.line(targetLine).from : doc.length;
 
-            ranges.push(Decoration.widget({
-              widget: new HunkHeaderWidget(changeId, [...currentHunkIndices], manager),
-              block: true,
-              side: -2 // Above added lines and removed lines
-            }).range(pos));
+            ranges.push(
+              Decoration.widget({
+                widget: new HunkHeaderWidget(
+                  changeId,
+                  [...currentHunkIndices],
+                  manager,
+                ),
+                block: true,
+                side: -2, // Above added lines and removed lines
+              }).range(pos),
+            );
 
             currentHunkIndices = [];
           }
         };
 
         // File Header at top of document
-        ranges.push(Decoration.widget({
-          widget: new FileHeaderWidget(changeId, manager),
-          block: true,
-          side: -3 // Very top
-        }).range(0));
+        ranges.push(
+          Decoration.widget({
+            widget: new FileHeaderWidget(changeId, manager),
+            block: true,
+            side: -3, // Very top
+          }).range(0),
+        );
 
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
           if (!line) continue;
-          if (line.type === 'unchanged') {
+          if (line.type === "unchanged") {
             flushHunk();
             if (docLine <= doc.lines) docLine++;
           } else {
             currentHunkIndices.push(i);
-            if (line.type === 'removed') {
-               if (docLine <= doc.lines) {
-                 const lineStart = doc.line(docLine).from;
-                 const lineEnd = doc.line(docLine).to;
+            if (line.type === "removed") {
+              if (docLine <= doc.lines) {
+                const lineStart = doc.line(docLine).from;
+                const lineEnd = doc.line(docLine).to;
 
-                 // Replace the original line text so it's hidden
-                 ranges.push(Decoration.replace({}).range(lineStart, lineEnd));
+                // Replace the original line text so it's hidden
+                ranges.push(Decoration.replace({}).range(lineStart, lineEnd));
 
-                 // Insert our custom diff block widget
-                 ranges.push(Decoration.widget({
-                   widget: new InlineDiffWidget(line, i, changeId, manager),
-                   block: true,
-                   side: -1
-                 }).range(lineStart));
+                // Insert our custom diff block widget
+                ranges.push(
+                  Decoration.widget({
+                    widget: new InlineDiffWidget(line, i, changeId, manager),
+                    block: true,
+                    side: -1,
+                  }).range(lineStart),
+                );
 
-                 docLine++;
-               }
-            } else if (line.type === 'added') {
-               const pos = docLine <= doc.lines ? doc.line(docLine).from : doc.length;
-               ranges.push(Decoration.widget({
-                 widget: new InlineDiffWidget(line, i, changeId, manager),
-                 block: true,
-                 side: -1
-               }).range(pos));
+                docLine++;
+              }
+            } else {
+              // line.type === "added"
+              const pos =
+                docLine <= doc.lines ? doc.line(docLine).from : doc.length;
+              ranges.push(
+                Decoration.widget({
+                  widget: new InlineDiffWidget(line, i, changeId, manager),
+                  block: true,
+                  side: -1,
+                }).range(pos),
+              );
             }
           }
         }
@@ -228,19 +307,19 @@ export const inlineDiffStateField = StateField.define<DecorationSet>({
     }
 
     if (tr.docChanged && !tr.effects.some((e) => e.is(setInlineDiffEffect))) {
-      if (tr.isUserEvent('input') || tr.isUserEvent('delete')) {
+      if (tr.isUserEvent("input") || tr.isUserEvent("delete")) {
         return Decoration.none;
       }
     }
 
     return value;
-  }
+  },
 });
 
 export const inlineDiffExtension = inlineDiffStateField;
 
 export function clearInlineDiff(view: EditorView): void {
   view.dispatch({
-    effects: setInlineDiffEffect.of(null)
+    effects: setInlineDiffEffect.of(null),
   });
 }

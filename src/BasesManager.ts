@@ -93,11 +93,11 @@ export class BasesManager {
     }
 
     if (base.views && base.views.length > 0) {
-      lines.push(`Views (${base.views.length}):`);
+      lines.push(`Views (${String(base.views.length)}):`);
       for (const view of base.views) {
         const name = view.name ?? '(unnamed)';
         const cols = view.order ? ` — columns: ${view.order.join(', ')}` : '';
-        const limit = view.limit !== undefined ? ` — limit: ${view.limit}` : '';
+        const limit = view.limit !== undefined ? ` — limit: ${String(view.limit)}` : '';
         lines.push(`  [${view.type}] ${name}${cols}${limit}`);
       }
     } else {

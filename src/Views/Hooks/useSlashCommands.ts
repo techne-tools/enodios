@@ -3,7 +3,7 @@ import { getSlashCommands } from "../../SlashCommands.ts";
 
 export function useSlashCommands(
   setInput: (val: string) => void,
-  textareaRef: React.RefObject<HTMLTextAreaElement>
+  textareaRef: React.RefObject<HTMLTextAreaElement>,
 ) {
   const [slashSuggestions, setSlashSuggestions] = useState<
     { description: string; name: string }[]
@@ -15,7 +15,11 @@ export function useSlashCommands(
   const handleSlashInput = useCallback((text: string) => {
     if (text.startsWith("/")) {
       const parts = text.split(" ");
-      const query = parts[0]!.slice(1);
+      const first = parts[0];
+      if (first === undefined) {
+        return;
+      }
+      const query = first.slice(1);
       const commands = getSlashCommands();
       const filtered = commands.filter((cmd) => cmd.name.startsWith(query));
 
@@ -34,14 +38,14 @@ export function useSlashCommands(
         if (e.key === "ArrowDown") {
           e.preventDefault();
           setSlashSelectionIndex((prev) =>
-            prev < slashSuggestions.length - 1 ? prev + 1 : 0
+            prev < slashSuggestions.length - 1 ? prev + 1 : 0,
           );
           return true;
         }
         if (e.key === "ArrowUp") {
           e.preventDefault();
           setSlashSelectionIndex((prev) =>
-            prev > 0 ? prev - 1 : slashSuggestions.length - 1
+            prev > 0 ? prev - 1 : slashSuggestions.length - 1,
           );
           return true;
         }
@@ -63,7 +67,7 @@ export function useSlashCommands(
       }
       return false;
     },
-    [isSlashOpen, slashSuggestions, slashSelectionIndex, setInput, textareaRef]
+    [isSlashOpen, slashSuggestions, slashSelectionIndex, setInput, textareaRef],
   );
 
   return {
@@ -76,6 +80,6 @@ export function useSlashCommands(
     handleSlashInput,
     handleSlashKeyDown,
     setIsSlashOpen,
-    setSlashSuggestions
+    setSlashSuggestions,
   };
 }

@@ -59,7 +59,10 @@ export class NoteComposerManager {
       const match = /^(#{1,6})\s+(.+)$/.exec(lines[i] ?? '');
       if (match && (match[2] ?? '').toLowerCase() === normalizedQuery) {
         headingLineIdx = i;
-        headingLevel = match[1]!.length;
+        const level = match[1];
+        if (level !== undefined) {
+          headingLevel = level.length;
+        }
         break;
       }
     }
@@ -73,9 +76,12 @@ export class NoteComposerManager {
     let sectionEndIdx = lines.length;
     for (let i = headingLineIdx + 1; i < lines.length; i++) {
       const match = /^(#{1,6})\s+/.exec(lines[i] ?? '');
-      if (match && match[1]!.length <= headingLevel) {
-        sectionEndIdx = i;
-        break;
+      if (match) {
+        const level = match[1];
+        if (level !== undefined && level.length <= headingLevel) {
+          sectionEndIdx = i;
+          break;
+        }
       }
     }
 
@@ -191,7 +197,10 @@ export class NoteComposerManager {
       + `![[${newBasename}]]`
       + content.slice(toChar);
 
-    const created = await this.plugin.app.vault.create(newPath, extracted.trim() + '\n');
+    const created = await this.plugin.app.vault.create(
+      newPath,
+      extracted.trim() + '\n'
+    );
     await this.plugin.app.vault.modify(file, remaining);
 
     return created;
