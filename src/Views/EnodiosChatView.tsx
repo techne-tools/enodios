@@ -254,6 +254,68 @@ export class EnodiosChatView extends ItemView {
 
 // --- Sub-components ---
 
+interface StarterIconProps {
+  icon: string;
+  id: string;
+}
+
+function StarterIcon({ icon, id }: StarterIconProps): React.JSX.Element {
+  const attrs = {
+    fill: "none",
+    height: "24",
+    stroke: "currentColor",
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    strokeWidth: "2",
+    viewBox: "0 0 24 24",
+    width: "24",
+    className: "svg-icon"
+  };
+
+  if (id === "lit-review" || icon === "📚") {
+    return (
+      <svg {...attrs}>
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+      </svg>
+    );
+  }
+  if (id === "writing-coach" || icon === "✍️") {
+    return (
+      <svg {...attrs}>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+    );
+  }
+  if (id === "code-assistant" || icon === "💻") {
+    return (
+      <svg {...attrs}>
+        <polyline points="16 18 22 12 16 6" />
+        <polyline points="8 6 2 12 8 18" />
+      </svg>
+    );
+  }
+  if (id === "study-companion" || icon === "🧠") {
+    return (
+      <svg {...attrs}>
+        <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3 3 0 0 1 0-4.88 2.5 2.5 0 0 1 0-3.12A2.5 2.5 0 0 1 9.5 2Z" />
+        <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3 3 0 0 0 0-4.88 2.5 2.5 0 0 0 0-3.12A2.5 2.5 0 0 0 14.5 2Z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...attrs}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M10 9H8" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
+    </svg>
+  );
+}
+
 export function EnodiosChatViewComponent({
   view
 }: EnodiosChatViewComponentProps): ReactElement {
@@ -3464,7 +3526,7 @@ const OnboardingPanel = memo(
           </div>
 
           {templates.length > 0 && (
-            <div style={{ width: "100%", maxWidth: "400px" }}>
+            <div style={{ width: "100%", maxWidth: "400px", margin: "0 auto" }}>
               <div
                 style={{
                   fontSize: "0.85em",
@@ -3482,7 +3544,10 @@ const OnboardingPanel = memo(
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
-                  gap: "10px"
+                  gap: "10px",
+                  justifyContent: "center",
+                  alignItems: "stretch",
+                  width: "100%"
                 }}
               >
                 {templates.map((tpl) => (
@@ -3513,12 +3578,25 @@ const OnboardingPanel = memo(
                       transition: "all 0.15s ease",
                       textAlign: "center",
                       gap: "8px",
-                      height: "100%"
+                      height: "100%",
+                      width: "100%",
+                      margin: 0,
+                      boxSizing: "border-box"
                     }}
                     title={tpl.description}
                     type="button"
                   >
-                    <span style={{ fontSize: "1.8em" }}>{tpl.icon}</span>
+                    <span
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--text-accent)",
+                        marginBottom: "4px"
+                      }}
+                    >
+                      <StarterIcon icon={tpl.icon} id={tpl.id} />
+                    </span>
                     <span
                       style={{
                         fontSize: "0.85em",
