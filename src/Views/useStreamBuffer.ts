@@ -63,6 +63,12 @@ export function useStreamBuffer(
       return;
     }
 
+    // Capture current ref values synchronously before scheduling the asynchronous state update.
+    // This prevents race conditions where the refs are cleared (set to null) synchronously
+    // in the same tick/event loop turn as flushNow/flushBuffer but before the React state updater runs.
+    const currentStreamingId = streamingMessageIdRef.current;
+    const currentReasoningId = reasoningMessageIdRef.current;
+
     // Capture and clear pending content atomically inside the setMessages updater
     // To prevent race conditions where a chunk arrives between capture and clear.
     setMessages((prev) => {
@@ -77,9 +83,9 @@ export function useStreamBuffer(
 
       let updated = prev;
 
-      if (latestContent) {
+      if (latestContent && currentStreamingId) {
         const assistantIndex = updated.findIndex(
-          (m) => m.role === 'assistant' && m.id === streamingMessageIdRef.current
+          (m) => m.role === 'assistant' && m.id === currentStreamingId
         );
         if (assistantIndex >= 0) {
           const newArray = [...updated];
@@ -92,9 +98,11 @@ export function useStreamBuffer(
       }
 
       if (latestReasoning && showReasoning) {
-        const reasoningIndex = updated.findIndex(
-          (m) => m.role === 'reasoning' && m.id === reasoningMessageIdRef.current
-        );
+        const reasoningIndex = currentReasoningId
+          ? updated.findIndex(
+              (m) => m.role === 'reasoning' && m.id === currentReasoningId
+            )
+          : -1;
         if (reasoningIndex >= 0) {
           const newArray = [...updated];
           newArray[reasoningIndex] = {
@@ -113,9 +121,11 @@ export function useStreamBuffer(
             timestamp: Date.now()
           };
           // Insert reasoning BEFORE the assistant placeholder so it appears above the response
-          const assistantIndex = updated.findIndex(
-            (m) => m.role === 'assistant' && m.id === streamingMessageIdRef.current
-          );
+          const assistantIndex = currentStreamingId
+            ? updated.findIndex(
+                (m) => m.role === 'assistant' && m.id === currentStreamingId
+              )
+            : -1;
           if (assistantIndex >= 0) {
             updated = [
               ...updated.slice(0, assistantIndex),

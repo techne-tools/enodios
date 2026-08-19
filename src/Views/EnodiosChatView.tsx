@@ -396,6 +396,7 @@ export function EnodiosChatViewComponent({
 
   const lastChunkTimeRef = useRef<number>(0);
   const typingTimeoutRef = useRef<null | ReturnType<typeof setTimeout>>(null);
+  const isPromptActiveRef = useRef<boolean>(false);
 
   // Ref to track the latest volatile state for stable callbacks.
   // This prevents memoized child components (like ChatMessageItem) from unnecessarily re-rendering.
@@ -532,6 +533,13 @@ export function EnodiosChatViewComponent({
   const resetTypingTimeout = useCallback((): void => {
     clearTypingTimeout();
     typingTimeoutRef.current = setTimeout(() => {
+      // If a prompt is still actively executing (e.g. running a tool or waiting for permission),
+      // we reschedule the timeout instead of prematurely resetting the typing state.
+      if (isPromptActiveRef.current) {
+        resetTypingTimeout();
+        return;
+      }
+
       setIsTyping(false);
       streamingMessageIdRef.current = null;
 
@@ -1009,6 +1017,7 @@ export function EnodiosChatViewComponent({
       lastPromptRef.current = newText;
       lastContextItemsRef.current = [...current.contextItems];
 
+      isPromptActiveRef.current = true;
       try {
         await view.sendPrompt(newText, current.contextItems, {
           allowedTools: current.allowedTools
@@ -1020,6 +1029,7 @@ export function EnodiosChatViewComponent({
       } finally {
         setIsTyping(false);
         streamingMessageIdRef.current = null;
+        isPromptActiveRef.current = false;
       }
     },
     [view]
@@ -1044,6 +1054,7 @@ export function EnodiosChatViewComponent({
     };
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
+    isPromptActiveRef.current = true;
     try {
       await view.sendPrompt(
         lastPromptRef.current,
@@ -1054,8 +1065,10 @@ export function EnodiosChatViewComponent({
       setError(
         `Retry failed: ${err instanceof Error ? err.message : String(err)}`
       );
+    } finally {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
+      isPromptActiveRef.current = false;
     }
   }, [view]);
 
@@ -1130,6 +1143,7 @@ export function EnodiosChatViewComponent({
           };
           setMessages((prev) => [...prev, assistantPlaceholder]);
 
+          isPromptActiveRef.current = true;
           try {
             await view.sendPrompt(fullText, current.contextItems, {
               allowedTools: current.allowedTools
@@ -1138,6 +1152,10 @@ export function EnodiosChatViewComponent({
             setError(
               `Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`
             );
+          } finally {
+            setIsTyping(false);
+            streamingMessageIdRef.current = null;
+            isPromptActiveRef.current = false;
           }
         }
       } catch (err) {
@@ -1181,6 +1199,7 @@ export function EnodiosChatViewComponent({
     };
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
+    isPromptActiveRef.current = true;
     try {
       await view.sendPrompt(fullText, current.contextItems, {
         allowedTools: current.allowedTools
@@ -1189,8 +1208,10 @@ export function EnodiosChatViewComponent({
       setError(
         `Failed to get a response: ${err instanceof Error ? err.message : String(err)}. Click to retry.`
       );
+    } finally {
       setIsTyping(false);
       streamingMessageIdRef.current = null;
+      isPromptActiveRef.current = false;
     }
   }, [view, plugin, handleNewChat]);
 
