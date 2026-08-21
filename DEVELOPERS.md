@@ -63,13 +63,14 @@ All file paths from the agent are validated before access:
 
 #### Shell Command Sanitization (`sanitizeShellCommand`)
 Terminal commands are restricted to a curated allowlist:
-- **Allowed commands**: `cat`, `cp`, `curl`, `echo`, `find`, `git`, `grep`, `ls`, `mkdir`, `mv`, `rm`, `touch`, `wget`
-- **Rejected**: All shells (bash, zsh, fish), script interpreters (python, node, ruby), and any command not in the allowlist
+- **Allowed commands**: `cat`, `echo`, `grep`, `ls`, `mkdir`, `touch`
+- **Per-command argument allowlists**: each command only accepts known-safe argument prefixes (e.g. `grep -i -n -r -w -l -c -v -E -F`, `ls -a -l -h -t -r -S -1 -F`, `mkdir -p -v -m`); any other argument is rejected.
+- **Rejected**: All shells (bash, zsh, fish), script interpreters (python, node, ruby), and any command not in the allowlist — including `git`, `curl`, `wget`, `find`, `rm`, `cp`, `mv`, which are deliberately excluded (destructive or exfiltration-capable).
 - **Argument validation**: Every argument is checked against dangerous patterns:
   - `-c`, `--command`, `-e`, `--eval`, `-exec` (code execution flags)
   - `|`, `;`, `&&`, `||` (shell metacharacters)
   - `$(`, `` ` ``, `${`, `>>`, `<(` (command substitution, redirection)
-- **Security Note**: This is defense-in-depth. With `shell: false`, arguments are passed directly to the executable, but some "safe" commands have configuration options that enable arbitrary code execution (e.g., `git --config core.sshCommand=rm -rf /`). The argument sanitizer catches these.
+- **Security Note**: This is defense-in-depth. With `shell: false`, arguments are passed directly to the executable, but some "safe" commands have configuration options that enable arbitrary code execution. The argument sanitizer catches these.
 
 #### MCP Server Validation (`validateMcpServerPath`)
 MCP server executables are validated before being passed to the agent:

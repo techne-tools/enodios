@@ -39,7 +39,7 @@ By default, terminal execution is disabled for security (as it bypasses the Obsi
 1. Go to `Settings > Hermes` and toggle on **Allow Terminal Access**.
 2. Open the chat, click the **Session Tools** (wrench icon), and ensure `createTerminal` is checked for that specific chat session.
 
-**Security Note**: Even when enabled, terminal commands are restricted to a safe allowlist (`cat`, `cp`, `curl`, `echo`, `find`, `git`, `grep`, `ls`, `mkdir`, `mv`, `rm`, `touch`, `wget`). Dangerous patterns (pipes, redirects, command substitution, option injection) are rejected.
+**Security Note**: Even when enabled, terminal commands are restricted to a safe allowlist (`cat`, `echo`, `grep`, `ls`, `mkdir`, `touch`). Each command has an argument allowlist (e.g. `grep -i -n -r`, `ls -a -l -h`); dangerous patterns (pipes, redirects, command substitution, option injection, `-e`/`-c` style code-execution flags) are rejected. Shells and script interpreters (`bash`, `python`, `node`, etc.) are never permitted, and `git`, `curl`, `wget`, `find`, `rm`, `cp`, `mv` are deliberately excluded.
 
 ### 🛑 "Path traversal denied"
 **Cause**: The agent attempted to access a file outside the vault using `../`, an absolute path, or a Windows drive letter.
