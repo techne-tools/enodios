@@ -628,9 +628,10 @@ export class AcpClient implements ChatClient {
   }
 
   /**
-   * Resolve all pending permission requests with the first available "allow" option.
-   * This is triggered by explicit user manual action ("Approve All" in UI), so it bypasses
-   * settings restrictions and resolves using the first available allow/general option.
+   * Resolve all pending permission requests, auto-approving only permissions that
+   * offer exactly one "allow" option. Triggered by the explicit user manual action
+   * ("Approve All" in the UI). Multi-option permissions are cancelled rather than
+   * blanket-approved — they require explicit per-permission review.
    */
   public resolveAllPermissions(): void {
     if (this.pendingPermissions.length === 0) return;
@@ -642,9 +643,15 @@ export class AcpClient implements ChatClient {
       const allowOptions = options.filter((o) => o.kind.startsWith('allow_'));
       const permType = getPermissionType(p.params);
 
-      const targetOption = allowOptions[0] ?? options[0];
-
-      if (targetOption) {
+      // SECURITY: Only auto-approve permissions that have exactly one option and
+      // that option is an allow. Permissions with multiple options (or a mix of
+      // allow/deny) require explicit per-permission review to prevent accidental
+      // approval of dangerous actions.
+      if (allowOptions.length === 1 && options.length === 1) {
+        const targetOption = allowOptions[0];
+        if (!targetOption) {
+          throw new Error('Unexpected empty allow options');
+        }
         const outcome = targetOption.kind;
         this.plugin.auditLog.recordPermission(permType, outcome, 'success');
         p.resolve({
