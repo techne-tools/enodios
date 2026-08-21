@@ -2,7 +2,7 @@ import type { ExtractPluginSettingsWrapper } from 'obsidian-dev-utils/obsidian/P
 import type { ReadonlyDeep } from 'type-fest';
 
 import { EditorView } from '@codemirror/view';
-import { Notice } from 'obsidian';
+import { Notice, TFile } from 'obsidian';
 import { PluginBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginBase';
 
 import type {
@@ -30,6 +30,8 @@ import type { PluginSettings } from './PluginSettings.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
 import { PluginSettingsTab } from './PluginSettingsTab.ts';
 import { SecretsManager } from './SecretsManager.ts';
+import { EmbeddingClient } from './SemanticSearch/EmbeddingClient.ts';
+import { SemanticSearchIndex } from './SemanticSearch/SemanticSearchIndex.ts';
 import { clearAllCommands } from './SlashCommands.ts';
 import { SlidesManager } from './SlidesManager.ts';
 import {
@@ -59,6 +61,7 @@ export class Plugin extends PluginBase<PluginTypes> {
   public noteTemplateManager!: NoteTemplateManager;
   public outlineManager!: OutlineManager;
   public secrets!: SecretsManager;
+  public semanticSearch!: SemanticSearchIndex;
   public slidesManager!: SlidesManager;
   public vaultManager!: VaultManager;
   public citationManager!: CitationManager;
@@ -125,6 +128,9 @@ export class Plugin extends PluginBase<PluginTypes> {
 
     this.vaultManager = new VaultManager(this);
     this.secrets = new SecretsManager(this);
+    this.semanticSearch = new SemanticSearchIndex(
+      new EmbeddingClient(this, this.secrets)
+    );
     this.fileChangeManager = new FileChangeManager(this);
     this.auditLog = new AuditLog(this);
     this.debug = new DebugLogger(this);
@@ -175,6 +181,34 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.registerEvent(
       this.app.workspace.on('active-leaf-change', () => {
         this.fileChangeManager.handleActiveLeafChange();
+      })
+    );
+
+    // Keep the semantic index fresh: index new/modified markdown notes and
+    // drop deleted ones. The content-hash guard inside indexNote makes
+    // re-embedding unchanged files a no-op, so this is cheap on repeated
+    // saves. (Persistence of the index is planned — see SemanticSearchIndex.)
+    this.registerEvent(
+      this.app.vault.on('modify', (file) => {
+        if (file instanceof TFile && file.extension === 'md') {
+          void this.semanticSearch.indexNoteFromFile(file).catch((err: unknown) => {
+            this.debug.error('Semantic indexing failed on modify', err);
+          });
+        }
+      })
+    );
+    this.registerEvent(
+      this.app.vault.on('create', (file) => {
+        if (file instanceof TFile && file.extension === 'md') {
+          void this.semanticSearch.indexNoteFromFile(file).catch((err: unknown) => {
+            this.debug.error('Semantic indexing failed on create', err);
+          });
+        }
+      })
+    );
+    this.registerEvent(
+      this.app.vault.on('delete', (file) => {
+        this.semanticSearch.remove(file.path);
       })
     );
 

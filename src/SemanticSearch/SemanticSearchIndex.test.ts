@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TFile } from 'obsidian';
 
 import type { IEmbeddingClient } from './EmbeddingClient.ts';
 
@@ -121,5 +122,43 @@ describe('SemanticSearchIndex', () => {
     // Second search must embed the query again and still return results
     const second = await index.search('physics');
     expect(second).toHaveLength(1);
+  });
+
+  it('should drop an entry when remove() is called', async () => {
+    await index.indexNote('note-a.md', 'content a');
+    await index.indexNote('note-b.md', 'content b');
+
+    index.remove('note-a.md');
+
+    expect(index.size()).toBe(1);
+    const results = await index.search('content a');
+    expect(results.map((r) => r.path)).not.toContain('note-a.md');
+    expect(results.map((r) => r.path)).toContain('note-b.md');
+  });
+
+  it('should remove a note that was indexed from a file', async () => {
+    const file = new TFile();
+    file.path = 'note-a.md';
+    file.vault.read = vi.fn().mockResolvedValue('sound design content');
+    await index.indexNoteFromFile(file);
+    expect(index.size()).toBe(1);
+
+    index.remove(file.path);
+
+    expect(index.size()).toBe(0);
+  });
+
+  it('indexNoteFromFile should read the file from the vault and index it', async () => {
+    const file = new TFile();
+    file.path = 'notes/field-recording.md';
+    const readMock = vi.fn().mockResolvedValue('field recording techniques');
+    file.vault.read = readMock;
+
+    await index.indexNoteFromFile(file);
+
+    expect(readMock).toHaveBeenCalledTimes(1);
+    expect(index.size()).toBe(1);
+    const results = await index.search('field recording');
+    expect(results[0]?.path).toBe('notes/field-recording.md');
   });
 });
