@@ -55,6 +55,7 @@
 
 - Conversations and audit log default to `enodios/` (`chatSaveFolder = 'enodios'`); README/TROUBLESHOOTING/DEVELOPERS still reference `hermes/audit-log.md` and `hermes/2026-05/`; TemplateManager hardcodes `hermes/templates`.
 - **Action:** pick one root (recommend `enodios/`), update TemplateManager and all doc references. Note: existing user vaults with `hermes/` folders need a migration note.
+- **Fix status:** RESOLVED 2026-08-21 — everything now uses `enodios/` (TemplateManager, tests, CHANGELOG, TODO, project skill, DEVELOPERS). Existing user vaults with `hermes/` folders should migrate: move `hermes/` contents to `enodios/` (conversations, audit log, templates).
 
 ## 7. `resolveAllPermissions` changelog entry is wrong or regressed
 
@@ -80,7 +81,7 @@
 
 1. **Export feature** — RESOLVED 2026-08-21: permanently dropped (owner decision). Docs scrubbed; the feature will not be restored.
 2. **`resolveAllPermissions`:** restore single-option guard, or accept blanket approve-all and fix the changelog?
-3. **Folder root:** migrate everything to `enodios/` (incl. TemplateManager `hermes/templates`)?
+3. **Folder root:** migrate everything to `enodios/` (incl. TemplateManager `hermes/templates`)? — **RESOLVED 2026-08-21:** migrated (commit `ffea435`).
 4. **Semantic RAG embedding backend:** see plan — Phase 1 Hermes `/v1/embeddings`, Phase 2 local Ollama/WASM, or both?
 
 ## Fixes applied 2026-08-21
@@ -89,5 +90,6 @@
 - [x] Corrected shell command allowlist (14 → 6 commands + per-command argument allowlists): TROUBLESHOOTING, DEVELOPERS.
 - [x] Fixed audit-log path drift: README/TROUBLESHOOTING/DEVELOPERS now reference `enodios/audit-log.md`.
 - [x] Fixed `PluginSettingsTab.ts:437` fallback `'hermes'` → `'enodios'` (Open Audit Log button looked in the wrong folder when Save Folder was empty; `AuditLog.ts` writes to `enodios/`).
+- [x] Migrated TemplateManager `hermes/templates` → `enodios/templates` (code + tests) and updated all remaining `hermes/` path references in CHANGELOG, TODO, project skill, DEVELOPERS.
 - [x] Wrote semantic RAG implementation plan: `docs/plans/2026-08-21-semantic-rag.md` (Task 0 relabels the current keyword `/search` until semantic search lands).
-- [ ] NOT DONE (needs owner decision): `resolveAllPermissions` behavior; TemplateManager `hermes/templates` migration; pre-rebrand doc refresh (DEVELOPERS references, TODO.md version, project skill, RELEASES.md); `src/Views/release.yml` removal; HermesApiClient/AcpClient header docstrings (API approval flow); DEVELOPERS symlink-limitation note.
+- [ ] NOT DONE (needs owner decision): `resolveAllPermissions` behavior; pre-rebrand doc refresh (TODO.md version, RELEASES.md); `src/Views/release.yml` removal; HermesApiClient/AcpClient header docstrings (API approval flow). DEVELOPERS.md symlink-limitation note and pre-rebrand references — updated 2026-08-21.
