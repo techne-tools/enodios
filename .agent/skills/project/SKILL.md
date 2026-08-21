@@ -30,6 +30,7 @@ Load this skill when:
   - `src/__tests__/`: Unit tests for components and hooks.
   - `src/styles/`: SCSS styling and CodeMirror 6 inline diff/ghost text extensions.
   - `src/utils/`: Utility modules (contextEnhancer, blockReferences, uuid).
+  - `src/SemanticSearch/`: Embedding clients (Hermes `/v1/embeddings`, Ollama) and the in-memory semantic index for `/search semantic`.
   - `src/__tests__/`: Vitest-based unit testing suite.
   - `dist/`: Compiled production bundles.
 

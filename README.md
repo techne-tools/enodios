@@ -4,7 +4,7 @@ Chat with the Hermes autonomous AI agent inside Obsidian. Enodios connects your 
 
 ## What you can do
 
-- **Chat with your vault**: type `/search [query]` to find notes and attach matching excerpts to the conversation.
+- **Chat with your vault**: type `/search [query]` to find notes and attach matching excerpts to the conversation. Use `/search semantic [query]` for meaning-based results via Hermes embeddings (API mode) or a local Ollama model — see the Embedding Provider setting.
 - **Inline suggestions**: run "Enodios: Trigger Inline Suggestion" while typing to get ghost-text completions. Press `Tab` to accept.
 - **Canvas support**: open a canvas and type `/canvas` to bring its structure into the chat.
 - **Citations and PDFs**: manage a bibliography, format references (APA, MLA, Chicago, IEEE), and pull text or highlights from PDFs.

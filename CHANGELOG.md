@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### New Features
+
+- **Semantic vault search** — `/search semantic <query>` finds notes by meaning instead of keyword match, using Hermes `/v1/embeddings` (API mode) or a local Ollama model (ACP mode). Embedding provider is configurable in settings (Auto / Hermes API / Ollama); Auto prefers the Hermes server when an API key is configured. The existing keyword `/search` is unchanged and remains the default until the semantic path matures.
+
 ## [0.9.0] - 2026-08-20
 
 ### New Features
