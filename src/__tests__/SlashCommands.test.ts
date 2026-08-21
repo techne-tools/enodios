@@ -209,6 +209,11 @@ describe('SlashCommands', () => {
       } as unknown as Plugin;
     });
 
+    it('should be labelled as keyword search until semantic RAG lands', () => {
+      const searchCmd = getSlashCommands().find((c) => c.name === 'search')!;
+      expect(searchCmd.description).toContain('keyword search');
+    });
+
     it('should require a search query', async () => {
       const searchCmd = getSlashCommands().find((c) => c.name === 'search')!;
       const result = await searchCmd.execute(mockPlugin, '   ');

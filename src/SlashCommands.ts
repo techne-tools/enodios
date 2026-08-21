@@ -132,7 +132,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     name: 'persona'
   },
   {
-    description: 'Search the vault and append results to context (Local RAG)',
+    description: 'Search the vault and append results to context (keyword search; semantic search coming in 0.10)',
     execute: async (plugin, args) => {
       if (!args.trim()) {
         return 'Please provide a search query. Example: `/search project goals`';
