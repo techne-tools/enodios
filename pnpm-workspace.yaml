@@ -7,16 +7,12 @@ overrides:
   '@eslint/eslintrc>ajv': '^6.14.0'
   devalue: '>=5.8.1'
   lodash-es: '>=4.17.24'
-  mermaid: '>=11.14.1'
+  mermaid: '>=11.16.1'
+  nanoid@<3.3.18: '^3.3.18'
   qs: '>=6.15.2'
   svelte: '>=5.55.7'
   uuid: '>=11.1.1'
-  dompurify@<3.4.7: ^3.4.7
-  dompurify@<3.4.9: ^3.4.9
-  dompurify@<=3.4.10: ^3.4.11
-  dompurify@<=3.4.5: ^3.4.6
-  dompurify@<=3.4.6: ^3.4.7
-  dompurify@>=3.0.0 <=3.4.7: ^3.4.8
+  dompurify: '>=3.4.13'
   esbuild@>=0.27.3 <0.28.1: ^0.28.1
   js-yaml@>=4.0.0 <=4.1.1: ^4.1.2
   markdown-it@<=14.1.1: ^14.1.2
@@ -37,7 +33,7 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - esbuild@0.28.1
   - vite@8.0.16
-  - dompurify@3.4.6 || 3.4.7 || 3.4.8 || 3.4.9 || 3.4.11
+  - dompurify@3.4.13
   - markdown-it@14.1.2
   - undici@7.28.0
   - js-yaml@4.1.2
