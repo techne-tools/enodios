@@ -39,7 +39,6 @@ export interface ConversationMetadata {
  * Vault API for file-system operations. It handles:
  *   - Folder creation (with recursive parent-folder handling)
  *   - Conversation persistence as markdown files with YAML frontmatter
- *   - Export to multiple formats (HTML, JSON, Markdown, PDF data URI)
  *   - Conversation listing and metadata extraction
  *
  * DESIGN DECISION: All folder creation goes through `ensureFolderExists()`
@@ -48,7 +47,11 @@ export interface ConversationMetadata {
  *
  * NOTE: This class does NOT handle the inline diff approval flow — that is
  * FileChangeManager's responsibility. VaultManager only writes files that
- * have already been approved (or are conversation exports created by the user).
+ * have already been approved (or are conversation files created by the user).
+ *
+ * NOTE: Conversation export (HTML/JSON/Markdown/PDF) was removed in 0.4.1-beta1
+ * and has not been restored. Saved conversations are plain markdown notes in
+ * the vault, so users can copy or re-purpose them directly.
  */
 export class VaultManager {
   private readonly plugin: Plugin;
