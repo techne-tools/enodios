@@ -41,7 +41,7 @@
   - `⌘Enter` / `Ctrl+Enter`: Approve selected/expanded change.
   - `Esc`: Reject expanded change.
 - **Tag Suggestions & Heuristics** — Dynamic keyword and frequency analysis (`TagManager`) and React suggestions modal (`TagSuggestionModal`) to suggest and update YAML frontmatter tags in notes.
-- **Conversation Templates** — Support custom templates loading with frontmatter from `hermes/templates/`. Empty chat states render starter cards that load templates directly on click.
+- **Conversation Templates** — Support custom templates loading with frontmatter from `enodios/templates/`. Empty chat states render starter cards that load templates directly on click.
 - **PDF Annotation & Page Text Parser** — Extracts highlighted text, comments, metadata, and page-specific text using `pdfjsLib` (`PDFAnnotationManager.ts`).
 - **ArrowUp to Edit Last Message** — Pressing `ArrowUp` inside the empty chat textarea enters edit mode on the last sent user message and autofocuses.
 - **Reasoning Visibility Quick Toggle** — Brain toggle icon in the chat header to quickly hide/show reasoning bubbles, with keyboard shortcut `⌘⌥E`.

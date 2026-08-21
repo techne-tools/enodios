@@ -447,7 +447,7 @@ Based on analysis of both codebases, the following Zotero features could usefull
 
 ### 🔴 Critical — Before Public Release
 
-- [x] **Persistent Action Audit Log** — Record every tool invocation, file change, permission grant, and terminal command with timestamps. Essential for trust and debugging. ✅ Implemented 17 May 2026 — `AuditLog.ts` with batched writes to `hermes/audit-log.md`, integrated into AcpClient and FileChangeManager.
+- [x] **Persistent Action Audit Log** — Record every tool invocation, file change, permission grant, and terminal command with timestamps. Essential for trust and debugging. ✅ Implemented 17 May 2026 — `AuditLog.ts` with batched writes to `enodios/audit-log.md`, integrated into AcpClient and FileChangeManager.
 - [x] **Conversation-Level System Prompt Templates** — Add `/persona` slash command and settings for saved prompt templates (coding assistant, writing coach, etc.). ✅ Implemented 17 May 2026 — `personaTemplates` in PluginSettings, `/persona` slash command in SlashCommands.ts.
 - [x] **Fix Broken Test Suite** — `SlashCommands.test.ts` fails due to missing `obsidian` mock export. `AcpClient.test.ts` has outdated `onPermissionRequest` method name. Fix mocks and update tests. ✅ Fixed 17 May 2026 — All 65 tests passing (4 test files).
 
@@ -468,7 +468,7 @@ Based on analysis of both codebases, the following Zotero features could usefull
 ### 🟢 Polish & Differentiation
 
 - [x] **Typing Sound / Haptic Feedback (Optional)** — Subtle audio cues or haptic feedback during agent generation. Optional setting. ✅ Implemented 17 May 2026 — `enableTypingSound` and `enableHapticFeedback` settings, Web Audio API click sounds, `navigator.vibrate()` haptic, throttled to ~20/sec.
-- [x] **Conversation Folders / Organization** — Auto-organize by date (`hermes/2026-05/`) or project tag. Manual folders via dropdown. ✅ Implemented 17 May 2026 — `conversationOrganization` setting (`flat`/`by-date`/`by-project`), `generateFilePath()` updated for date-based subfolders.
+- [x] **Conversation Folders / Organization** — Auto-organize by date (`enodios/2026-05/`) or project tag. Manual folders via dropdown. ✅ Implemented 17 May 2026 — `conversationOrganization` setting (`flat`/`by-date`/`by-project`), `generateFilePath()` updated for date-based subfolders.
 - [x] **Inline Suggestion Alternatives (Ghost Text v2)** — Show `⌥→` to cycle through 3 completion alternatives, like GitHub Copilot. ✅ Implemented 17 May 2026 — `GhostTextState` with alternatives array, `Alt+ArrowRight` keymap for cycling, alternatives indicator in widget.
 - [x] **First-Time Onboarding Flow** — Dismissible welcome message explaining connection modes, slash commands, @ button, and security warnings. ✅ Implemented 17 May 2026 — `OnboardingPanel` component with welcome message, feature list, security note, dismissible with `hasSeenOnboarding` setting.
 
