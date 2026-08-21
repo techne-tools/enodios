@@ -13,7 +13,7 @@ Chat with the Hermes autonomous AI agent inside Obsidian. Enodios connects your 
 
 ## How safety works
 
-The agent can create and modify files, but every change appears in a diff view for you to approve or reject — individually or in bulk. Terminal access is off by default, and the agent's actions are logged to `hermes/audit-log.md`.
+The agent can create and modify files, but every change appears in a diff view for you to approve or reject — individually or in bulk. Terminal access is off by default, and the agent's actions are logged to `enodios/audit-log.md`.
 
 ## Connections
 

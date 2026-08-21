@@ -48,7 +48,7 @@ Instead of manual DOM manipulation, the entire sidebar chat interface is a React
   - **Bulk Actions**: "Approve All" and "Reject All" buttons for handling multiple changes at once, with atomic path-level locking to prevent concurrent writes.
 - **`SecretsManager`**: Uses Obsidian's `loadLocalStorage`/`saveLocalStorage` specifically for handling remote API keys so they are never stored in plaintext `data.json`.
   - **Security Warning**: localStorage is NOT encrypted. Secrets are stored in plaintext in the user's profile directory. API keys are revokable, which mitigates the risk, but users should rotate keys regularly and avoid storing non-revokable credentials.
-- **`AuditLog`**: Persistent audit trail recording every tool invocation, file change, permission grant, terminal command, and connection event. Writes are batched (500ms delay) to `hermes/audit-log.md` to avoid excessive I/O.
+- **`AuditLog`**: Persistent audit trail recording every tool invocation, file change, permission grant, terminal command, and connection event. Writes are batched (500ms delay) to `enodios/audit-log.md` to avoid excessive I/O.
   - **Security Warning**: The audit log contains sensitive information (file paths, command arguments, API errors) and is stored as plaintext in the vault. Users should not share it publicly.
 
 ### Security Architecture
@@ -117,7 +117,7 @@ Handles persistence and loading of chat conversations.
 ### 8. Academic & Utility Managers
 - **`PDFAnnotationManager`** (`src/PDFAnnotationManager.ts`): Integrates `pdfjs-dist` to extract plain text per page, parse metadata, and pull highlights/comments from embedded PDF annotations.
 - **`TagManager`** (`src/TagManager.ts`): Implements an term-frequency keyword matching heuristic against vault-wide tags. Suggestions are presented to the user via a React-based checklist modal (`TagSuggestionModal.tsx`) and committed directly to the note frontmatter.
-- **`TemplateManager`** (`src/TemplateManager.ts`): Loads pre-configured built-in templates and user custom prompts (from `hermes/templates/`) supporting frontmatter metadata. Starters are rendered in empty chat views as clickable cards.
+- **`TemplateManager`** (`src/TemplateManager.ts`): Loads pre-configured built-in templates and user custom prompts (from `hermes/templates/`) supporting frontmatter metadata. Starters are rendered in empty chat views as clickable cards. **Path inconsistency:** template loading still hardcodes `hermes/templates` while conversations and the audit log default to `enodios/` — see issue #6 in `docs/docs-code-alignment-2026-08-21.md`.
 - **`contextEnhancer`** (`src/utils/contextEnhancer.ts`): Generates enriched note context including word count, character count, tags, YAML frontmatter, created/modified timestamps, and backlinks. Used by both `AcpClient` and `HermesApiClient` when sending note context to the agent.
 
 ### 9. Unified Keyboard Hotkeys & Focus Flow

@@ -59,7 +59,7 @@ By default, terminal execution is disabled for security (as it bypasses the Obsi
 - Absolute path (no relative paths)
 - Not in a temporary directory (`/tmp`, `/var/tmp`, `/dev/shm`, `/run`)
 - Not world-writable
-Check the audit log (`hermes/audit-log.md`) for the exact rejection reason.
+Check the audit log (`enodios/audit-log.md`) for the exact rejection reason.
 
 ## Features and UI
 
@@ -89,7 +89,7 @@ Conversation export (HTML/JSON/Markdown) was removed in 0.4.1-beta1. Saved conve
 
 ### 📂 Conversations aren't organized into date folders
 **Cause**: The conversation organization setting is set to `flat` (default).
-**Solution**: Go to `Settings > Hermes` and change **Conversation Organization** to `by-date`. New conversations will be saved in `hermes/2026-05/` style subfolders. Existing conversations are not moved.
+**Solution**: Go to `Settings > Hermes` and change **Conversation Organization** to `by-date`. New conversations will be saved in `enodios/2026-05/` style subfolders. Existing conversations are not moved.
 
 ### 👻 Ghost text shows "...Hermes is thinking..." but never completes
 **Cause**: The inline suggestion request timed out or the API returned an empty completion.
@@ -102,7 +102,7 @@ Conversation export (HTML/JSON/Markdown) was removed in 0.4.1-beta1. Saved conve
 ## Audit Log & Debugging
 
 ### 📋 Where is the audit log?
-The audit log is stored at `hermes/audit-log.md` in your vault (or whatever folder you configured in **Save Folder**). It records every action the agent takes — file changes, tool calls, permissions, terminal commands, and connections.
+The audit log is stored at `enodios/audit-log.md` in your vault (or whatever folder you configured in **Save Folder**). It records every action the agent takes — file changes, tool calls, permissions, terminal commands, and connections.
 
 **Security Note**: The audit log contains sensitive information (file paths, command arguments, API errors). Do not share it publicly or sync it to untrusted cloud services.
 
