@@ -434,7 +434,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
       )
       .addButton((button) => {
         button.setButtonText('Open Audit Log').onClick(() => {
-          const folder = this.plugin.settings.chatSaveFolder || 'hermes';
+          const folder = this.plugin.settings.chatSaveFolder || 'enodios';
           const logPath = `${folder}/audit-log.md`;
           const file = this.plugin.app.vault.getAbstractFileByPath(logPath);
           if (file instanceof TFile) {
