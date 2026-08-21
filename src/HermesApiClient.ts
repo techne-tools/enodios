@@ -37,9 +37,11 @@ export interface HermesApiMessage {
  * - Stateless: no persistent subprocess or session ID
  * - SSE streaming instead of JSON-RPC over stdio
  * - No terminal emulation (abortTerminal is a no-op)
- * - File changes go through the standard REST toolset, not the ACP
- *   fs/write_text_file client method, so there is NO inline diff approval
- *   flow in API mode — the agent writes directly via its native tools.
+ * - File changes do NOT go through the ACP fs/write_text_file client
+ *   method; instead the vault is snapshotted before each turn
+ *   (captureVaultSnapshot) and diffed afterwards (processVaultChanges),
+ *   routing every agent change through the same FileChangeManager
+ *   inline-diff approval flow as ACP mode, with revert-on-reject.
  */
 
 export class HermesApiClient implements ChatClient {

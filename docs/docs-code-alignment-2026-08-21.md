@@ -70,6 +70,8 @@
 - `docs/RELEASES.md`: header says "Obsidian Hermes plugin"; content ends at 0.4.1-beta1.
 - `src/Views/release.yml`: stale duplicate of the release workflow (no lint/test), divergent from `.github/workflows/release.yml`. Delete it.
 
+**Fix status (2026-08-21):** TODO.md version history, project skill, RELEASES.md and the `src/Views/release.yml` deletion were completed in the `enodios-w3-docs` worktree. DEVELOPERS.md refresh is owned by a separate worker.
+
 ## 9. Docs understate security (good direction, still worth fixing)
 
 - DEVELOPERS: "Known Limitation: Symlink traversal is not checked." `isPathSafe` now resolves realpaths and rejects vault escapes. Update the limitation note.
@@ -79,9 +81,9 @@
 ## Open decisions (need owner input)
 
 1. **Export feature** — RESOLVED 2026-08-21: permanently dropped (owner decision). Docs scrubbed; the feature will not be restored.
-2. **`resolveAllPermissions`:** restore single-option guard, or accept blanket approve-all and fix the changelog?
-3. **Folder root:** migrate everything to `enodios/` (incl. TemplateManager `hermes/templates`)?
-4. **Semantic RAG embedding backend:** see plan — Phase 1 Hermes `/v1/embeddings`, Phase 2 local Ollama/WASM, or both?
+2. **`resolveAllPermissions`** — RESOLVED 2026-08-21: restore the single-option guard (owner decision; being implemented by another worker).
+3. **Folder root** — RESOLVED 2026-08-21: migrate everything to `enodios/` (incl. TemplateManager `hermes/templates`; being implemented by another worker).
+4. **Semantic RAG embedding backend** — RESOLVED 2026-08-21: build Phases 0–2 of `docs/plans/2026-08-21-semantic-rag.md` (Tasks 0–5) + Task 8 (docs), implemented later by another worker. Tasks 6–7 (index persistence, `/search attach`) are deferred.
 
 ## Fixes applied 2026-08-21
 
@@ -91,3 +93,14 @@
 - [x] Fixed `PluginSettingsTab.ts:437` fallback `'hermes'` → `'enodios'` (Open Audit Log button looked in the wrong folder when Save Folder was empty; `AuditLog.ts` writes to `enodios/`).
 - [x] Wrote semantic RAG implementation plan: `docs/plans/2026-08-21-semantic-rag.md` (Task 0 relabels the current keyword `/search` until semantic search lands).
 - [ ] NOT DONE (needs owner decision): `resolveAllPermissions` behavior; TemplateManager `hermes/templates` migration; pre-rebrand doc refresh (DEVELOPERS references, TODO.md version, project skill, RELEASES.md); `src/Views/release.yml` removal; HermesApiClient/AcpClient header docstrings (API approval flow); DEVELOPERS symlink-limitation note.
+
+## Fixes applied 2026-08-21 (pre-rebrand doc refresh — enodios-w3-docs worktree)
+
+- [x] TODO.md: header → "Enodios Plugin Development Todo List"; Current Version → 0.9.0; added v0.5.1→v0.9.0 version history; relabeled `/search` as keyword search; scrubbed export-claims; `hermes/audit-log.md` → `enodios/audit-log.md`; `hermes/2026-05/` → `enodios/2026-05/`; `.hermes/chats/` → `enodios/chats/`.
+- [x] `.agent/skills/project/SKILL.md`: view name → `EnodiosChatView`; templates path → `enodios/templates/`; install folder → `.obsidian/plugins/enodios/`; manifest id → `enodios`.
+- [x] `docs/RELEASES.md`: header → Enodios; filled in v0.4.2 → v0.9.0 release notes; BRAT URL → `prismatic7/enodios`.
+- [x] Deleted `src/Views/release.yml` (stale duplicate of `.github/workflows/release.yml`).
+- [x] `src/HermesApiClient.ts` header docstring: corrected the false "NO inline diff approval flow in API mode" claim — now documents the pre-turn snapshot → post-turn diff → FileChangeManager approval (with revert-on-reject). (AcpClient comparison table row owned by the same fixer/other worker.)
+- [ ] DEVELOPERS.md refresh — owned by a separate worker.
+- [ ] `resolveAllPermissions` single-option guard — owned by another worker.
+- [ ] TemplateManager `hermes/templates` → `enodios/templates` migration — owned by another worker.

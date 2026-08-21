@@ -24,9 +24,9 @@ Load this skill when:
 - **Key Directories**:
   - `src/`: Core plugin code and client logic.
   - `src/Modals/`: Modal dialogs (CitationSuggestModal, TagSuggestionModal).
-  - `src/Views/`: HermesChatView implementation.
-  - `src/Views/Components/`: Reusable components for HermesChatView (ChatHeader, AuditLogPanel, ChatMessageItem, MessageList).
-  - `src/Views/Hooks/`: Custom React hooks for HermesChatView (useSlashCommands, useAutocomplete).
+  - `src/Views/`: EnodiosChatView implementation.
+  - `src/Views/Components/`: Reusable components for EnodiosChatView (ChatHeader, AuditLogPanel, ChatMessageItem, MessageList).
+  - `src/Views/Hooks/`: Custom React hooks for EnodiosChatView (useSlashCommands, useAutocomplete).
   - `src/__tests__/`: Unit tests for components and hooks.
   - `src/styles/`: SCSS styling and CodeMirror 6 inline diff/ghost text extensions.
   - `src/utils/`: Utility modules (contextEnhancer, blockReferences, uuid).
@@ -35,7 +35,7 @@ Load this skill when:
 
 ## Core Architecture
 
-- **Plugin Lifecycle**: `Plugin.ts` registers command palette callbacks, settings pane (`PluginSettingsTab`), the right sidebar leaf (`HermesChatView`), and editor decorations.
+- **Plugin Lifecycle**: `Plugin.ts` registers command palette callbacks, settings pane (`PluginSettingsTab`), the right sidebar leaf (`EnodiosChatView`), and editor decorations.
 - **Agent Integration**:
   - **Local Subprocess**: `AcpClient` spawns the Hermes CLI to execute prompts and handle interactive shell/permission commands using stdin/stdout.
   - **Remote Server**: `HermesApiClient` connects to a remote Hermes deployment via stateless HTTP post requests and Server-Sent Events (SSE).
@@ -44,7 +44,7 @@ Load this skill when:
   - `CitationManager`: Loads `.bib`/CSL JSON bibliography files, searches citations, generates formatted bibliographies (APA, MLA, Chicago, IEEE).
   - `PDFAnnotationManager`: Extracts highlights, comments, metadata, and page text from PDFs using Obsidian's built-in `pdfjsLib`.
   - `TagManager`: Scans vault-wide tags with term-frequency matching to suggest relevant tags for notes.
-  - `TemplateManager`: Loads built-in and user-custom conversation starter templates from `hermes/templates/`.
+  - `TemplateManager`: Loads built-in and user-custom conversation starter templates from `enodios/templates/`.
 - **Context Enhancement**: `contextEnhancer.ts` enriches note context with word count, tags, frontmatter, and backlinks before sending to the agent.
 
 ## Project-Specific Conventions
@@ -55,9 +55,9 @@ Load this skill when:
 
 ## Plugin Installation
 
-**CRITICAL**: Plugins must be installed in `<vault>/.obsidian/plugins/hermes/`:
+**CRITICAL**: Plugins must be installed in `<vault>/.obsidian/plugins/enodios/`:
 ```
-<Vault>/.obsidian/plugins/hermes/
+<Vault>/.obsidian/plugins/enodios/
   ├── main.js          # Compiled JavaScript
   ├── manifest.json    # Plugin manifest
   └── styles.css       # Compiled CSS
@@ -67,7 +67,7 @@ The `.obsidian/plugins` directory is required - Obsidian will not detect plugins
 
 ## Key Files
 
-- `manifest.json`: Plugin manifest (configured with id: `hermes`, `isDesktopOnly: true`).
+- `manifest.json`: Plugin manifest (configured with id: `enodios`, `isDesktopOnly: true`).
 - `package.json`: NPM package configuration containing dependencies (`@agentclientprotocol/sdk`, `prismjs`) and build utilities.
 
 ## Maintenance Tasks

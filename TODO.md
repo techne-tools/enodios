@@ -1,8 +1,23 @@
-# Hermes Plugin Development Todo List
+# Enodios Plugin Development Todo List
 
 **Created:** 14 May 2026
 **Phase:** Phase 4 - Polish & Release Prep
-**Current Version:** 0.5.0
+**Current Version:** 0.9.0
+
+> **Note:** The plugin was rebranded from "Hermes Agent for Obsidian" to **Enodios** in v0.7.0 (repo: `prismatic7/enodios`). Entries below that predate 0.7.0 may still reference the old name and paths; code references now use `EnodiosChatView`, `enodios/` folders, and plugin id `enodios`.
+
+## Version history (v0.5.1 → v0.9.0)
+
+- [x] **v0.5.1 (9 July 2026)** — Integrated 13 community plugins (Bases, Canvas, Note Composer, Note Templates, Outline, Slides, CommunityPluginsManager, etc.); ACP `stop` update emitted when `prompt()` resolves so the final message renders after multi-step turns.
+- [x] **v0.5.2 (31 July 2026)** — Strict vault-confinement system prompt injected into both clients (agent is bound to the vault's absolute path); workspace active-leaf-change listener restoring inline diffs in the editor + setting to hide the pending-changes card; autocomplete/context-button fixes; native slash commands for bases, tables, git push, admonitions; tag-based by-project conversation organization.
+- [x] **v0.6.0 (3 August 2026)** — Chat view decomposed into components and hooks (`ChatHeader`, `ChatMessageItem`, `MessageList`, `AuditLogPanel`, `useSlashCommands`, `useAutocomplete`) with `@testing-library/react` hook tests; dprint formatting applied; design specs added.
+- [x] **v0.6.1 (18 August 2026)** — `web_search`/`web_extract` added to default tools + Research Assistant persona; hyperlink contrast fix in user bubbles; stream-cessation fix (`try/finally` in `AcpClient`) so typing state always clears.
+- [x] **v0.6.2 (18 August 2026)** — Changelog header format fix; design-pass guidelines/workflows imported.
+- [x] **v0.7.0 (18 August 2026)** — **Rebrand to Enodios** (manifest id `enodios`, plugin name "Enodios", view `EnodiosChatView`, repo `prismatic7/enodios`) + refined visual design pass from Open Design.
+- [x] **v0.8.0 (19 August 2026)** — Fixed lost responses after tool calls.
+- [x] **v0.8.1 (19 August 2026)** — Starter cards restyled with Lucide icons and center alignment.
+- [x] **v0.9.0 (20 August 2026)** — Pre-1.0 hardening: full ESLint type-safety rule set re-enabled (180 → 0 violations), `tsconfig.test.json` + `pnpm test:typecheck`, expanded Obsidian test mock, 224/224 tests green.
+
 
 ## Core Features (High Priority)
 
@@ -70,7 +85,7 @@
 - [x] Phase 3: Canvas Integration via `/canvas` command (16 May 2026)
 - [x] Phase 3: Terminal Streaming & Control with "Abort" button (16 May 2026)
 - [x] Phase 3: Conversation Branching with message editing (16 May 2026)
-- [x] Phase 3: Semantic Vault RAG via `/search` command and unit tests (16 May 2026)
+- [x] Phase 3: Vault search via `/search` command and unit tests (16 May 2026) — keyword search; semantic RAG planned (see `docs/plans/2026-08-21-semantic-rag.md`)
 - [x] Added bulk actions (Approve All / Reject All) for file changes and permissions (16 May 2026)
 - [x] Supported file deletions via `FileChangeManager` (16 May 2026)
 - [x] Added Session-specific Tool Execution (per-chat capabilities) (16 May 2026)
@@ -155,7 +170,7 @@
 
 ### Chat History Persistence
 
-- Save conversations to vault folder (e.g., `.hermes/chats/`)
+- Save conversations to vault folder (e.g., `enodios/chats/`)
 - Format: Markdown files with frontmatter
 - Leverage Obsidian's native file management
 - Enable export via Obsidian tools/plugins
@@ -447,7 +462,7 @@ Based on analysis of both codebases, the following Zotero features could usefull
 
 ### 🔴 Critical — Before Public Release
 
-- [x] **Persistent Action Audit Log** — Record every tool invocation, file change, permission grant, and terminal command with timestamps. Essential for trust and debugging. ✅ Implemented 17 May 2026 — `AuditLog.ts` with batched writes to `hermes/audit-log.md`, integrated into AcpClient and FileChangeManager.
+- [x] **Persistent Action Audit Log** — Record every tool invocation, file change, permission grant, and terminal command with timestamps. Essential for trust and debugging. ✅ Implemented 17 May 2026 — `AuditLog.ts` with batched writes to `enodios/audit-log.md`, integrated into AcpClient and FileChangeManager.
 - [x] **Conversation-Level System Prompt Templates** — Add `/persona` slash command and settings for saved prompt templates (coding assistant, writing coach, etc.). ✅ Implemented 17 May 2026 — `personaTemplates` in PluginSettings, `/persona` slash command in SlashCommands.ts.
 - [x] **Fix Broken Test Suite** — `SlashCommands.test.ts` fails due to missing `obsidian` mock export. `AcpClient.test.ts` has outdated `onPermissionRequest` method name. Fix mocks and update tests. ✅ Fixed 17 May 2026 — All 65 tests passing (4 test files).
 
@@ -461,14 +476,14 @@ Based on analysis of both codebases, the following Zotero features could usefull
 ### 🟡 Medium Impact — Nice to Have
 
 - [x] **Smart Context: Block-Level References** — Parse selections to detect `[[Note#Heading]]`, code blocks, list ranges. Embed just that block, not the whole note. ✅ Implemented 17 May 2026 — `blockReferences.ts` with heading/code-block/list/block-id parsing, block ref resolution in AcpClient and HermesApiClient.
-- [x] **Export Conversations (PDF/HTML/JSON)** — Add export options beyond markdown: HTML (self-contained), JSON (programmatic), PDF. ✅ Implemented 17 May 2026 — Export dropdown in chat header with HTML and JSON download, `exportToHtml()`, `exportToJson()`, `exportToPdfDataUri()` in VaultManager.
+- [x] **Conversation Copy via Obsidian Native Tools** — Copy messages/conversations through Obsidian's native mechanisms. ✅ Implemented 17 May 2026. (Note: the standalone HTML/JSON/PDF export feature was **removed** in 0.4.1-beta1 — see commit `3ffbdad` — and is permanently dropped.)
 - [x] **Token Usage Dashboard** — Display input/output tokens and estimated cost in chat footer. Parsed from `usage_update` ACP event. ✅ Implemented 17 May 2026 — `TokenUsageFooter` component with input/output/total tokens and estimated cost, listens to `hermes-usage-update` window events.
 - [x] **Command Palette Integration** — Register quick actions: "Ask Hermes about selection", "Summarize current note", "Generate tags". ✅ Implemented 17 May 2026 — Three new commands in Plugin.ts: `hermes-ask-selection`, `hermes-summarize-note`, `hermes-generate-tags`.
 
 ### 🟢 Polish & Differentiation
 
 - [x] **Typing Sound / Haptic Feedback (Optional)** — Subtle audio cues or haptic feedback during agent generation. Optional setting. ✅ Implemented 17 May 2026 — `enableTypingSound` and `enableHapticFeedback` settings, Web Audio API click sounds, `navigator.vibrate()` haptic, throttled to ~20/sec.
-- [x] **Conversation Folders / Organization** — Auto-organize by date (`hermes/2026-05/`) or project tag. Manual folders via dropdown. ✅ Implemented 17 May 2026 — `conversationOrganization` setting (`flat`/`by-date`/`by-project`), `generateFilePath()` updated for date-based subfolders.
+- [x] **Conversation Folders / Organization** — Auto-organize by date (`enodios/2026-05/`) or project tag. Manual folders via dropdown. ✅ Implemented 17 May 2026 — `conversationOrganization` setting (`flat`/`by-date`/`by-project`), `generateFilePath()` updated for date-based subfolders.
 - [x] **Inline Suggestion Alternatives (Ghost Text v2)** — Show `⌥→` to cycle through 3 completion alternatives, like GitHub Copilot. ✅ Implemented 17 May 2026 — `GhostTextState` with alternatives array, `Alt+ArrowRight` keymap for cycling, alternatives indicator in widget.
 - [x] **First-Time Onboarding Flow** — Dismissible welcome message explaining connection modes, slash commands, @ button, and security warnings. ✅ Implemented 17 May 2026 — `OnboardingPanel` component with welcome message, feature list, security note, dismissible with `hasSeenOnboarding` setting.
 
