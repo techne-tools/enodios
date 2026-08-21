@@ -14,6 +14,13 @@ export interface IEmbeddingClient {
    * similarity.
    */
   embed(texts: string[]): Promise<number[][]>;
+
+  /**
+   * Whether this provider is currently usable (API key configured in API
+   * mode, Ollama reachable, etc.). The index exposes this to slash
+   * commands so they can surface a not-ready message instead of crashing.
+   */
+  isReady(): Promise<boolean>;
 }
 
 /**
@@ -59,5 +66,17 @@ export class EmbeddingClient implements IEmbeddingClient {
     }
     const data = (await response.json()) as { data: { embedding: number[] }[] };
     return data.data.map((d) => d.embedding);
+  }
+
+  /**
+   * The Hermes endpoint is usable only in API connection mode with an API
+   * key configured.
+   */
+  public async isReady(): Promise<boolean> {
+    if (this.plugin.settings.connectionMode !== 'api') {
+      return false;
+    }
+    const apiKey = await this.secrets.get('apiKey');
+    return apiKey !== '';
   }
 }
