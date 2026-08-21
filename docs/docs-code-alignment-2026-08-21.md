@@ -79,9 +79,9 @@
 ## Open decisions (need owner input)
 
 1. **Export feature** — RESOLVED 2026-08-21: permanently dropped (owner decision). Docs scrubbed; the feature will not be restored.
-2. **`resolveAllPermissions`:** restore single-option guard, or accept blanket approve-all and fix the changelog?
-3. **Folder root:** migrate everything to `enodios/` (incl. TemplateManager `hermes/templates`)?
-4. **Semantic RAG embedding backend:** see plan — Phase 1 Hermes `/v1/embeddings`, Phase 2 local Ollama/WASM, or both?
+2. **`resolveAllPermissions`:** restore single-option guard, or accept blanket approve-all and fix the changelog? — RESOLVED 2026-08-21: restore the single-option guard. Implemented in `fix/permissions-guard` (42f88d8 + 06793f0).
+3. **Folder root:** migrate everything to `enodios/` (incl. TemplateManager `hermes/templates`)? — RESOLVED 2026-08-21: migrate to `enodios/`. Implemented in `fix/paths-enodios` (ffea435 + 4afd63c); TemplateManager, docs, and defaults now use `enodios/` exclusively.
+4. **Semantic RAG embedding backend:** see plan — Phase 1 Hermes `/v1/embeddings`, Phase 2 local Ollama/WASM, or both? — RESOLVED 2026-08-21: build Phases 0–2 (Tasks 0–5), both backends with an `auto` provider. Implemented in `feat/semantic-rag`; Tasks 6–7 (persistence, `/search attach`) deferred.
 
 ## Fixes applied 2026-08-21
 
@@ -89,5 +89,9 @@
 - [x] Corrected shell command allowlist (14 → 6 commands + per-command argument allowlists): TROUBLESHOOTING, DEVELOPERS.
 - [x] Fixed audit-log path drift: README/TROUBLESHOOTING/DEVELOPERS now reference `enodios/audit-log.md`.
 - [x] Fixed `PluginSettingsTab.ts:437` fallback `'hermes'` → `'enodios'` (Open Audit Log button looked in the wrong folder when Save Folder was empty; `AuditLog.ts` writes to `enodios/`).
+- [x] Migrated TemplateManager `hermes/templates` → `enodios/templates` (code + tests) and updated all remaining `hermes/` path references in CHANGELOG, TODO, project skill, DEVELOPERS.
+- [x] Restored single-option guard in `resolveAllPermissions` (with test coverage).
+- [x] Pre-rebrand doc refresh: TODO.md version, project skill, RELEASES.md, `src/Views/release.yml` removed; DEVELOPERS references and symlink-limitation note updated.
+- [x] Updated HermesApiClient/AcpClient header docstrings for the API-mode approval flow.
 - [x] Wrote semantic RAG implementation plan: `docs/plans/2026-08-21-semantic-rag.md` (Task 0 relabels the current keyword `/search` until semantic search lands).
-- [ ] NOT DONE (needs owner decision): `resolveAllPermissions` behavior; TemplateManager `hermes/templates` migration; pre-rebrand doc refresh (DEVELOPERS references, TODO.md version, project skill, RELEASES.md); `src/Views/release.yml` removal; HermesApiClient/AcpClient header docstrings (API approval flow); DEVELOPERS symlink-limitation note.
+- [x] Implemented semantic RAG Tasks 0–5 + Task 8 docs: `/search semantic` with Hermes `/v1/embeddings` + Ollama fallback, settings toggle, README/CHANGELOG/DEVELOPERS/project skill updated. Deferred: Tasks 6–7 (persistence, `/search attach`).
