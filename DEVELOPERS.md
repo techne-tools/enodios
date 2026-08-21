@@ -1,6 +1,6 @@
 # Developer Guide
 
-Welcome! This document outlines the architecture, tech stack, and workflows for contributing to the Obsidian Hermes plugin.
+Welcome! This document outlines the architecture, tech stack, and workflows for contributing to the Enodios Obsidian plugin.
 
 ## Tech Stack
 
@@ -17,8 +17,8 @@ Welcome! This document outlines the architecture, tech stack, and workflows for 
 1. **Clone the repository** directly into a test vault for the easiest workflow:
    ```bash
    cd /path/to/your/test-vault/.obsidian/plugins/
-   git clone https://github.com/prismatic7/obsidian-hermes.git hermes
-   cd hermes
+   git clone https://github.com/prismatic7/enodios.git enodios
+   cd enodios
    ```
 2. **Install dependencies**:
    ```bash
@@ -37,7 +37,7 @@ The plugin communicates with the Hermes agent using an abstracted `ChatClient` i
 - **`AcpClient.ts`**: Manages a stateful `ChildProcess`. It communicates over `stdio` using `ndjson`. It intercepts tool calls (like file writes) and proxies them to the `FileChangeManager`.
 - **`HermesApiClient.ts`**: A stateless REST client connecting to the agent's `/v1/chat/completions` endpoint via Server-Sent Events (SSE).
 
-### 2. React UI Integration (`src/Views/HermesChatView.tsx`)
+### 2. React UI Integration (`src/Views/EnodiosChatView.tsx`)
 Instead of manual DOM manipulation, the entire sidebar chat interface is a React component tree mounted via React 18's `createRoot()`.
 - Event listeners from the `ChatClient`, `FileChangeManager`, and Obsidian Workspace are synchronized into React state using `useEffect` hooks.
 - Avoid putting heavy synchronous logic directly in the state setters to prevent blocking the UI thread.
@@ -46,8 +46,9 @@ Instead of manual DOM manipulation, the entire sidebar chat interface is a React
 - **`FileChangeManager`**: Intercepts `writeTextFile` and `deleteTextFile` calls from the agent. It stores them in memory and renders a `PendingChangesPanel` containing inline diffs. Changes are only committed to the `app.vault` after user approval.
   - **Partial Approval**: Users can select individual lines in the diff via checkboxes. The diff is snapshotted at registration time (`diffSnapshot`) to prevent race conditions if the file changes while the user is reviewing.
   - **Bulk Actions**: "Approve All" and "Reject All" buttons for handling multiple changes at once, with atomic path-level locking to prevent concurrent writes.
-- **`SecretsManager`**: Uses Obsidian's `loadLocalStorage`/`saveLocalStorage` specifically for handling remote API keys so they are never stored in plaintext `data.json`.
-  - **Security Warning**: localStorage is NOT encrypted. Secrets are stored in plaintext in the user's profile directory. API keys are revokable, which mitigates the risk, but users should rotate keys regularly and avoid storing non-revokable credentials.
+- **`SecretsManager`**: Encrypts remote API keys with Electron's `safeStorage` (OS keychain: Keychain/DPAPI/libsecret) before persisting them via Obsidian's `loadLocalStorage`/`saveLocalStorage`, so secrets are never stored in plaintext `data.json` or in localStorage.
+  - Encrypted values are stored as `base64(ciphertext)` with a `v1:` prefix; legacy plaintext entries are transparently migrated to encrypted form on first read.
+  - **Fallback**: If `safeStorage` is unavailable (e.g. a future mobile build), SecretsManager falls back to plaintext localStorage and surfaces a prominent warning, because storing secrets in plaintext is a security downgrade the user must know about.
 - **`AuditLog`**: Persistent audit trail recording every tool invocation, file change, permission grant, terminal command, and connection event. Writes are batched (500ms delay) to `enodios/audit-log.md` to avoid excessive I/O.
   - **Security Warning**: The audit log contains sensitive information (file paths, command arguments, API errors) and is stored as plaintext in the vault. Users should not share it publicly.
 
@@ -59,7 +60,7 @@ All file paths from the agent are validated before access:
 - Rejects paths containing `../` (parent directory traversal)
 - Rejects null bytes and control characters (`\x00-\x1f`)
 - Rejects Windows absolute paths (`C:\`, `D:\`, etc.) and UNC paths (`\\server\share`)
-- **Known Limitation**: Symlink traversal is not checked. If the vault contains a symlink to a sensitive directory, the agent can traverse it. Future versions should use `fs.realpath()` to resolve symlinks.
+- Resolves symlinks: `isPathSafe` (in `src/utils/pathSafety.ts`) uses `fs.realpath` to verify the resolved path stays inside the vault base path, rejecting vault escapes via symlink (e.g. a symlink pointing at `~/.ssh` or `../`). If the real path cannot be determined, it falls back to lexical safety only.
 
 #### Shell Command Sanitization (`sanitizeShellCommand`)
 Terminal commands are restricted to a curated allowlist:
@@ -117,11 +118,11 @@ Handles persistence and loading of chat conversations.
 ### 8. Academic & Utility Managers
 - **`PDFAnnotationManager`** (`src/PDFAnnotationManager.ts`): Integrates `pdfjs-dist` to extract plain text per page, parse metadata, and pull highlights/comments from embedded PDF annotations.
 - **`TagManager`** (`src/TagManager.ts`): Implements an term-frequency keyword matching heuristic against vault-wide tags. Suggestions are presented to the user via a React-based checklist modal (`TagSuggestionModal.tsx`) and committed directly to the note frontmatter.
-- **`TemplateManager`** (`src/TemplateManager.ts`): Loads pre-configured built-in templates and user custom prompts (from `hermes/templates/`) supporting frontmatter metadata. Starters are rendered in empty chat views as clickable cards. **Path inconsistency:** template loading still hardcodes `hermes/templates` while conversations and the audit log default to `enodios/` — see issue #6 in `docs/docs-code-alignment-2026-08-21.md`.
+- **`TemplateManager`** (`src/TemplateManager.ts`): Loads pre-configured built-in templates and user custom prompts (from `enodios/templates/`) supporting frontmatter metadata. Starters are rendered in empty chat views as clickable cards.
 - **`contextEnhancer`** (`src/utils/contextEnhancer.ts`): Generates enriched note context including word count, character count, tags, YAML frontmatter, created/modified timestamps, and backlinks. Used by both `AcpClient` and `HermesApiClient` when sending note context to the agent.
 
 ### 9. Unified Keyboard Hotkeys & Focus Flow
-- **Diff Reviews**: Keyboard events are bound in `PendingChangesPanel` (`src/Views/HermesChatView.tsx`) to approve/reject changes quickly (`⌘⇧A`, `⌘⇧R`, `⌘Enter`, `Esc`).
+- **Diff Reviews**: Keyboard events are bound in `PendingChangesPanel` (`src/Views/EnodiosChatView.tsx`) to approve/reject changes quickly (`⌘⇧A`, `⌘⇧R`, `⌘Enter`, `Esc`).
 - **Sidebar Chat Actions**: Context-aware window keydown listeners support quick session controls:
   - `⌘⌥C`: Reset and start a New Chat.
   - `⌘⌥L`: Toggle Previous Conversations sidebar drawer.
