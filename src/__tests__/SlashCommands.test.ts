@@ -282,6 +282,89 @@ describe('SlashCommands', () => {
     });
   });
 
+  describe('search semantic subcommand', () => {
+    let mockPlugin: Plugin;
+
+    beforeEach(() => {
+      mockPlugin = {
+        app: {
+          vault: {
+            getMarkdownFiles: vi.fn().mockReturnValue([]),
+            cachedRead: vi.fn().mockResolvedValue(''),
+          }
+        },
+        semanticSearch: {
+          isReady: vi.fn().mockResolvedValue(true),
+          search: vi.fn().mockResolvedValue([
+            { path: 'notes/sound-design.md', score: 0.92 },
+            { path: 'notes/acoustics.md', score: 0.74 }
+          ])
+        }
+      } as unknown as Plugin;
+    });
+
+    it('should return the not-ready message when semantic search is unavailable', async () => {
+      mockPlugin.semanticSearch.isReady = vi.fn().mockResolvedValue(false);
+
+      const searchCmd = getSlashCommands().find((c) => c.name === 'search')!;
+      const result = await searchCmd.execute(mockPlugin, 'semantic sound design');
+
+      expect(result).toBe(
+        'Semantic search requires API mode with an API key configured.'
+      );
+      expect(mockPlugin.semanticSearch.search).not.toHaveBeenCalled();
+    });
+
+    it('should return a formatted list of ranked results', async () => {
+      const searchCmd = getSlashCommands().find((c) => c.name === 'search')!;
+      const result = await searchCmd.execute(mockPlugin, 'semantic sound design');
+
+      expect(mockPlugin.semanticSearch.search).toHaveBeenCalledWith(
+        'sound design',
+        5
+      );
+      expect(result).toContain('🧠 Semantic Search Results for "sound design"');
+      expect(result).toContain('[[notes/sound-design.md]]');
+      expect(result).toContain('score: 0.920');
+      expect(result).toContain('[[notes/acoustics.md]]');
+      expect(result).toContain('score: 0.740');
+    });
+
+    it('should suggest the keyword search when there are no semantic matches', async () => {
+      mockPlugin.semanticSearch.search = vi.fn().mockResolvedValue([]);
+
+      const searchCmd = getSlashCommands().find((c) => c.name === 'search')!;
+      const result = await searchCmd.execute(mockPlugin, 'semantic zzz');
+
+      expect(result).toBe(
+        'No semantic matches found for "zzz". Try /search "zzz" for keyword results.'
+      );
+    });
+
+    it('should handle the semantic subcommand with no query', async () => {
+      const searchCmd = getSlashCommands().find((c) => c.name === 'search')!;
+      const result = await searchCmd.execute(mockPlugin, 'semantic');
+
+      expect(mockPlugin.semanticSearch.search).toHaveBeenCalledWith('', 5);
+      expect(result).toContain('Semantic Search Results');
+    });
+
+    it('should leave keyword search behaviour unchanged', async () => {
+      mockPlugin.app.vault.getMarkdownFiles = vi.fn().mockReturnValue([
+        { path: 'file1.md' }
+      ]);
+      mockPlugin.app.vault.cachedRead = vi.fn().mockResolvedValue(
+        'The secret word is hidden here.'
+      );
+
+      const searchCmd = getSlashCommands().find((c) => c.name === 'search')!;
+      const result = await searchCmd.execute(mockPlugin, 'secret');
+
+      expect(mockPlugin.semanticSearch.search).not.toHaveBeenCalled();
+      expect(result).toContain('file1.md');
+    });
+  });
+
   describe('git & admonition commands', () => {
     let mockPlugin: Plugin;
 
