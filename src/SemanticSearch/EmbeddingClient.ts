@@ -1,5 +1,56 @@
 import type { Plugin } from '../Plugin.ts';
 import type { SecretsManager } from '../SecretsManager.ts';
+import { OllamaEmbeddingClient } from './OllamaEmbeddingClient.ts';
+
+/**
+ * Settings-visible provider modes for the embedding backend.
+ * Mirrors the `embeddingProvider` settings field (see PluginSettings).
+ */
+export const EmbeddingProvider = {
+  Auto: 'auto',
+  Hermes: 'hermes',
+  Ollama: 'ollama'
+} as const;
+
+export type EmbeddingProviderMode =
+  (typeof EmbeddingProvider)[keyof typeof EmbeddingProvider];
+
+/**
+ * Build the embedding client matching the configured provider, honouring
+ * the owner decision on provider priority:
+ *   'auto'      → Hermes /v1/embeddings when in API mode with an API key;
+ *                 otherwise Ollama if reachable; otherwise not-ready.
+ *   'hermes'    → Hermes endpoint only (isReady reflects API mode + key).
+ *   'ollama'    → Ollama only (isReady reflects reachability).
+ */
+export function createEmbeddingClient(
+  plugin: Plugin,
+  secrets: SecretsManager
+): IEmbeddingClient {
+  const provider = plugin.settings.embeddingProvider;
+  if (provider === EmbeddingProvider.Hermes) {
+    return new EmbeddingClient(plugin, secrets);
+  }
+  if (provider === EmbeddingProvider.Ollama) {
+    return new OllamaEmbeddingClient(plugin);
+  }
+  // 'auto': prefer Hermes in API mode with a key; fall back to Ollama.
+  const hermes = new EmbeddingClient(plugin, secrets);
+  return {
+    embed: async (texts) => {
+      const useHermes =
+        plugin.settings.connectionMode === 'api' &&
+        (await secrets.get('apiKey')) !== '';
+      return useHermes ? hermes.embed(texts) : new OllamaEmbeddingClient(plugin).embed(texts);
+    },
+    isReady: async () => {
+      if (await hermes.isReady()) {
+        return true;
+      }
+      return new OllamaEmbeddingClient(plugin).isReady();
+    }
+  };
+}
 
 /**
  * Minimal interface implemented by every embedding backend.

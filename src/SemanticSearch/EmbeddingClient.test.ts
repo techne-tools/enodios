@@ -3,11 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Plugin } from '../Plugin.ts';
 import type { SecretsManager } from '../SecretsManager.ts';
 
-import { EmbeddingClient } from './EmbeddingClient.ts';
+import {
+  createEmbeddingClient,
+  EmbeddingClient,
+  EmbeddingProvider
+} from './EmbeddingClient.ts';
 
-// EmbeddingClient calls `fetch`, which Obsidian's sandbox provides at
+// The embedding clients call `fetch`, which Obsidian's sandbox provides at
 // runtime. In tests we mock the global fetch.
-describe('EmbeddingClient', () => {
+describe('EmbeddingClient (Hermes /v1/embeddings)', () => {
   let client: EmbeddingClient;
   const fetchMock = vi.fn();
 
@@ -23,6 +27,7 @@ describe('EmbeddingClient', () => {
   function makePlugin(overrides: Record<string, unknown> = {}): Plugin {
     return {
       settings: {
+        connectionMode: 'api',
         hermesAgentName: 'enodios-agent',
         hermesApiUrl: 'http://localhost:8642',
         ...overrides
@@ -126,5 +131,130 @@ describe('EmbeddingClient', () => {
     await expect(client.embed(['note'])).rejects.toThrow(
       'Embedding API error 401'
     );
+  });
+
+  it('isReady: true only in API mode with an API key', async () => {
+    const apiClient = new EmbeddingClient(makePlugin(), makeSecrets('key'));
+    await expect(apiClient.isReady()).resolves.toBe(true);
+
+    const acpClient = new EmbeddingClient(
+      makePlugin({ connectionMode: 'acp' }),
+      makeSecrets('key')
+    );
+    await expect(acpClient.isReady()).resolves.toBe(false);
+
+    const noKeyClient = new EmbeddingClient(
+      makePlugin({ connectionMode: 'api' }),
+      makeSecrets('')
+    );
+    await expect(noKeyClient.isReady()).resolves.toBe(false);
+  });
+});
+
+describe('createEmbeddingClient (provider factory)', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function makePlugin(overrides: Record<string, unknown> = {}): Plugin {
+    return {
+      settings: {
+        connectionMode: 'api',
+        embeddingProvider: 'auto',
+        hermesAgentName: 'enodios-agent',
+        hermesApiUrl: 'http://localhost:8642',
+        ollamaEmbeddingModel: 'nomic-embed-text',
+        ...overrides
+      }
+    } as unknown as Plugin;
+  }
+
+  function makeSecrets(apiKey: string): SecretsManager {
+    return {
+      get: vi.fn().mockResolvedValue(apiKey)
+    } as unknown as SecretsManager;
+  }
+
+  it('auto: uses Hermes when in API mode with an API key', async () => {
+    const client = createEmbeddingClient(
+      makePlugin({ connectionMode: 'api' }),
+      makeSecrets('key')
+    );
+
+    await expect(client.isReady()).resolves.toBe(true);
+    // No Ollama probe should have happened
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('auto: falls back to Ollama when in ACP mode and Ollama is reachable', async () => {
+    const client = createEmbeddingClient(
+      makePlugin({ connectionMode: 'acp' }),
+      makeSecrets('')
+    );
+
+    await expect(client.isReady()).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:11434/api/tags');
+  });
+
+  it('auto: not ready when ACP mode and Ollama is unreachable', async () => {
+    fetchMock.mockRejectedValue(new Error('connection refused'));
+    const client = createEmbeddingClient(
+      makePlugin({ connectionMode: 'acp' }),
+      makeSecrets('')
+    );
+
+    await expect(client.isReady()).resolves.toBe(false);
+  });
+
+  it('auto: falls back to Ollama when API mode but no API key', async () => {
+    const client = createEmbeddingClient(
+      makePlugin({ connectionMode: 'api' }),
+      makeSecrets('')
+    );
+
+    await expect(client.isReady()).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:11434/api/tags');
+  });
+
+  it('explicit hermes: not ready when API mode is off', async () => {
+    const client = createEmbeddingClient(
+      makePlugin({ connectionMode: 'acp', embeddingProvider: 'hermes' }),
+      makeSecrets('key')
+    );
+
+    await expect(client.isReady()).resolves.toBe(false);
+  });
+
+  it('explicit ollama: reachability is the only requirement', async () => {
+    const client = createEmbeddingClient(
+      makePlugin({ embeddingProvider: 'ollama' }),
+      makeSecrets('')
+    );
+
+    await expect(client.isReady()).resolves.toBe(true);
+  });
+
+  it('explicit ollama: not ready when Ollama is down', async () => {
+    fetchMock.mockRejectedValue(new Error('refused'));
+    const client = createEmbeddingClient(
+      makePlugin({ embeddingProvider: 'ollama' }),
+      makeSecrets('')
+    );
+
+    await expect(client.isReady()).resolves.toBe(false);
+  });
+
+  it('EmbeddingProvider is a settings-visible enum of the three modes', () => {
+    expect(EmbeddingProvider.Auto).toBe('auto');
+    expect(EmbeddingProvider.Hermes).toBe('hermes');
+    expect(EmbeddingProvider.Ollama).toBe('ollama');
   });
 });

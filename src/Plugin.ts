@@ -30,7 +30,7 @@ import type { PluginSettings } from './PluginSettings.ts';
 import { PluginSettingsManager } from './PluginSettingsManager.ts';
 import { PluginSettingsTab } from './PluginSettingsTab.ts';
 import { SecretsManager } from './SecretsManager.ts';
-import { EmbeddingClient } from './SemanticSearch/EmbeddingClient.ts';
+import { createEmbeddingClient } from './SemanticSearch/EmbeddingClient.ts';
 import { SemanticSearchIndex } from './SemanticSearch/SemanticSearchIndex.ts';
 import { clearAllCommands } from './SlashCommands.ts';
 import { SlidesManager } from './SlidesManager.ts';
@@ -129,7 +129,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.vaultManager = new VaultManager(this);
     this.secrets = new SecretsManager(this);
     this.semanticSearch = new SemanticSearchIndex(
-      new EmbeddingClient(this, this.secrets)
+      createEmbeddingClient(this, this.secrets)
     );
     this.fileChangeManager = new FileChangeManager(this);
     this.auditLog = new AuditLog(this);
