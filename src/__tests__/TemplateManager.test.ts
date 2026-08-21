@@ -51,11 +51,11 @@ describe('TemplateManager', () => {
       expect(templates.map(t => t.id)).toContain('lit-review');
     });
 
-    it('should load custom templates from hermes/templates folder and strip YAML frontmatter', async () => {
+    it('should load custom templates from enodios/templates folder and strip YAML frontmatter', async () => {
       const manager = new TemplateManager(mockPlugin as Plugin);
-      mockPlugin.app.vault.getAbstractFileByPath.mockReturnValue({ path: 'hermes/templates' });
+      mockPlugin.app.vault.getAbstractFileByPath.mockReturnValue({ path: 'enodios/templates' });
 
-      const file1 = { path: 'hermes/templates/custom1.md', extension: 'md', basename: 'custom1' };
+      const file1 = { path: 'enodios/templates/custom1.md', extension: 'md', basename: 'custom1' };
       mockPlugin.app.vault.getFiles.mockReturnValue([file1]);
 
       mockPlugin.app.vault.read.mockResolvedValue(`---
@@ -93,13 +93,13 @@ This is the custom prompt template body.
 
       await manager.saveTemplate('My Custom Coach', 'This is custom coach body', '🧠', 'Coaching prompt');
 
-      expect(mockPlugin.app.vault.createFolder).toHaveBeenCalledWith('hermes/templates');
+      expect(mockPlugin.app.vault.createFolder).toHaveBeenCalledWith('enodios/templates');
       expect(mockPlugin.app.vault.create).toHaveBeenCalledWith(
-        'hermes/templates/my-custom-coach.md',
+        'enodios/templates/my-custom-coach.md',
         expect.stringContaining('name: My Custom Coach')
       );
       expect(mockPlugin.app.vault.create).toHaveBeenCalledWith(
-        'hermes/templates/my-custom-coach.md',
+        'enodios/templates/my-custom-coach.md',
         expect.stringContaining('This is custom coach body')
       );
     });
