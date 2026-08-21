@@ -79,9 +79,9 @@ Check the audit log (`hermes/audit-log.md`) for the exact rejection reason.
 **Cause**: The command palette commands (Ask Selection, Summarize Note, Generate Tags) have a 2-second rate limit to prevent accidental spam.
 **Solution**: Wait 2 seconds between command invocations. The chat input has its own separate rate limit indicator.
 
-### 📤 Export fails with "Failed to export conversation"
-**Cause**: An error occurred during HTML or JSON export generation.
-**Solution**: Check the Obsidian DevTools console for the specific error. Common causes include extremely large conversations exceeding memory limits, or file system permission issues in your vault folder.
+### 📤 Conversation export
+
+Conversation export (HTML/JSON/Markdown) was removed in 0.4.1-beta1. Saved conversations live in your vault as plain markdown notes under the **Save Folder** — copy or re-purpose the note directly. If you rely on export, raise a feature request on GitHub.
 
 ### 🔊 Typing sounds aren't playing
 **Cause**: Browser autoplay policies block AudioContext creation until user interaction.

@@ -10,7 +10,6 @@ Chat with the Hermes autonomous AI agent inside Obsidian. Enodios connects your 
 - **Citations and PDFs**: manage a bibliography, format references (APA, MLA, Chicago, IEEE), and pull text or highlights from PDFs.
 - **Tag suggestions**: `/tags suggest` scans your notes and offers matching tags to write into the frontmatter.
 - **Templates and personas**: save prompts with `/template save` and switch instructions with `/persona`.
-- **Export conversations** as HTML, JSON, or Markdown.
 
 ## How safety works
 

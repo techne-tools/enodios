@@ -109,10 +109,9 @@ Parses markdown to extract specific blocks (headings, code blocks, lists, block 
 - Used by both `AcpClient` and `HermesApiClient` when resolving context items to send only relevant sections instead of entire notes.
 
 ### 7. Conversation Management (`src/VaultManager.ts`)
-Handles persistence, loading, and export of chat conversations.
-- **Organization modes**: `flat` (all in one folder), `by-date` (`hermes/2026-05/`), or `by-project`.
-- **Export formats**: HTML (self-contained with escaped output), JSON (with metadata), PDF (via printable blob URL — caller must revoke).
-- **Security**: `escapeHtml` properly escapes `&`, `<`, `>`, `"`, `'`, and backticks (`` ` ``) to prevent XSS in exported HTML.
+Handles persistence and loading of chat conversations.
+- **Organization modes**: `flat` (all in one folder), `by-date` (`enodios/2026-05/`), or `by-project`.
+- **Note**: Export (HTML/JSON/Markdown/PDF) was removed in 0.4.1-beta1 and has not been restored. Conversations are plain markdown notes with YAML frontmatter, so they can be copied, templated, or re-purposed directly in the vault.
 
 ### 8. Academic & Utility Managers
 - **`PDFAnnotationManager`** (`src/PDFAnnotationManager.ts`): Integrates `pdfjs-dist` to extract plain text per page, parse metadata, and pull highlights/comments from embedded PDF annotations.
