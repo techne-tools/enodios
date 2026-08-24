@@ -56,11 +56,11 @@ export class TemplateManager {
   }
 
   /**
-   * Loads all templates, combining built-ins with custom templates stored in vault at hermes/templates/.
+   * Loads all templates, combining built-ins with custom templates stored in vault at enodios/templates/.
    */
   public async loadTemplates(): Promise<ChatTemplate[]> {
     const templates = [...this.BUILT_IN_TEMPLATES];
-    const templatesFolder = 'hermes/templates';
+    const templatesFolder = 'enodios/templates';
 
     // Check if templates folder exists in vault
     const folder = this.plugin.app.vault.getAbstractFileByPath(templatesFolder);
@@ -116,7 +116,7 @@ export class TemplateManager {
    * Saves a custom template in the vault.
    */
   public async saveTemplate(name: string, prompt: string, icon = '📄', description = 'Custom saved template'): Promise<void> {
-    const templatesFolder = 'hermes/templates';
+    const templatesFolder = 'enodios/templates';
 
     // Ensure the folder exists
     const folderExists = this.plugin.app.vault.getAbstractFileByPath(templatesFolder);

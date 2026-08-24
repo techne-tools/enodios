@@ -1,5 +1,6 @@
 import {
   Notice,
+  setIcon,
   TFile
 } from 'obsidian';
 import { PluginSettingsTabBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginSettingsTabBase';
@@ -24,51 +25,59 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
 
     this.containerEl.createEl('h2', { text: 'Enodios Plugin Settings' });
 
-    this.renderCollapsibleSection('🔌 Connection Settings', (el) => {
+    this.renderCollapsibleSection('Connection Settings', 'plug', (el) => {
       this.renderConnectionSection(el);
     });
-    this.renderCollapsibleSection('🤖 Agent Personality', (el) => {
+    this.renderCollapsibleSection('Agent Personality', 'bot', (el) => {
       this.renderAgentIdentitySection(el);
     });
-    this.renderCollapsibleSection('💬 What You See in Chat', (el) => {
+    this.renderCollapsibleSection('What You See in Chat', 'message-square', (el) => {
       this.renderChatDisplaySection(el);
     });
-    this.renderCollapsibleSection('📎 Automatic Context', (el) => {
+    this.renderCollapsibleSection('Automatic Context', 'paperclip', (el) => {
       this.renderContextSection(el);
     });
-    this.renderCollapsibleSection('🎓 Academic, Citations & Toggles', (el) => {
+    this.renderCollapsibleSection('Academic, Citations & Toggles', 'graduation-cap', (el) => {
       this.renderAcademicSection(el);
     });
-    this.renderCollapsibleSection('🧩 Core Plugin Integrations', (el) => {
+    this.renderCollapsibleSection('Core Plugin Integrations', 'puzzle', (el) => {
       this.renderCorePluginSection(el);
     });
-    this.renderCollapsibleSection('🌍 Community Plugin Integrations', (el) => {
+    this.renderCollapsibleSection('Community Plugin Integrations', 'users', (el) => {
       this.renderCommunityPluginSection(el);
     });
-    this.renderCollapsibleSection('🗂️ Saving Conversations', (el) => {
+    this.renderCollapsibleSection('Saving Conversations', 'archive', (el) => {
       this.renderConversationStorageSection(el);
     });
-    this.renderCollapsibleSection('🔊 Sound & Feel', (el) => {
+    this.renderCollapsibleSection('Sound & Feel', 'volume-2', (el) => {
       this.renderFeedbackSection(el);
     });
-    this.renderCollapsibleSection('🛡️ Security', (el) => {
+    this.renderCollapsibleSection('Security', 'shield', (el) => {
       this.renderSecuritySection(el);
     });
-    this.renderCollapsibleSection('🐛 Troubleshooting', (el) => {
+    this.renderCollapsibleSection('Troubleshooting', 'wrench', (el) => {
       this.renderDebugSection(el);
     });
   }
 
   private renderCollapsibleSection(
     title: string,
+    icon: string,
     renderFunc: (el: HTMLElement) => void
   ): void {
     const details = this.containerEl.createEl('details', {
       cls: 'enodios-settings-details'
     });
-    details.createEl('summary', {
-      text: title,
+    const summary = details.createEl('summary', {
       cls: 'enodios-settings-summary'
+    });
+    const iconEl = summary.createEl('span', {
+      cls: 'enodios-settings-icon'
+    });
+    setIcon(iconEl, icon);
+    summary.createEl('span', {
+      text: title,
+      cls: 'enodios-settings-title'
     });
     const content = details.createEl('div', {
       cls: 'enodios-settings-content'

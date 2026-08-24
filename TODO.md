@@ -70,7 +70,7 @@
 - [x] Phase 3: Canvas Integration via `/canvas` command (16 May 2026)
 - [x] Phase 3: Terminal Streaming & Control with "Abort" button (16 May 2026)
 - [x] Phase 3: Conversation Branching with message editing (16 May 2026)
-- [x] Phase 3: Semantic Vault RAG via `/search` command and unit tests (16 May 2026)
+- [ ] Phase 3: Semantic Vault RAG via `/search` — **NOT IMPLEMENTED**. `/search` is keyword-only (see `docs/plans/2026-08-21-semantic-rag.md` for the pending semantic RAG plan).
 - [x] Added bulk actions (Approve All / Reject All) for file changes and permissions (16 May 2026)
 - [x] Supported file deletions via `FileChangeManager` (16 May 2026)
 - [x] Added Session-specific Tool Execution (per-chat capabilities) (16 May 2026)
@@ -461,7 +461,7 @@ Based on analysis of both codebases, the following Zotero features could usefull
 ### 🟡 Medium Impact — Nice to Have
 
 - [x] **Smart Context: Block-Level References** — Parse selections to detect `[[Note#Heading]]`, code blocks, list ranges. Embed just that block, not the whole note. ✅ Implemented 17 May 2026 — `blockReferences.ts` with heading/code-block/list/block-id parsing, block ref resolution in AcpClient and HermesApiClient.
-- [x] **Export Conversations (PDF/HTML/JSON)** — Add export options beyond markdown: HTML (self-contained), JSON (programmatic), PDF. ✅ Implemented 17 May 2026 — Export dropdown in chat header with HTML and JSON download, `exportToHtml()`, `exportToJson()`, `exportToPdfDataUri()` in VaultManager.
+- [x] ~~**Export Conversations (PDF/HTML/JSON)**~~ — **REMOVED**. Export methods (`exportToHtml()`, `exportToJson()`, `exportToPdfDataUri()`) and the export dropdown were deleted in the 0.4.1-beta1 hotfix (2026-06-10) and never restored. Conversations export via Obsidian-native copy only. Decision needed: restore or permanently drop.
 - [x] **Token Usage Dashboard** — Display input/output tokens and estimated cost in chat footer. Parsed from `usage_update` ACP event. ✅ Implemented 17 May 2026 — `TokenUsageFooter` component with input/output/total tokens and estimated cost, listens to `hermes-usage-update` window events.
 - [x] **Command Palette Integration** — Register quick actions: "Ask Hermes about selection", "Summarize current note", "Generate tags". ✅ Implemented 17 May 2026 — Three new commands in Plugin.ts: `hermes-ask-selection`, `hermes-summarize-note`, `hermes-generate-tags`.
 

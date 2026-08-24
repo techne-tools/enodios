@@ -7,7 +7,7 @@ import type { AcpConnectionStatus } from "../../ChatClient.ts";
 // Helper component
 function TypingIndicator({ agentName }: { agentName: string }): ReactElement {
   return (
-    <div className="enodios-typing-indicator">{agentName} is thinking...</div>
+    <div className="enodios-typing-indicator enodios-typing">{agentName} is thinking...</div>
   );
 }
 

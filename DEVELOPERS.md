@@ -46,8 +46,8 @@ Instead of manual DOM manipulation, the entire sidebar chat interface is a React
 - **`FileChangeManager`**: Intercepts `writeTextFile` and `deleteTextFile` calls from the agent. It stores them in memory and renders a `PendingChangesPanel` containing inline diffs. Changes are only committed to the `app.vault` after user approval.
   - **Partial Approval**: Users can select individual lines in the diff via checkboxes. The diff is snapshotted at registration time (`diffSnapshot`) to prevent race conditions if the file changes while the user is reviewing.
   - **Bulk Actions**: "Approve All" and "Reject All" buttons for handling multiple changes at once, with atomic path-level locking to prevent concurrent writes.
-- **`SecretsManager`**: Uses Obsidian's `loadLocalStorage`/`saveLocalStorage` specifically for handling remote API keys so they are never stored in plaintext `data.json`.
-  - **Security Warning**: localStorage is NOT encrypted. Secrets are stored in plaintext in the user's profile directory. API keys are revokable, which mitigates the risk, but users should rotate keys regularly and avoid storing non-revokable credentials.
+- **`SecretsManager`**: Uses Obsidian's `loadLocalStorage`/`saveLocalStorage` to persist remote API keys, encrypted with Electron `safeStorage` (OS keychain-backed: Keychain on macOS, DPAPI on Windows, libsecret on Linux).
+  - **Encryption**: Values are encrypted before persistence and prefixed `v1:` so encrypted vs legacy entries can be distinguished. If `safeStorage` is unavailable (e.g. a future mobile build), it falls back to plaintext. Legacy plaintext values are transparently encrypted and migrated on first read. Never stores secrets in `data.json`.
 - **`AuditLog`**: Persistent audit trail recording every tool invocation, file change, permission grant, terminal command, and connection event. Writes are batched (500ms delay) to `enodios/audit-log.md` to avoid excessive I/O.
   - **Security Warning**: The audit log contains sensitive information (file paths, command arguments, API errors) and is stored as plaintext in the vault. Users should not share it publicly.
 

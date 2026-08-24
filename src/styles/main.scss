@@ -479,6 +479,13 @@
   }
 }
 
+.enodios-typing {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
 .enodios-message {
   display: flex;
   flex-direction: column;
@@ -2273,17 +2280,29 @@
   &::-webkit-details-marker {
     display: none;
   }
+}
 
-  &::before {
-    content: "▶";
-    font-size: 0.8em;
-    color: var(--text-muted);
-    transition: transform 0.2s ease;
+.enodios-settings-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+
+  svg {
+    width: 18px;
+    height: 18px;
   }
 }
 
-.enodios-settings-details[open] .enodios-settings-summary::before {
-  transform: rotate(90deg);
+.enodios-settings-title {
+  flex: 1;
+}
+
+.enodios-settings-details[open] .enodios-settings-icon {
+  color: var(--interactive-accent);
 }
 
 .enodios-settings-content {

@@ -164,7 +164,7 @@
 - Code block syntax highlighting in chat view
 - Dynamic notification badge on ribbon icon for pending actions
 - Conversation branching with message editing
-- Semantic Vault RAG via `/search` command
+- Keyword vault search via `/search` command (semantic RAG pending — see `docs/plans/2026-08-21-semantic-rag.md`)
 - Canvas integration via `/canvas` command
 - Model Context Protocol (MCP) support via settings
 - Deep Editor Integration (CodeMirror 6 Ghost Text)
