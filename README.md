@@ -13,14 +13,14 @@ Chat with the Hermes autonomous AI agent inside Obsidian. Enodios connects your 
 
 ## How safety works
 
-The agent can create and modify files, but every change appears in a diff view for you to approve or reject — individually or in bulk. Terminal access is off by default, and the agent's actions are logged to `enodios/audit-log.md`.
+The agent can create and modify files, but every change appears in a diff view for you to approve or reject — individually or in bulk. Terminal access is off by default, and the agent's actions are logged to `enodios/audit-log.md` while Debug Mode is enabled.
 
 ## Connections
 
 - **ACP**: runs a local Hermes subprocess (requires the Hermes binary).
 - **API**: connects to a remote Hermes agent over HTTP/SSE.
 
-You can attach MCP servers in settings to give the agent extra tools. Only add MCP servers you trust — they can run programs on your computer.
+MCP servers are configured in Hermes itself (`hermes mcp`), not in this plugin. The plugin connects to whatever servers your Hermes profile has enabled.
 
 ## Installation
 

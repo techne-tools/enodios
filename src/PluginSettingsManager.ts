@@ -54,8 +54,8 @@ export class PluginSettingsManager extends PluginSettingsManagerBase<PluginTypes
 
     this.registerValidator('conversationOrganization', (value) => {
       const org: string = value;
-      if (org !== 'flat' && org !== 'by-date' && org !== 'by-project') {
-        return 'conversationOrganization must be "flat", "by-date", or "by-project"';
+      if (org !== 'flat' && org !== 'by-date') {
+        return 'conversationOrganization must be "flat" or "by-date"';
       }
       return undefined;
     });
@@ -64,11 +64,12 @@ export class PluginSettingsManager extends PluginSettingsManagerBase<PluginTypes
       const style: string = value;
       if (
         style !== 'apa'
-        && style !== 'mla'
         && style !== 'chicago'
+        && style !== 'harvard'
         && style !== 'ieee'
+        && style !== 'mla'
       ) {
-        return 'citationStyle must be "apa", "mla", "chicago", or "ieee"';
+        return 'citationStyle must be "apa", "chicago", "harvard", "ieee", or "mla"';
       }
       return undefined;
     });

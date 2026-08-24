@@ -138,6 +138,10 @@ export class CitationManager {
         const authorStr = this.formatChicagoAuthors(authors);
         return `(${authorStr} ${year})`;
       }
+      case 'harvard': {
+        const authorStr = this.formatApaAuthors(authors);
+        return `(${authorStr}, ${year})`;
+      }
       case 'ieee':
         return `[${String(index)}]`;
       case 'mla': {
@@ -584,31 +588,10 @@ export class CitationManager {
         if (url) main += ` Available: ${url}.`;
         return main;
       }
-      case 'mla': {
-        // MLA bibliography item format: Last, First. "Title." Journal, vol. X, no. Y, Year, pp. Z.
-        let main = `${formatFullAuthors('mla')}. "${title}." `;
-        if (journal) {
-          main += `*${journal}*, `;
-          if (volume) main += `vol. ${volume}, `;
-          if (number) main += `no. ${number}, `;
-          main += `${year}, `;
-          if (pages) main += `pp. ${pages}.`;
-        } else if (booktitle) {
-          main += `in *${booktitle}*, `;
-          if (publisher) main += `${publisher}, `;
-          main += `${year}, `;
-          if (pages) main += `pp. ${pages}.`;
-        } else {
-          if (publisher) main += `${publisher}, `;
-          main += `${year}.`;
-        }
-        if (doi) main += ` DOI: ${doi}.`;
-        else if (url) main += ` ${url}.`;
-        return main;
-      }
       case 'apa':
+      case 'harvard':
       default: {
-        // APA: Author, A. A. (Year). Title. Journal, Volume(Issue), pages.
+        // Harvard / APA: Author, A. A. (Year). Title. Journal, Volume(Issue), pages.
         let main = `${formatFullAuthors('apa')} (${year}). ${title}. `;
         if (journal) {
           main += `*${journal}*`;

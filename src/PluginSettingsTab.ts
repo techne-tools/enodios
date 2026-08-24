@@ -88,6 +88,22 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
   // ─── Agent Identity ───
   private renderAgentIdentitySection(containerEl: HTMLElement): void {
     new SettingEx(containerEl)
+      .setName('Hermes Profile')
+      .setDesc(
+        'Which Hermes profile this plugin connects to. Profiles are created and managed in Hermes itself (`hermes profile`), not here. The default profile is used unless you have created others.'
+      )
+      .addDropdown((dropdown) => {
+        dropdown.addOption('default', 'default');
+        for (const persona of this.plugin.settings.personaTemplates) {
+          if (persona.id !== 'default') {
+            dropdown.addOption(persona.id, persona.id);
+          }
+        }
+        dropdown.setValue(this.plugin.settings.hermesProfile);
+        this.bind(dropdown, 'hermesProfile');
+      });
+
+    new SettingEx(containerEl)
       .setName('Agent Display Name')
       .setDesc(
         'What you call your assistant in the chat. Change it to whatever feels right — "Claude", "Friday", "Research Buddy", etc.'
@@ -183,38 +199,6 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
             await this.testAcpConnection();
           });
         });
-
-      new SettingEx(containerEl)
-        .setName('⚠️ Enable External Tool Servers (MCP)')
-        .setDesc(
-          'MCP servers are external programs that Hermes can call. They bypass file-approval and permission checks, and can execute arbitrary code with your user privileges. Only enable if you fully trust every server you add below.'
-        )
-        .addToggle((toggle) => {
-          toggle.setValue(this.plugin.settings.mcpServersEnabled);
-          this.bind(toggle, 'mcpServersEnabled', {
-            onChanged: () => {
-              this.display();
-            }
-          });
-        });
-
-      if (this.plugin.settings.mcpServersEnabled) {
-        new SettingEx(containerEl)
-          .setName('External Tool Server Paths')
-          .setDesc(
-            'One absolute path per line. These executables run with your user privileges and are not sandboxed. Restart the connection after changing.'
-          )
-          .addTextArea((text) => {
-            text
-              .setPlaceholder(
-                '/Users/you/.local/bin/mcp-web-search\n/opt/mcp-database'
-              )
-              .setValue(this.plugin.settings.mcpServersList);
-            text.inputEl.rows = 3;
-            text.inputEl.style.width = '100%';
-            this.bind(text, 'mcpServersList');
-          });
-      }
     }
 
     // Remote mode settings
@@ -333,6 +317,7 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         dropdown.addOption('apa', 'APA (7th edition)');
         dropdown.addOption('mla', 'MLA (9th edition)');
         dropdown.addOption('chicago', 'Chicago (Author-Date)');
+        dropdown.addOption('harvard', 'Harvard (Cite Them Right)');
         dropdown.addOption('ieee', 'IEEE');
         dropdown.setValue(this.plugin.settings.citationStyle);
         this.bind(dropdown, 'citationStyle');
@@ -415,10 +400,6 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
       .addDropdown((dropdown) => {
         dropdown.addOption('flat', 'Flat — all in one folder');
         dropdown.addOption('by-date', 'By Date — monthly subfolders');
-        dropdown.addOption(
-          'by-project',
-          'By Project — tag-based (coming soon)'
-        );
         dropdown.setValue(this.plugin.settings.conversationOrganization);
         this.bind(dropdown, 'conversationOrganization');
       });
@@ -429,32 +410,38 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
     new SettingEx(containerEl)
       .setName('Debug Mode')
       .setDesc(
-        'Write detailed technical logs to the browser console. Turn this on when something is broken and you need to report a bug. You can view the console with Cmd+Option+I (Mac) or Ctrl+Shift+I (Windows/Linux).'
+        'Write detailed technical logs to the browser console and record an audit trace of agent actions (file changes, tool calls, terminal commands) to the vault. Turn this on when something is broken and you need to report a bug. You can view the console with Cmd+Option+I (Mac) or Ctrl+Shift+I (Windows/Linux).'
       )
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.enableDebugMode);
-        this.bind(toggle, 'enableDebugMode');
-      });
-
-    new SettingEx(containerEl)
-      .setName('View Audit Log')
-      .setDesc(
-        'Open the audit log file that records every action the agent takes — file changes, tool calls, and permissions.'
-      )
-      .addButton((button) => {
-        button.setButtonText('Open Audit Log').onClick(() => {
-          const folder = this.plugin.settings.chatSaveFolder || 'enodios';
-          const logPath = `${folder}/audit-log.md`;
-          const file = this.plugin.app.vault.getAbstractFileByPath(logPath);
-          if (file instanceof TFile) {
-            void this.plugin.app.workspace.getLeaf().openFile(file);
-          } else {
-            new Notice(
-              'Audit log not found yet. It is created after the first action.'
-            );
+        this.bind(toggle, 'enableDebugMode', {
+          onChanged: () => {
+            this.display();
           }
         });
       });
+
+    if (this.plugin.settings.enableDebugMode) {
+      new SettingEx(containerEl)
+        .setName('View Audit Log')
+        .setDesc(
+          'Open the audit log file that records every action the agent takes — file changes, tool calls, and permissions. Only recorded while Debug Mode is on.'
+        )
+        .addButton((button) => {
+          button.setButtonText('Open Audit Log').onClick(() => {
+            const folder = this.plugin.settings.chatSaveFolder || 'enodios';
+            const logPath = `${folder}/audit-log.md`;
+            const file = this.plugin.app.vault.getAbstractFileByPath(logPath);
+            if (file instanceof TFile) {
+              void this.plugin.app.workspace.getLeaf().openFile(file);
+            } else {
+              new Notice(
+                'Audit log not found yet. It is created after the first action while Debug Mode is on.'
+              );
+            }
+          });
+        });
+    }
 
     new SettingEx(containerEl)
       .setName('Reset Onboarding')

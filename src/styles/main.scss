@@ -2199,6 +2199,36 @@
   white-space: pre-wrap;
 }
 
+.enodios-audit-entry-summary {
+  color: var(--text-normal);
+}
+
+.enodios-audit-entry-meta {
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.enodios-audit-entry-meta-row {
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+}
+
+.enodios-audit-entry-meta-row dt {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 64px;
+}
+
+.enodios-audit-entry-meta-row dd {
+  margin: 0;
+  color: var(--text-normal);
+  word-break: break-all;
+}
+
 /* Individual line actions in inline diff */
 .enodios-diff-line-actions {
   display: inline-flex;

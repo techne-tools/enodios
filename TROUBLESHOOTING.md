@@ -54,12 +54,12 @@ By default, terminal execution is disabled for security (as it bypasses the Obsi
 **Solution**: Wait at least 1 second between prompt sends.
 
 ### 🛑 "MCP server rejected: ..."
-**Cause**: An MCP server configured in settings failed security validation.
+**Cause**: An MCP server configured in Hermes (`hermes mcp`) failed security validation.
 **Solution**: MCP servers must meet these requirements:
 - Absolute path (no relative paths)
 - Not in a temporary directory (`/tmp`, `/var/tmp`, `/dev/shm`, `/run`)
 - Not world-writable
-Check the audit log (`enodios/audit-log.md`) for the exact rejection reason.
+Check the Hermes logs for the exact rejection reason.
 
 ## Features and UI
 

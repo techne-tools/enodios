@@ -468,7 +468,7 @@ Based on analysis of both codebases, the following Zotero features could usefull
 ### 🟢 Polish & Differentiation
 
 - [x] **Typing Sound / Haptic Feedback (Optional)** — Subtle audio cues or haptic feedback during agent generation. Optional setting. ✅ Implemented 17 May 2026 — `enableTypingSound` and `enableHapticFeedback` settings, Web Audio API click sounds, `navigator.vibrate()` haptic, throttled to ~20/sec.
-- [x] **Conversation Folders / Organization** — Auto-organize by date (`hermes/2026-05/`) or project tag. Manual folders via dropdown. ✅ Implemented 17 May 2026 — `conversationOrganization` setting (`flat`/`by-date`/`by-project`), `generateFilePath()` updated for date-based subfolders.
+- [x] ~~**Conversation Folders / Organization**~~ — Auto-organize by date (`enodios/2026-05/`) or project tag. ✅ Implemented 17 May 2026 — `conversationOrganization` setting (`flat`/`by-date`/`by-project`), `generateFilePath()` updated for date-based subfolders. **`by-project` removed 24 Aug 2026** — not coming soon; only `flat` and `by-date` remain.
 - [x] **Inline Suggestion Alternatives (Ghost Text v2)** — Show `⌥→` to cycle through 3 completion alternatives, like GitHub Copilot. ✅ Implemented 17 May 2026 — `GhostTextState` with alternatives array, `Alt+ArrowRight` keymap for cycling, alternatives indicator in widget.
 - [x] **First-Time Onboarding Flow** — Dismissible welcome message explaining connection modes, slash commands, @ button, and security warnings. ✅ Implemented 17 May 2026 — `OnboardingPanel` component with welcome message, feature list, security note, dismissible with `hasSeenOnboarding` setting.
 

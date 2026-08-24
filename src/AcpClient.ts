@@ -32,8 +32,7 @@ import {
 } from '@agentclientprotocol/sdk';
 import { spawn } from 'child_process';
 import {
-  existsSync,
-  statSync
+  existsSync
 } from 'fs';
 import {
   FileSystemAdapter,
@@ -282,7 +281,7 @@ export interface PromptContextItem {
  * - Path traversal is blocked by `isPathSafe()` — absolute paths, parent
  *   directory references (`../`), and null bytes are all rejected.
  * - Terminal access is gated by the `allowTerminal` setting (off by default).
- * - MCP servers are explicitly opt-in and logged as a security event.
+ * - MCP servers are configured in Hermes proper (`hermes mcp`), not in this plugin.
  */
 export class AcpClient implements ChatClient {
   private activeTerminals = new Map<string, ActiveTerminal>();
@@ -1284,8 +1283,16 @@ export class AcpClient implements ChatClient {
     try {
       // Spawn hermes acp
       const hermesPath = this.resolveHermesPath();
+      const env = buildSanitizedEnv();
+      // Select the Hermes profile (managed in Hermes proper via `hermes profile`).
+      // HERMES_PROFILE is the documented way to run a specific profile; the
+      // default profile is used when the setting is left at 'default'.
+      const profile = this.plugin.settings.hermesProfile.trim() || 'default';
+      if (profile !== 'default') {
+        env['HERMES_PROFILE'] = profile;
+      }
       this.childProcess = spawn(hermesPath, ['acp'], {
-        env: buildSanitizedEnv(),
+        env,
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
@@ -1534,61 +1541,11 @@ export class AcpClient implements ChatClient {
       // Create a new session
       const vaultPath = this.plugin.app.vault.getRoot().path;
 
-      let mcpServers: string[] = [];
-      if (this.plugin.settings.mcpServersEnabled) {
-        mcpServers = this.plugin.settings.mcpServersList
-          .split('\n')
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0);
-
-        if (mcpServers.length > 0) {
-          this.plugin.auditLog.recordConnection(
-            'mcp_servers',
-            'acp',
-            'success',
-            `enabled with ${String(mcpServers.length)} server(s)`
-          );
-        }
-      } else {
-        this.plugin.auditLog.recordConnection(
-          'mcp_servers',
-          'acp',
-          'blocked',
-          'disabled by user setting'
-        );
-      }
-
-      // SECURITY: Validate MCP server paths before passing to the agent.
-      // Reject world-writable files, temporary directories, non-absolute
-      // paths, and paths inside the current vault.
-      const adapter = this.plugin.app.vault.adapter;
-      const vaultBasePath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : '';
-      const validatedMcpServers: string[] = [];
-      for (const serverPath of mcpServers) {
-        try {
-          validateMcpServerPath(serverPath, vaultBasePath);
-          validatedMcpServers.push(serverPath);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          this.plugin.auditLog.recordConnection(
-            'mcp_servers',
-            'acp',
-            'blocked',
-            `rejected ${serverPath}: ${message}`
-          );
-          this.plugin.debug.warn(`MCP server rejected: ${message}`);
-        }
-      }
-      mcpServers = validatedMcpServers;
-
-      // Security Note: MCP servers are external executables spawned by the Hermes agent.
-      // Configuring untrusted MCP servers poses a significant security risk, as they can
-      // execute arbitrary code on the user's system with the privileges of the Obsidian process.
-      // Users must be warned about this risk in the plugin documentation.
-
       const sessionRequest: NewSessionRequest = {
         cwd: vaultPath,
-        mcpServers: mcpServers as unknown as NewSessionRequest['mcpServers']
+        // MCP servers are configured in Hermes proper (`hermes mcp`), not in
+        // this plugin. An empty list means the agent uses its own config.
+        mcpServers: []
       };
       const sessionResponse = await this.clientConnection.newSession(sessionRequest);
 
@@ -2006,54 +1963,6 @@ function sanitizeShellCommand(command: string): string {
   }
 
   return trimmed;
-}
-
-/**
- * Validate an MCP server executable path for security concerns.
- * Rejects temporary directories, world-writable files, relative paths, and
- * paths inside the current vault.
- *
- * SECURITY NOTE: This is a best-effort check. A determined attacker with
- * control of the filesystem can bypass these checks (e.g., by changing
- * permissions after validation). The primary defense is user vigilance
- * when configuring MCP servers. Rejecting vault-contained paths prevents
- * an untrusted vault from executing arbitrary binaries via MCP loading.
- */
-function validateMcpServerPath(
-  serverPath: string,
-  vaultBasePath: string
-): void {
-  if (!serverPath.startsWith('/')) {
-    throw new Error('MCP server path must be absolute');
-  }
-  const tmpDirs = ['/tmp', '/var/tmp', '/dev/shm', '/run'];
-  for (const tmp of tmpDirs) {
-    if (serverPath.startsWith(tmp)) {
-      throw new Error(`MCP server cannot be in a temporary directory: ${tmp}`);
-    }
-  }
-  // Reject paths inside the current vault — an untrusted vault must not be
-  // able to execute binaries it ships with.
-  if (
-    vaultBasePath
-    && (serverPath === vaultBasePath || serverPath.startsWith(`${vaultBasePath}/`))
-  ) {
-    throw new Error('MCP server path cannot be inside the current vault');
-  }
-  try {
-    const stats = statSync(serverPath);
-    // Check if world-writable (last octal digit includes 2)
-    if ((stats.mode & 0o002) !== 0) {
-      throw new Error('MCP server file is world-writable');
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('world-writable')) {
-      throw error;
-    }
-    throw new Error(
-      `Cannot stat MCP server file: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
 }
 
 /**

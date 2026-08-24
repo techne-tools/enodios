@@ -165,8 +165,16 @@ export class AuditLog {
 
   /**
    * Record a single audit entry. Queued for batch writing.
+   *
+   * The audit log is a debugging aid, not a permanent record: entries are
+   * only recorded while Debug Mode is enabled. When debug mode is off,
+   * recording is a no-op — no file is created and no noise is written to
+   * the vault.
    */
   public record(entry: Omit<AuditEntry, 'timestamp'>): void {
+    if (!this.plugin.settings.enableDebugMode) {
+      return;
+    }
     this.writeQueue.push({
       ...entry,
       timestamp: Date.now()

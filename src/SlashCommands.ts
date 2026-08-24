@@ -199,7 +199,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     name: 'search'
   },
   {
-    description: 'Manage citations & styles. Usage: /cite style [apa|mla|chicago|ieee] OR /cite search [query] OR /cite bib',
+    description: 'Manage citations & styles. Usage: /cite style [apa|mla|chicago|harvard|ieee] OR /cite search [query] OR /cite bib',
     execute: async (plugin, args) => {
       if (!plugin.settings.enableCitations) {
         return 'Citations feature is disabled in settings.';
@@ -211,11 +211,12 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       if (sub === 'style') {
         const style = subArgs.toLowerCase().trim() as
           | 'apa'
-          | 'mla'
           | 'chicago'
-          | 'ieee';
-        if (!['apa', 'chicago', 'ieee', 'mla'].includes(style)) {
-          return `Invalid style. Available: **apa**, **mla**, **chicago**, **ieee**`;
+          | 'harvard'
+          | 'ieee'
+          | 'mla';
+        if (!['apa', 'chicago', 'harvard', 'ieee', 'mla'].includes(style)) {
+          return `Invalid style. Available: **apa**, **mla**, **chicago**, **harvard**, **ieee**`;
         }
         // @ts-expect-error - mutable setting
         plugin.settings.citationStyle = style;

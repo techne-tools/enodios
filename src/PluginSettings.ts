@@ -12,6 +12,9 @@ export class PluginSettings {
 
   // Agent Identity
   public chatAgentName = 'Hermes';
+  // Hermes profile used for the local (ACP) connection. Profiles are managed
+  // in Hermes proper (`hermes profile`), not in this plugin.
+  public hermesProfile = 'default';
 
   // Conversation Persistence
   public chatSaveFolder = 'enodios';
@@ -20,7 +23,7 @@ export class PluginSettings {
 
   // Academic & Citations Settings
   public bibliographyPath = 'references.bib';
-  public citationStyle: 'apa' | 'mla' | 'chicago' | 'ieee' = 'apa';
+  public citationStyle: 'apa' | 'chicago' | 'harvard' | 'ieee' | 'mla' = 'apa';
   public autoExtractPdfAnnotations = false;
 
   // Feature Toggles
@@ -32,7 +35,7 @@ export class PluginSettings {
 
   // Context Behavior
   public contextEntireNote = false;
-  public conversationOrganization: 'by-date' | 'by-project' | 'flat' = 'flat';
+  public conversationOrganization: 'by-date' | 'flat' = 'flat';
 
   // Debug Mode — enables verbose console logging for troubleshooting
   public enableDebugMode = false;
@@ -49,8 +52,6 @@ export class PluginSettings {
 
   // ACP Configuration
   public hermesBinaryPath = '';
-  public mcpServersEnabled = false;
-  public mcpServersList = '';
 
   // Note Templates (Obsidian core Templates plugin)
   /** Override path for the Obsidian Templates folder. Leave empty to auto-detect. */

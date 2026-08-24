@@ -317,8 +317,7 @@ export class VaultManager {
       const conversationTitle = title ?? 'Conversation';
       const filePath = this.generateFilePath(
         conversationTitle,
-        Date.now(),
-        messages
+        Date.now()
       );
       const content = this.messagesToMarkdown(
         messages,
@@ -364,7 +363,7 @@ export class VaultManager {
       );
       return false;
     }
-    let file: TFile = abstractFile;
+    const file: TFile = abstractFile;
 
     try {
       const conversationTitle = title ?? 'Conversation';
@@ -373,26 +372,6 @@ export class VaultManager {
         conversationTitle,
         allowedTools
       );
-
-      const orgMode = this.plugin.settings.conversationOrganization;
-      if (orgMode === 'by-project') {
-        const newPath = this.generateFilePath(
-          conversationTitle,
-          file.stat.ctime,
-          messages
-        );
-        if (newPath !== file.path) {
-          const folderPath = newPath.split('/').slice(0, -1).join('/');
-          if (folderPath) {
-            await this.ensureFolderExists(folderPath);
-          }
-          await this.plugin.app.fileManager.renameFile(file, newPath);
-          const movedFile = this.vault.getAbstractFileByPath(newPath);
-          if (movedFile instanceof TFile) {
-            file = movedFile;
-          }
-        }
-      }
 
       await this.vault.modify(file, content);
       return true;
@@ -426,8 +405,7 @@ export class VaultManager {
    */
   private generateFilePath(
     title: string,
-    timestamp: number,
-    messages?: ChatMessage[]
+    timestamp: number
   ): string {
     const folder = this.getSaveFolder();
     const safeTitle = this.sanitizeFilename(title);
@@ -438,7 +416,7 @@ export class VaultManager {
 
     // Support folder organization modes
     const orgMode = this.plugin.settings.conversationOrganization;
-    const validModes = ['flat', 'by-date', 'by-project'] as const;
+    const validModes = ['flat', 'by-date'] as const;
     const validatedMode = (validModes as readonly string[]).includes(orgMode)
       ? orgMode
       : 'flat';
@@ -447,53 +425,7 @@ export class VaultManager {
       return `${folder}/${yearMonth}/${safeTitle}-${dateStr}-${timestampStr}.md`;
     }
 
-    if (validatedMode === 'by-project') {
-      const projectDir = this.getProjectFolder(messages);
-      return `${folder}/${projectDir}/${safeTitle}-${dateStr}-${timestampStr}.md`;
-    }
-
     return `${folder}/${safeTitle}-${dateStr}-${timestampStr}.md`;
-  }
-
-  private getProjectFolder(messages?: ChatMessage[]): string {
-    const activeFile = this.plugin.app.workspace.getActiveFile();
-    if (activeFile) {
-      const cache = this.plugin.app.metadataCache.getFileCache(activeFile);
-      const rawTags: unknown = cache?.frontmatter?.['tags'] ?? cache?.frontmatter?.['tag'];
-      if (rawTags) {
-        const tags = Array.isArray(rawTags)
-          ? rawTags.map((item) => String(item))
-          : typeof rawTags === 'string'
-          ? rawTags.split(/,\s*/)
-          : [];
-        const tag = tags.find((t) => t.trim());
-        if (tag) return this.cleanTagForFolder(tag);
-      }
-      if (cache?.tags && cache.tags.length > 0) {
-        const tag = cache.tags[0]?.tag;
-        if (tag) return this.cleanTagForFolder(tag);
-      }
-    }
-
-    if (messages && messages.length > 0) {
-      for (const msg of messages) {
-        const match = /#([a-zA-Z0-9_\-\/]+)/.exec(msg.content);
-        if (match?.[1]) {
-          return this.cleanTagForFolder(match[1]);
-        }
-      }
-    }
-
-    return 'general';
-  }
-
-  private cleanTagForFolder(tag: string): string {
-    return tag
-      .replace(/^#/, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9_\-\/]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .trim();
   }
 
   /**

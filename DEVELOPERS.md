@@ -72,12 +72,8 @@ Terminal commands are restricted to a curated allowlist:
   - `$(`, `` ` ``, `${`, `>>`, `<(` (command substitution, redirection)
 - **Security Note**: This is defense-in-depth. With `shell: false`, arguments are passed directly to the executable, but some "safe" commands have configuration options that enable arbitrary code execution. The argument sanitizer catches these.
 
-#### MCP Server Validation (`validateMcpServerPath`)
-MCP server executables are validated before being passed to the agent:
-- Must be absolute paths (no relative paths)
-- Cannot be in temporary directories (`/tmp`, `/var/tmp`, `/dev/shm`, `/run`)
-- Cannot be world-writable files (`statSync().mode & 0o002`)
-- Invalid servers are logged to the audit log and skipped
+#### MCP Server Configuration
+MCP servers are configured in Hermes proper (`hermes mcp`), not in this plugin. The plugin passes an empty MCP list to the ACP session, so the agent uses its own Hermes configuration. The Hermes profile used for the local connection is selected in Settings → Agent Personality → Hermes Profile (via `HERMES_PROFILE`).
 
 #### Permission Auto-Approval (`autoApproveSingleOptionPermissions`)
 By default, ALL permission requests require explicit user approval. A setting (`autoApproveSingleOptionPermissions`, default: `false`) enables auto-approval for permissions with exactly one "allow" option. This is a convenience feature that reduces security — only enable if you completely trust the agent.
@@ -111,13 +107,13 @@ Parses markdown to extract specific blocks (headings, code blocks, lists, block 
 
 ### 7. Conversation Management (`src/VaultManager.ts`)
 Handles persistence and loading of chat conversations.
-- **Organization modes**: `flat` (all in one folder), `by-date` (`enodios/2026-05/`), or `by-project`.
+- **Organization modes**: `flat` (all in one folder) or `by-date` (`enodios/2026-05/`).
 - **Note**: Export (HTML/JSON/Markdown/PDF) was removed in 0.4.1-beta1 and has not been restored. Conversations are plain markdown notes with YAML frontmatter, so they can be copied, templated, or re-purposed directly in the vault.
 
 ### 8. Academic & Utility Managers
 - **`PDFAnnotationManager`** (`src/PDFAnnotationManager.ts`): Integrates `pdfjs-dist` to extract plain text per page, parse metadata, and pull highlights/comments from embedded PDF annotations.
 - **`TagManager`** (`src/TagManager.ts`): Implements an term-frequency keyword matching heuristic against vault-wide tags. Suggestions are presented to the user via a React-based checklist modal (`TagSuggestionModal.tsx`) and committed directly to the note frontmatter.
-- **`TemplateManager`** (`src/TemplateManager.ts`): Loads pre-configured built-in templates and user custom prompts (from `hermes/templates/`) supporting frontmatter metadata. Starters are rendered in empty chat views as clickable cards. **Path inconsistency:** template loading still hardcodes `hermes/templates` while conversations and the audit log default to `enodios/` — see issue #6 in `docs/docs-code-alignment-2026-08-21.md`.
+- **`TemplateManager`** (`src/TemplateManager.ts`): Loads pre-configured built-in templates and user custom prompts (from `enodios/templates/`) supporting frontmatter metadata. Starters are rendered in empty chat views as clickable cards.
 - **`contextEnhancer`** (`src/utils/contextEnhancer.ts`): Generates enriched note context including word count, character count, tags, YAML frontmatter, created/modified timestamps, and backlinks. Used by both `AcpClient` and `HermesApiClient` when sending note context to the agent.
 
 ### 9. Unified Keyboard Hotkeys & Focus Flow
