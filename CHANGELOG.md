@@ -1,11 +1,17 @@
 # CHANGELOG
 
+## [0.9.2] - 2026-08-25
+
+### Bug Fixes
+
+- **Hermes Profile selector actually works** — The profile dropdown was a no-op: it passed `HERMES_PROFILE` as an environment variable, which the Hermes CLI ignores (profile resolution only honours the `-p` flag, the `HERMES_HOME` path shape, or the sticky `active_profile` file), and the sanitized env strips `HERMES_HOME`. Every session therefore ran the default profile. The plugin now spawns `hermes -p <profile> acp` when a non-default profile is selected. Verified end-to-end with the sanitized env (`hermes -p <profile> acp --check` resolves the profile without `HERMES_HOME`).
+
 ## [0.9.1] - 2026-08-24
 
 ### Settings Pane Declutter
 
 - **MCP servers moved to Hermes** — Removed the plugin's MCP server settings (`mcpServersEnabled`, `mcpServersList`) and the "⚠️ Enable External Tool Servers" UI. MCP servers are now configured in Hermes proper (`hermes mcp`); the plugin passes an empty MCP list to the ACP session so the agent uses its own configuration.
-- **Hermes Profile selector** — Agent Personality now includes a profile dropdown (alongside Display Name). The selected profile is passed to the local ACP connection via `HERMES_PROFILE`; profiles themselves are created and managed in Hermes (`hermes profile`).
+- **Hermes Profile selector** — Agent Personality now includes a profile dropdown (alongside Display Name). The selected profile is passed to the local ACP connection via `hermes -p <profile> acp`; profiles themselves are created and managed in Hermes (`hermes profile`).
 - **Harvard citations** — Added Harvard (Cite Them Right) to the citation style dropdown, `/cite style`, and the settings validator. In-text and bibliography formatting follow the author-date convention (shared with APA).
 - **'By Project' conversation organization removed** — The option was marked "coming soon" and is not planned; removed the dropdown entry and all by-project code paths (tag-based folder resolution, rename-on-update logic, validators, tests).
 - **Audit log gated on Debug Mode** — The audit log only records while Debug Mode is enabled (no file is created otherwise). The "View Audit Log" button appears only when debug is on.

@@ -1285,13 +1285,14 @@ export class AcpClient implements ChatClient {
       const hermesPath = this.resolveHermesPath();
       const env = buildSanitizedEnv();
       // Select the Hermes profile (managed in Hermes proper via `hermes profile`).
-      // HERMES_PROFILE is the documented way to run a specific profile; the
-      // default profile is used when the setting is left at 'default'.
+      // The `-p` flag is the ONLY reliable way to scope a Hermes invocation to a
+      // profile: the CLI's profile override (_apply_profile_override) reads the
+      // flag, not the HERMES_PROFILE env var, and HERMES_HOME is stripped by
+      // buildSanitizedEnv. The default profile is used when the setting is left
+      // at 'default'.
       const profile = this.plugin.settings.hermesProfile.trim() || 'default';
-      if (profile !== 'default') {
-        env['HERMES_PROFILE'] = profile;
-      }
-      this.childProcess = spawn(hermesPath, ['acp'], {
+      const acpArgs = profile === 'default' ? ['acp'] : ['-p', profile, 'acp'];
+      this.childProcess = spawn(hermesPath, acpArgs, {
         env,
         stdio: ['pipe', 'pipe', 'pipe']
       });

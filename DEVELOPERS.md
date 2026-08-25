@@ -73,7 +73,7 @@ Terminal commands are restricted to a curated allowlist:
 - **Security Note**: This is defense-in-depth. With `shell: false`, arguments are passed directly to the executable, but some "safe" commands have configuration options that enable arbitrary code execution. The argument sanitizer catches these.
 
 #### MCP Server Configuration
-MCP servers are configured in Hermes proper (`hermes mcp`), not in this plugin. The plugin passes an empty MCP list to the ACP session, so the agent uses its own Hermes configuration. The Hermes profile used for the local connection is selected in Settings → Agent Personality → Hermes Profile (via `HERMES_PROFILE`).
+MCP servers are configured in Hermes proper (`hermes mcp`), not in this plugin. The plugin passes an empty MCP list to the ACP session, so the agent uses its own Hermes configuration. The Hermes profile used for the local connection is selected in Settings → Agent Personality → Hermes Profile; the plugin spawns `hermes -p <profile> acp` (the `-p` flag is the only reliable profile selector — the CLI ignores the `HERMES_PROFILE` env var).
 
 #### Permission Auto-Approval (`autoApproveSingleOptionPermissions`)
 By default, ALL permission requests require explicit user approval. A setting (`autoApproveSingleOptionPermissions`, default: `false`) enables auto-approval for permissions with exactly one "allow" option. This is a convenience feature that reduces security — only enable if you completely trust the agent.

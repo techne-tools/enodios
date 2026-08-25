@@ -113,6 +113,32 @@ describe("AcpClient", () => {
     acpClient = new AcpClient(plugin);
   });
 
+  describe("spawn profile selection", () => {
+    it("should spawn `hermes acp` without -p when profile is default", async () => {
+      const { spawn } = await import("child_process");
+      plugin = createMockPlugin({ settings: { allowTerminal: false, hermesBinaryPath: "", hermesProfile: "default" } });
+      acpClient = new AcpClient(plugin);
+      await acpClient.connect().catch(() => {});
+      expect(spawn).toHaveBeenCalledWith(
+        expect.any(String),
+        ["acp"],
+        expect.objectContaining({ env: expect.not.objectContaining({ HERMES_PROFILE: expect.anything() }) }),
+      );
+    });
+
+    it("should spawn `hermes -p <profile> acp` for a non-default profile", async () => {
+      const { spawn } = await import("child_process");
+      plugin = createMockPlugin({ settings: { allowTerminal: false, hermesBinaryPath: "", hermesProfile: "enodios" } });
+      acpClient = new AcpClient(plugin);
+      await acpClient.connect().catch(() => {});
+      expect(spawn).toHaveBeenCalledWith(
+        expect.any(String),
+        ["-p", "enodios", "acp"],
+        expect.objectContaining({ env: expect.not.objectContaining({ HERMES_PROFILE: expect.anything() }) }),
+      );
+    });
+  });
+
   describe("isReady", () => {
     it("should return false when not connected", () => {
       expect(acpClient.isReady()).toBe(false);
