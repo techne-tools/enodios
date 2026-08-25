@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [0.9.3] - 2026-08-25
+
+### Bug Fixes
+
+- **Hermes Profile dropdown lists real profiles** — The dropdown was populated from the plugin's persona templates (`coding`, `writing`, `research`), which are system-prompt presets, not Hermes profiles. Selecting one would spawn `hermes -p coding acp` and fail because no such profile exists. The dropdown now enumerates the actual profiles under `HERMES_HOME/profiles/` (default `~/.hermes/profiles/`), matching `hermes profile list` — `default` plus any profiles you have created (e.g. `enodios`). Personas remain available via the active-persona setting; profiles and personas are separate concepts.
+
 ## [0.9.2] - 2026-08-25
 
 ### Bug Fixes

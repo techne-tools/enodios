@@ -31,9 +31,7 @@ import {
   ndJsonStream
 } from '@agentclientprotocol/sdk';
 import { spawn } from 'child_process';
-import {
-  existsSync
-} from 'fs';
+import { existsSync } from 'fs';
 import {
   FileSystemAdapter,
   normalizePath,

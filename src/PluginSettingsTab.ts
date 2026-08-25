@@ -7,6 +7,7 @@ import { PluginSettingsTabBase } from 'obsidian-dev-utils/obsidian/Plugin/Plugin
 import { SettingEx } from 'obsidian-dev-utils/obsidian/SettingEx';
 
 import type { PluginTypes } from './PluginTypes.ts';
+import { listProfiles } from './ProfileDiscovery.ts';
 
 /**
  * Settings tab for the Hermes plugin.
@@ -93,11 +94,12 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         'Which Hermes profile this plugin connects to. Profiles are created and managed in Hermes itself (`hermes profile`), not here. The default profile is used unless you have created others.'
       )
       .addDropdown((dropdown) => {
-        dropdown.addOption('default', 'default');
-        for (const persona of this.plugin.settings.personaTemplates) {
-          if (persona.id !== 'default') {
-            dropdown.addOption(persona.id, persona.id);
-          }
+        // List the profiles Hermes actually knows about (created via
+        // `hermes profile`), not the plugin's persona templates. Personas
+        // (system prompts + tool restrictions) and profiles (CLI scoping
+        // via `hermes -p <name> acp`) are different concepts.
+        for (const profile of listProfiles()) {
+          dropdown.addOption(profile, profile);
         }
         dropdown.setValue(this.plugin.settings.hermesProfile);
         this.bind(dropdown, 'hermesProfile');
