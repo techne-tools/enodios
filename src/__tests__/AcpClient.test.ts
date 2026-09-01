@@ -235,6 +235,101 @@ describe("AcpClient", () => {
         }),
       );
     });
+
+    it("should auto-approve single-option allow permissions via resolveAllPermissions", () => {
+      const mockResolve = vi.fn();
+      const mockReject = vi.fn();
+
+      const pendingPermission = {
+        id: "test-perm-3",
+        params: {
+          options: [
+            { kind: "allow_once", name: "Allow Once", optionId: "allow1" },
+          ],
+          sessionId: "session-1",
+          toolCall: {},
+        },
+        reject: mockReject,
+        resolve: mockResolve,
+      };
+
+      (acpClient as unknown as Record<string, unknown>)["pendingPermissions"] =
+        [pendingPermission];
+
+      acpClient.resolveAllPermissions();
+
+      expect(mockResolve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outcome: expect.objectContaining({
+            outcome: "selected",
+            optionId: "allow1",
+          }),
+        }),
+      );
+    });
+
+    it("should cancel multi-option permissions via resolveAllPermissions", () => {
+      const mockResolve = vi.fn();
+      const mockReject = vi.fn();
+
+      const pendingPermission = {
+        id: "test-perm-4",
+        params: {
+          options: [
+            { kind: "allow_once", name: "Allow Once", optionId: "allow1" },
+            { kind: "deny_once", name: "Deny Once", optionId: "deny1" },
+          ],
+          sessionId: "session-1",
+          toolCall: {},
+        },
+        reject: mockReject,
+        resolve: mockResolve,
+      };
+
+      (acpClient as unknown as Record<string, unknown>)["pendingPermissions"] =
+        [pendingPermission];
+
+      acpClient.resolveAllPermissions();
+
+      expect(mockResolve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outcome: expect.objectContaining({
+            outcome: "cancelled",
+          }),
+        }),
+      );
+    });
+
+    it("should cancel non-allow single-option permissions via resolveAllPermissions", () => {
+      const mockResolve = vi.fn();
+      const mockReject = vi.fn();
+
+      const pendingPermission = {
+        id: "test-perm-5",
+        params: {
+          options: [
+            { kind: "deny_once", name: "Deny Once", optionId: "deny1" },
+          ],
+          sessionId: "session-1",
+          toolCall: {},
+        },
+        reject: mockReject,
+        resolve: mockResolve,
+      };
+
+      (acpClient as unknown as Record<string, unknown>)["pendingPermissions"] =
+        [pendingPermission];
+
+      acpClient.resolveAllPermissions();
+
+      expect(mockResolve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outcome: expect.objectContaining({
+            outcome: "cancelled",
+          }),
+        }),
+      );
+    });
   });
 
   describe("subscriptions", () => {
