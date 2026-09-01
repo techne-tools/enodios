@@ -116,6 +116,13 @@ Handles persistence and loading of chat conversations.
 - **`TemplateManager`** (`src/TemplateManager.ts`): Loads pre-configured built-in templates and user custom prompts (from `enodios/templates/`) supporting frontmatter metadata. Starters are rendered in empty chat views as clickable cards.
 - **`contextEnhancer`** (`src/utils/contextEnhancer.ts`): Generates enriched note context including word count, character count, tags, YAML frontmatter, created/modified timestamps, and backlinks. Used by both `AcpClient` and `HermesApiClient` when sending note context to the agent.
 
+### 8b. Semantic Search (`src/SemanticSearch/`)
+
+- **`EmbeddingClient`**: Client for the Hermes `/v1/embeddings` endpoint (OpenAI-compatible), authenticated with the API key from `SecretsManager`. Usable only in API mode.
+- **`OllamaEmbeddingClient`**: Local fallback that POSTs to `http://localhost:11434/api/embeddings` (default model `nomic-embed-text`, overridable in settings). Used when Ollama is reachable.
+- **`SemanticSearchIndex`**: In-memory note → embedding index with a SHA-256 content-hash guard (unchanged files are skipped on re-index) and cosine-similarity ranking. Wired to vault `modify`/`create`/`delete` events in `Plugin.ts` for incremental freshness. Persistence is planned (Task 6 of the RAG plan) — the index currently lives only in memory.
+- **Provider selection**: `createEmbeddingClient` honours the `embeddingProvider` setting (`auto` | `hermes` | `ollama`). Auto prefers Hermes when in API mode with a key, then Ollama, then surfaces the not-ready message from `/search semantic`.
+
 ### 9. Unified Keyboard Hotkeys & Focus Flow
 - **Diff Reviews**: Keyboard events are bound in `PendingChangesPanel` (`src/Views/HermesChatView.tsx`) to approve/reject changes quickly (`⌘⇧A`, `⌘⇧R`, `⌘Enter`, `Esc`).
 - **Sidebar Chat Actions**: Context-aware window keydown listeners support quick session controls:

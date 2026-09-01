@@ -179,6 +179,38 @@ export class PluginSettingsTab extends PluginSettingsTabBase<PluginTypes> {
         });
       });
 
+    // Semantic search embedding provider (Phase 2 of the semantic RAG plan)
+    new SettingEx(containerEl)
+      .setName('Embedding Provider')
+      .setDesc(
+        'Backend for /search semantic. Auto: Hermes API in Remote mode, local Ollama otherwise. Hermes: the Remote server only. Ollama: your local Ollama server (model below).'
+      )
+      .addDropdown((dropdown) => {
+        dropdown.addOption('auto', 'Auto (recommended)');
+        dropdown.addOption('hermes', 'Hermes API');
+        dropdown.addOption('ollama', 'Local Ollama');
+        dropdown.setValue(this.plugin.settings.embeddingProvider);
+        this.bind(dropdown, 'embeddingProvider', {
+          onChanged: () => {
+            this.display();
+          }
+        });
+      });
+
+    if (this.plugin.settings.embeddingProvider === 'ollama') {
+      new SettingEx(containerEl)
+        .setName('Ollama Embedding Model')
+        .setDesc(
+          'Model used by your local Ollama server. Defaults to nomic-embed-text, a small on-device model.'
+        )
+        .addText((text) => {
+          text
+            .setPlaceholder('nomic-embed-text')
+            .setValue(this.plugin.settings.ollamaEmbeddingModel);
+          this.bind(text, 'ollamaEmbeddingModel');
+        });
+    }
+
     // Local mode settings
     if (this.plugin.settings.connectionMode === 'acp') {
       new SettingEx(containerEl)

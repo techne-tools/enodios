@@ -138,6 +138,27 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
         return 'Please provide a search query. Example: `/search project goals`';
       }
 
+      // `/search semantic <query>` — meaning-based ranking via the
+      // semantic index (Hermes embeddings in API mode, Ollama fallback).
+      const parts = args.trim().split(/\s+(.*)/, 2);
+      const sub = (parts[0] ?? '').toLowerCase();
+      const rest = (parts[1] ?? '').trim();
+
+      if (sub === 'semantic') {
+        if (!(await plugin.semanticSearch.isReady())) {
+          return 'Semantic search requires API mode with an API key configured.';
+        }
+        const results = await plugin.semanticSearch.search(rest, 5);
+        if (results.length === 0) {
+          return `No semantic matches found for "${rest}". Try /search "${rest}" for keyword results.`;
+        }
+        let list = `### 🧠 Semantic Search Results for "${rest}"\n\n`;
+        for (const r of results) {
+          list += `* **[[${r.path}]]** (score: ${r.score.toFixed(3)})\n`;
+        }
+        return list;
+      }
+
       if (isPluginEnabled(plugin.app, 'omnisearch')) {
         return plugin.communityPluginsManager.searchOmnisearch(args.trim());
       }

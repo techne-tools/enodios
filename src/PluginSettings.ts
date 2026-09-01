@@ -21,6 +21,14 @@ export class PluginSettings {
   // Connection
   public connectionMode: 'acp' | 'api' = 'acp';
 
+  // Semantic Search (Phase 2 of the semantic RAG plan)
+  // Which embedding backend to use: 'auto' picks Hermes in API mode,
+  // falls back to a local Ollama server; 'hermes' forces the Hermes
+  // /v1/embeddings endpoint; 'ollama' forces the local Ollama API.
+  public embeddingProvider: 'auto' | 'hermes' | 'ollama' = 'auto';
+  // Ollama embedding model used when the Ollama provider is active.
+  public ollamaEmbeddingModel = 'nomic-embed-text';
+
   // Academic & Citations Settings
   public bibliographyPath = 'references.bib';
   public citationStyle: 'apa' | 'chicago' | 'harvard' | 'ieee' | 'mla' = 'apa';
