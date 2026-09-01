@@ -44,7 +44,7 @@ Load this skill when:
   - `CitationManager`: Loads `.bib`/CSL JSON bibliography files, searches citations, generates formatted bibliographies (APA, MLA, Chicago, IEEE).
   - `PDFAnnotationManager`: Extracts highlights, comments, metadata, and page text from PDFs using Obsidian's built-in `pdfjsLib`.
   - `TagManager`: Scans vault-wide tags with term-frequency matching to suggest relevant tags for notes.
-  - `TemplateManager`: Loads built-in and user-custom conversation starter templates from `hermes/templates/`.
+  - `TemplateManager`: Loads built-in and user-custom conversation starter templates from `enodios/templates/`.
 - **Context Enhancement**: `contextEnhancer.ts` enriches note context with word count, tags, frontmatter, and backlinks before sending to the agent.
 
 ## Project-Specific Conventions
