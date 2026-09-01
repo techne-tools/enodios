@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { AcpClient } from "../AcpClient.ts";
 import type { Plugin } from "../Plugin.ts";
+import { PluginSettings } from "../PluginSettings.ts";
 
 // Mock obsidian
 vi.mock("obsidian", () => ({
@@ -67,7 +68,13 @@ vi.mock("@agentclientprotocol/sdk", () => ({
   }),
 }));
 
-function createMockPlugin(overrides?: Partial<Plugin>): Plugin {
+type PluginOverride = Omit<Partial<Plugin>, 'settings'> & {
+  settings?: Partial<PluginSettings>;
+};
+
+function createMockPlugin(overrides?: PluginOverride): Plugin {
+  const baseSettings = new PluginSettings();
+  const settingsOverrides = overrides?.settings ?? {};
   return {
     app: {
       vault: {
@@ -96,8 +103,8 @@ function createMockPlugin(overrides?: Partial<Plugin>): Plugin {
       registerChange: vi.fn().mockResolvedValue(undefined),
     },
     settings: {
-      allowTerminal: false,
-      hermesBinaryPath: "",
+      ...baseSettings,
+      ...settingsOverrides,
     },
     ...overrides,
   } as unknown as Plugin;

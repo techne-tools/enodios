@@ -2,7 +2,10 @@ import type { ExtractPluginSettingsWrapper } from 'obsidian-dev-utils/obsidian/P
 import type { ReadonlyDeep } from 'type-fest';
 
 import { EditorView } from '@codemirror/view';
-import { Notice, TFile } from 'obsidian';
+import {
+  Notice,
+  TFile
+} from 'obsidian';
 import { PluginBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginBase';
 
 import type {
@@ -71,6 +74,7 @@ export class Plugin extends PluginBase<PluginTypes> {
   public activeEditorView: EditorView | null = null;
   private ribbonBadgeEl?: HTMLElement;
   private statusBarItemEl?: HTMLElement;
+  private semanticIndexTimer: number | null = null;
 
   /**
    * Get the active chat client based on connection mode.
@@ -121,6 +125,7 @@ export class Plugin extends PluginBase<PluginTypes> {
 
   protected override async onLayoutReady(): Promise<void> {
     await super.onLayoutReady();
+    this.startSemanticIndex();
   }
 
   protected override async onloadImpl(): Promise<void> {
@@ -129,7 +134,8 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.vaultManager = new VaultManager(this);
     this.secrets = new SecretsManager(this);
     this.semanticSearch = new SemanticSearchIndex(
-      createEmbeddingClient(this, this.secrets)
+      createEmbeddingClient(this, this.secrets),
+      this.app.vault
     );
     this.fileChangeManager = new FileChangeManager(this);
     this.auditLog = new AuditLog(this);
@@ -623,7 +629,38 @@ export class Plugin extends PluginBase<PluginTypes> {
       }
     }
 
+    // Cancel the deferred startup semantic-index run, if it hasn't fired yet.
+    if (this.semanticIndexTimer) {
+      clearTimeout(this.semanticIndexTimer);
+      this.semanticIndexTimer = null;
+    }
+
     await super.onunloadImpl();
+  }
+
+  /**
+   * Deferred startup bulk index for semantic search.
+   *
+   * `/search semantic` needs existing vault notes, not just notes
+   * created/modified after load. Once the layout is ready, wait for the
+   * current chat to settle, then index the whole vault with bounded
+   * concurrency (see SemanticSearchIndex.indexVault). The content-hash
+   * guard makes this a no-op for already-indexed notes, so it is safe
+   * to re-run. This is deferred so a large vault doesn't block first
+   * paint or chat start; it runs only when the embedding provider is
+   * actually available.
+   */
+  private startSemanticIndex(): void {
+    this.semanticIndexTimer = window.setTimeout(() => {
+      void this.semanticSearch.isReady().then((ready) => {
+        if (ready) {
+          void this.semanticSearch.indexVault().catch((err: unknown) => {
+            this.debug.error('Semantic bulk indexing failed', err);
+          });
+        }
+      });
+      this.semanticIndexTimer = null;
+    }, 2000);
   }
 
   private async focusChatInput(): Promise<void> {

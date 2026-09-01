@@ -310,7 +310,7 @@ describe('SlashCommands', () => {
       const result = await searchCmd.execute(mockPlugin, 'semantic sound design');
 
       expect(result).toBe(
-        'Semantic search requires API mode with an API key configured.'
+        'Semantic search is not ready. In Remote (API) mode, configure an API key; in Local (ACP) mode, start your local Ollama server with an embedding model (e.g. nomic-embed-text).'
       );
       expect(mockPlugin.semanticSearch.search).not.toHaveBeenCalled();
     });
@@ -345,8 +345,8 @@ describe('SlashCommands', () => {
       const searchCmd = getSlashCommands().find((c) => c.name === 'search')!;
       const result = await searchCmd.execute(mockPlugin, 'semantic');
 
-      expect(mockPlugin.semanticSearch.search).toHaveBeenCalledWith('', 5);
-      expect(result).toContain('Semantic Search Results');
+      expect(mockPlugin.semanticSearch.search).not.toHaveBeenCalled();
+      expect(result).toBe('Please provide a query: `/search semantic <query>`');
     });
 
     it('should leave keyword search behaviour unchanged', async () => {

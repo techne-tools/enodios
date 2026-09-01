@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TFile } from 'obsidian';
+import type { Vault } from 'obsidian';
 
 import type { IEmbeddingClient } from './EmbeddingClient.ts';
 
@@ -39,9 +40,25 @@ describe('SemanticSearchIndex', () => {
   let embeddingClient: StubEmbeddingClient;
   let index: SemanticSearchIndex;
 
+  /**
+   * Minimal vault stub with a mutable markdown-file list, so tests can
+   * exercise `indexVault` without depending on the shared obsidian mock.
+   */
+  function makeVault(files: { path: string }[] = []): Vault {
+    const read = vi.fn(async (file: { path: string }) => `content of ${file.path}`);
+    const vault = {
+      getMarkdownFiles: () => files,
+      read
+    } as unknown as Vault;
+    for (const file of files) {
+      (file as { vault?: unknown }).vault = vault;
+    }
+    return vault;
+  }
+
   beforeEach(() => {
     embeddingClient = new StubEmbeddingClient();
-    index = new SemanticSearchIndex(embeddingClient);
+    index = new SemanticSearchIndex(embeddingClient, makeVault());
   });
 
   it('should index a note and store its embedding', async () => {
@@ -160,5 +177,64 @@ describe('SemanticSearchIndex', () => {
     expect(index.size()).toBe(1);
     const results = await index.search('field recording');
     expect(results[0]?.path).toBe('notes/field-recording.md');
+  });
+
+  describe('indexVault', () => {
+    it('indexes every markdown file in the vault', async () => {
+      const files = [
+        { path: 'notes/a.md' },
+        { path: 'notes/b.md' }
+      ];
+      const vault = makeVault(files);
+      const vaultIndex = new SemanticSearchIndex(embeddingClient, vault);
+
+      await vaultIndex.indexVault();
+
+      expect(vaultIndex.size()).toBe(2);
+      expect(embeddingClient.calls.length).toBe(2);
+      expect(embeddingClient.calls[0]?.[0]).toContain('notes/a.md');
+      expect(embeddingClient.calls[1]?.[0]).toContain('notes/b.md');
+    });
+
+    it('does not re-embed notes whose content hash is unchanged', async () => {
+      const files = [{ path: 'notes/a.md' }];
+      const vault = makeVault(files);
+      const vaultIndex = new SemanticSearchIndex(embeddingClient, vault);
+
+      await vaultIndex.indexVault();
+      const callsAfterFirst = embeddingClient.calls.length;
+
+      await vaultIndex.indexVault();
+
+      expect(embeddingClient.calls.length).toBe(callsAfterFirst);
+      expect(vaultIndex.size()).toBe(1);
+    });
+
+    it('keeps going when a single note fails to embed', async () => {
+      const files = [
+        { path: 'notes/bad.md' },
+        { path: 'notes/good.md' }
+      ];
+      const vault = makeVault(files);
+      const failing = new SemanticSearchIndex(
+        {
+          embed: async (texts) =>
+            texts.map((text) => {
+              if (text.includes('bad.md')) {
+                throw new Error('provider down');
+              }
+              return [text.length];
+            }),
+          isReady: async () => true
+        },
+        vault
+      );
+
+      await failing.indexVault();
+
+      expect(failing.size()).toBe(1);
+      const results = await failing.search('good');
+      expect(results[0]?.path).toBe('notes/good.md');
+    });
   });
 });

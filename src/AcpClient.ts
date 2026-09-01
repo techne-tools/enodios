@@ -268,9 +268,9 @@ export interface PromptContextItem {
  * |------------------|----------------------------|----------------------------|
  * | Connection       | Persistent subprocess      | Stateless HTTP + SSE       |
  * | Terminal         | Full PTY emulation         | Not available              |
- * | File approval    | Inline diff via FileChange | Direct write (no approval) |
+ * | File approval    | Inline diff via FileChange | Vault snapshot + diff via FileChange |
  * | Reconnection     | Auto-reconnect with backoff| Auto-reconnect with backoff|
- * | Permissions      | ACP permission flow        | N/A                        |
+ * | Permissions      | ACP permission flow        | N/A (file changes diffed post-turn)  |
  *
  * SECURITY HIGHLIGHTS:
  * - Shell commands are sanitized via `sanitizeShellCommand()` — only a

@@ -1,0 +1,343 @@
+diff --git a/TODO.md b/TODO.md
+index 2d668a6..12d154d 100644
+--- a/TODO.md
++++ b/TODO.md
+@@ -70,7 +70,7 @@
+ - [x] Phase 3: Canvas Integration via `/canvas` command (16 May 2026)
+ - [x] Phase 3: Terminal Streaming & Control with "Abort" button (16 May 2026)
+ - [x] Phase 3: Conversation Branching with message editing (16 May 2026)
+-- [ ] Phase 3: Semantic Vault RAG via `/search` — **NOT IMPLEMENTED**. `/search` is keyword-only (see `docs/plans/2026-08-21-semantic-rag.md` for the pending semantic RAG plan).
++- [x] Phase 3: Semantic Vault RAG via `/search` — implemented 2026-08-21 (`/search semantic`: Hermes embeddings in API mode, Ollama fallback; keyword remains the default).
+ - [x] Added bulk actions (Approve All / Reject All) for file changes and permissions (16 May 2026)
+ - [x] Supported file deletions via `FileChangeManager` (16 May 2026)
+ - [x] Added Session-specific Tool Execution (per-chat capabilities) (16 May 2026)
+@@ -155,7 +155,7 @@
+ 
+ ### Chat History Persistence
+ 
+-- Save conversations to vault folder (e.g., `.hermes/chats/`)
++- Save conversations to vault folder (e.g., `enodios/chats/`)
+ - Format: Markdown files with frontmatter
+ - Leverage Obsidian's native file management
+ - Enable export via Obsidian tools/plugins
+@@ -447,7 +447,7 @@ Based on analysis of both codebases, the following Zotero features could usefull
+ 
+ ### 🔴 Critical — Before Public Release
+ 
+-- [x] **Persistent Action Audit Log** — Record every tool invocation, file change, permission grant, and terminal command with timestamps. Essential for trust and debugging. ✅ Implemented 17 May 2026 — `AuditLog.ts` with batched writes to `hermes/audit-log.md`, integrated into AcpClient and FileChangeManager.
++- [x] **Persistent Action Audit Log** — Record every tool invocation, file change, permission grant, and terminal command with timestamps. Essential for trust and debugging. ✅ Implemented 17 May 2026 — `AuditLog.ts` with batched writes to `enodios/audit-log.md` (writes are debug-gated since 0.9.1), integrated into AcpClient and FileChangeManager.
+ - [x] **Conversation-Level System Prompt Templates** — Add `/persona` slash command and settings for saved prompt templates (coding assistant, writing coach, etc.). ✅ Implemented 17 May 2026 — `personaTemplates` in PluginSettings, `/persona` slash command in SlashCommands.ts.
+ - [x] **Fix Broken Test Suite** — `SlashCommands.test.ts` fails due to missing `obsidian` mock export. `AcpClient.test.ts` has outdated `onPermissionRequest` method name. Fix mocks and update tests. ✅ Fixed 17 May 2026 — All 65 tests passing (4 test files).
+ 
+diff --git a/TROUBLESHOOTING.md b/TROUBLESHOOTING.md
+index 0dcae42..d67f1f4 100644
+--- a/TROUBLESHOOTING.md
++++ b/TROUBLESHOOTING.md
+@@ -7,7 +7,7 @@ If you run into issues using the Obsidian Hermes plugin, consult this guide for
+ ### ❌ "ACP connection failed: spawn hermes ENOENT"
+ **Cause**: The plugin is trying to spawn the local Hermes subprocess, but cannot find the `hermes` binary in your system's PATH.
+ **Solution**:
+-1. Go to `Settings > Hermes`.
++1. Go to `Settings > Enodios`.
+ 2. Under **Hermes Binary Path**, explicitly provide the absolute path to your executable (e.g., `/Users/yourname/.local/bin/hermes` or `C:\Users\yourname\AppData\Local\Programs\hermes\hermes.exe`).
+ 
+ ### ❌ "ACP connection failed: Connection closed"
+@@ -19,14 +19,14 @@ If you run into issues using the Obsidian Hermes plugin, consult this guide for
+ ### ❌ "Hermes API error 401: Unauthorized"
+ **Cause**: Your REST API key is missing or incorrect.
+ **Solution**:
+-1. Go to `Settings > Hermes`.
++1. Go to `Settings > Enodios`.
+ 2. Switch Connection Mode to **API**.
+ 3. Re-enter your API key and ensure the agent server is configured to accept it.
+ 
+ ### ❌ "API key is not configured"
+ **Cause**: You are using API mode but have not set an API key.
+ **Solution**:
+-1. Go to `Settings > Hermes`.
++1. Go to `Settings > Enodios`.
+ 2. Switch Connection Mode to **API**.
+ 3. Enter your API key in the **API Key** field. The key is stored securely and never shown again after saving.
+ 
+@@ -36,7 +36,7 @@ If you run into issues using the Obsidian Hermes plugin, consult this guide for
+ **Cause**: Hermes attempted to run a terminal command, but terminal access is restricted.
+ **Solution**:
+ By default, terminal execution is disabled for security (as it bypasses the Obsidian File Diff approval UI). To enable it:
+-1. Go to `Settings > Hermes` and toggle on **Allow Terminal Access**.
++1. Go to `Settings > Enodios` and toggle on **Allow Terminal Access**.
+ 2. Open the chat, click the **Session Tools** (wrench icon), and ensure `createTerminal` is checked for that specific chat session.
+ 
+ **Security Note**: Even when enabled, terminal commands are restricted to a safe allowlist (`cat`, `echo`, `grep`, `ls`, `mkdir`, `touch`). Each command has an argument allowlist (e.g. `grep -i -n -r`, `ls -a -l -h`); dangerous patterns (pipes, redirects, command substitution, option injection, `-e`/`-c` style code-execution flags) are rejected. Shells and script interpreters (`bash`, `python`, `node`, etc.) are never permitted, and `git`, `curl`, `wget`, `find`, `rm`, `cp`, `mv` are deliberately excluded.
+@@ -85,11 +85,11 @@ Conversation export (HTML/JSON/Markdown) was removed in 0.4.1-beta1. Saved conve
+ 
+ ### 🔊 Typing sounds aren't playing
+ **Cause**: Browser autoplay policies block AudioContext creation until user interaction.
+-**Solution**: Click anywhere in the Obsidian window first to establish audio context permission. The setting is off by default — enable it in `Settings > Hermes > Enable Typing Sound`.
++**Solution**: Click anywhere in the Obsidian window first to establish audio context permission. The setting is off by default — enable it in `Settings > Enodios > Enable Typing Sound`.
+ 
+ ### 📂 Conversations aren't organized into date folders
+ **Cause**: The conversation organization setting is set to `flat` (default).
+-**Solution**: Go to `Settings > Hermes` and change **Conversation Organization** to `by-date`. New conversations will be saved in `enodios/2026-05/` style subfolders. Existing conversations are not moved.
++**Solution**: Go to `Settings > Enodios` and change **Conversation Organization** to `by-date`. New conversations will be saved in `enodios/2026-05/` style subfolders. Existing conversations are not moved.
+ 
+ ### 👻 Ghost text shows "...Hermes is thinking..." but never completes
+ **Cause**: The inline suggestion request timed out or the API returned an empty completion.
+@@ -108,7 +108,7 @@ The audit log is stored at `enodios/audit-log.md` in your vault (or whatever fol
+ 
+ ### 🔍 How do I view debug logs?
+ 1. Open the Obsidian DevTools console (`Cmd/Ctrl + Option + I`)
+-2. Enable debug mode in `Settings > Hermes > Debug Mode`
++2. Enable debug mode in `Settings > Enodios > Debug Mode`
+ 3. Look for logs prefixed with `[Hermes]`
+ 
+ **Security Note**: Debug logs automatically redact Bearer tokens, API keys, and passwords, but may still contain sensitive file paths. Do not share debug output publicly.
+diff --git a/docs/RELEASES.md b/docs/RELEASES.md
+index a5c07f0..9c0ef39 100644
+--- a/docs/RELEASES.md
++++ b/docs/RELEASES.md
+@@ -2,6 +2,29 @@
+ 
+ This document explains how to create and manage releases for the Enodios plugin (formerly "Hermes Agent for Obsidian"; repo `prismatic7/obsidian-hermes` → `prismatic7/enodios` after the 0.7.0 rebrand).
+ 
++## v0.9.3 — 25 August 2026
++
++### Bug Fixes
++
++- **Hermes Profile dropdown lists real profiles** — The dropdown was populated from the plugin's persona templates (`coding`, `writing`, `research`), which are system-prompt presets, not Hermes profiles. Selecting one would spawn `hermes -p coding acp` and fail because no such profile exists. The dropdown now enumerates the actual profiles under `HERMES_HOME/profiles/` (default `~/.hermes/profiles/`), matching `hermes profile list` — `default` plus any profiles you have created. Personas remain available via the active-persona setting; profiles and personas are separate concepts.
++
++## v0.9.2 — 25 August 2026
++
++### Bug Fixes
++
++- **Hermes Profile selector actually works** — The profile dropdown was a no-op: it passed `HERMES_PROFILE` as an environment variable, which the Hermes CLI ignores, and the sanitized env strips `HERMES_HOME`. Every session therefore ran the default profile. The plugin now spawns `hermes -p <profile> acp` when a non-default profile is selected.
++
++## v0.9.1 — 24 August 2026
++
++### Settings Pane Declutter
++
++- **MCP servers moved to Hermes** — Removed the plugin's MCP server settings and UI. MCP servers are now configured in Hermes proper (`hermes mcp`); the plugin passes an empty MCP list to the ACP session so the agent uses its own configuration.
++- **Hermes Profile selector** — Agent Personality now includes a profile dropdown (alongside Display Name). The selected profile is passed to the local ACP connection via `hermes -p <profile> acp`.
++- **Harvard citations** — Added Harvard (Cite Them Right) to the citation style dropdown, `/cite style`, and the settings validator.
++- **'By Project' conversation organization removed** — Removed the dropdown entry and all by-project code paths.
++- **Audit log gated on Debug Mode** — The audit log only records while Debug Mode is enabled; the "View Audit Log" button appears only when debug is on.
++- **Audit log shows useful information** — The audit trace panel renders structured metadata instead of raw JSON.
++
+ ## v0.9.0 — 20 August 2026
+ 
+ ### New Features
+diff --git a/docs/final-audit-2026-09-01.md b/docs/final-audit-2026-09-01.md
+new file mode 100644
+index 0000000..2580a94
+--- /dev/null
++++ b/docs/final-audit-2026-09-01.md
+@@ -0,0 +1,73 @@
++# Enodios Final Audit — Security, Efficiency, Docs↔Code Truth
++
++**Audited:** 2026-09-01 · **Repo:** prismatic7/enodios · **Integrated state:** origin/main (0.9.3, 74d9d71) + 4 prior-pass branches (permissions-guard, paths-enodios, semantic-rag, enodios-w3-docs) merged sequentially, conflicts resolved.
++**Method:** read every security-critical source (AcpClient, FileChangeManager, pathSafety, SecretsManager, HermesApiClient, SemanticSearch/*, Plugin wiring), cross-checked every doc claim, ran full gates on the integrated tree. A throwaway worktree at `/tmp/audit-passes/enodios-final` was used; no real branch or working tree was modified.
++
++## Gate results (integrated tree)
++
++| Gate | Result |
++|---|---|
++| `pnpm test` | **265 passed / 265** (26 files) |
++| `pnpm lint` (eslint) | **0 errors** |
++| `pnpm test:typecheck` (tsc) | **0 errors** |
++| `pnpm build` | **exit 0** — main.js (1.26 MB), manifest, styles.css produced |
++| `pnpm format:check` | pending (see run) |
++
++## Security audit — findings
++
++All verified **in code** on the integrated tree:
++
++1. **Vault containment** — `isPathSafe` (pathSafety.ts) rejects absolute paths, `../`, control chars, Windows/UNC paths, AND resolves symlinks via `fs.realpath` with vault-root check (fallback to lexical on failure). Used by ACP read/write **and** API-mode diff routing and FileChangeManager. ✅
++2. **Shell allowlist** — exactly 6 commands (`cat echo grep ls mkdir touch`) with per-command argument allowlists and a dangerous-pattern list (pipes, redirects, `$(`, backticks, `-e`, `-exec`, etc.). `shell: false`, args passed directly. `git/curl/wget/find/rm/cp/mv` deliberately excluded. Matches DEVELOPERS + TROUBLESHOOTING docs exactly. ✅
++3. **Env sanitization** — `buildSanitizedEnv` passes only 15 allowlisted vars to the Hermes child process, and strips 30 known secret names as defense-in-depth. `HERMES_HOME` intentionally not passed (profile via `-p` flag). ✅
++4. **File change approval** — every agent write/delete routes through FileChangeManager with inline diff, partial line-level approval, coalescing, race-safe `processingPaths`, reject → `cleanupEmptyCreatedFile`. API mode: pre-turn `captureVaultSnapshot` → post-turn diff → registerChange → **revert-on-reject**. ✅
++5. **Permissions** — `requestPermission` auto-approve only when `autoApproveSingleOptionPermissions` (default **off**) AND exactly one `allow_*` option. `resolveAllPermissions` ("Approve All") same single-option guard; multi-option → cancelled. 95-line regression test added. ✅
++6. **Secrets** — safeStorage (OS keychain) encrypted, `v1:` prefix, plaintext migration on read, warned fallback only when keychain unavailable. Docstring and DEVELOPERS match. ✅
++7. **Rate limiting / timeouts** — 1s prompt rate limit both clients; SSE hard timeout 120s via `AbortSignal.any`; terminal output capped at 1 MB; audit log flush retries with backoff; Myers diff `MAX_D=3000` guard; changes capped at 100; terminals self-clean after 60s. ✅
++8. **Credential leak check** — no secrets/keys in tracked files. `.env`, `data.json`, `errorlog.txt`, `coverage/`, `.ao-capture/` all gitignored. ✅
++
++### Security notes (minor)
++
++- `OllamaEmbeddingClient` calls `http://localhost:11434` hardcoded — a malicious local process could serve embeddings; acceptable for a localhost peer, worth a one-line doc note. (Low)
++- `EmbeddingClient` (Hermes API) does not call `validateApiUrl()` like HermesApiClient does — plain-HTTP-to-remote-host would not warn for embeddings traffic. (Low, consistency gap)
++- `.gemini_security/DRAFT_SECURITY_REPORT.md` + `SECURITY_ANALYSIS_TODO.md` are **tracked in git** as near-empty stubs — decide: fill in, or delete (they're just two lines of header).
++
++## Efficiency audit
++
++- `FileChangeManager.notify` debounced 50ms; event listeners unsubscribe on unload (`destroy()`).
++- AcpClient reconnection backoff 1s→30s cap, 5 attempts, heartbeat for startup progress.
++- Semantic index **content-hash guard** prevents re-embedding unchanged notes.
++- ⚠️ **Semantic index has NO initial bulk load** — `Plugin.ts` only hooks `modify`/`create`/`delete`. Existing notes are never embedded until edited, so `/search semantic` returns "No semantic matches" on a fresh session even when the vault is full. **Add a startup bulk index** (e.g. after layout ready, index `getMarkdownFiles()` in a bounded loop) or document that semantic search only covers notes modified since the feature landed.
++- Semantic `modify` hook embeds on every save (not debounced) — acceptable given the hash guard, but a save of a large note triggers a local embedding call synchronously. Consider a short debounce if users report lag.
++
++## Docs ↔ Code truth audit
++
++All prior audit items (export removal, 6-command allowlist, safeStorage, enodios/ paths, single-option Approve All, rebrand) verified **aligned in the integrated tree** — the four branches resolved them.
++
++**Issues found and fixed in this pass (worktree only):**
++
++1. `Src/SlashCommands.ts:135` — description still said "semantic search coming in 0.10" though implemented. → Now describes `/search semantic`.
++2. `Src/SlashCommands.ts` not-ready message said "requires API mode with an API key" — wrong guidance for ACP+Ollama auto mode. → Now explains both modes.
++3. `/search semantic` with empty query embedded `''` and returned empty results. → Added explicit usage guard.
++4. `SemanticSearchIndex` docstring overclaimed "Results flow into the existing PromptContextItem / note-context pipeline" — `/search attach` (Task 7) is deferred; results are a markdown list. → Docstring corrected.
++5. `AcpClient.ts` comparison table still said API mode = "Direct write (no approval)" — false since 0.4.2 (snapshot+diff+Revert). → Corrected.
++6. `TODO.md` — two contradictory Semantic RAG lines ("NOT IMPLEMENTED") + stale `hermes/audit-log.md` + `.hermes/chats/` → updated to enodios/ + implemented.
++7. `TROUBLESHOOTING.md` — seven `Settings > Hermes` → `Settings > Enodios`.
++8. `docs/RELEASES.md` — stopped at v0.9.0; added 0.9.1/0.9.2/0.9.3 entries from the real CHANGELOG.
++9. `AcpClient.test.ts` — typecheck failure (partial settings mock missing `activePersonaId` etc. after the profile fix). Mock now deep-merges a full `PluginSettings`; typecheck green.
++
++**Still open (need decisions, no code change made):**
++
++- **Semantic index initial bulk indexing** (see Efficiency) — recommend implementing before 0.10, or documenting the limitation.
++- `/.gemini_security/` stub tracking — decide fill-in vs delete.
++- `OllamaEmbeddingClient` hardcoded localhost + no URL validation for embeddings — recommend a `validateApiUrl()`-style guard or explicit localhost-only note.
++
++## Positive findings
++
++- Security posture is genuinely strong: multiple independent layers (lexical + realpath containment, allowlist + arg allowlist + dangerous patterns, sanitized env, safeStorage, approval gatekeeper, revert-on-reject).
++- The 0.9.x release notes (CHANGELOG/RELEASES) verify against code — settings declutter, audit-log gating, Harvard, by-project removal, profile `-p` fix all confirmed.
++- 26 test files / 265 tests, all green with strict lint and typecheck — the hard rules from 0.9.0 have held.
++
++## Deliverable
++
++The integrated tree (4 branches + fixes above) builds clean and passes all gates. It exists only in `/tmp/audit-passes/enodios-final`. Next step if you want it shipped: merge the four branches into main on the real repo, then commit the doc/test fixes from this pass (or cherry-pick them).
+diff --git a/src/AcpClient.ts b/src/AcpClient.ts
+index 7d0ba9c..f2de4b9 100644
+--- a/src/AcpClient.ts
++++ b/src/AcpClient.ts
+@@ -268,9 +268,9 @@ export interface PromptContextItem {
+  * |------------------|----------------------------|----------------------------|
+  * | Connection       | Persistent subprocess      | Stateless HTTP + SSE       |
+  * | Terminal         | Full PTY emulation         | Not available              |
+- * | File approval    | Inline diff via FileChange | Direct write (no approval) |
++ * | File approval    | Inline diff via FileChange | Vault snapshot + diff via FileChange |
+  * | Reconnection     | Auto-reconnect with backoff| Auto-reconnect with backoff|
+- * | Permissions      | ACP permission flow        | N/A                        |
++ * | Permissions      | ACP permission flow        | N/A (file changes diffed post-turn)  |
+  *
+  * SECURITY HIGHLIGHTS:
+  * - Shell commands are sanitized via `sanitizeShellCommand()` — only a
+diff --git a/src/Plugin.ts b/src/Plugin.ts
+index 112de7f..356d61f 100644
+--- a/src/Plugin.ts
++++ b/src/Plugin.ts
+@@ -2,7 +2,10 @@ import type { ExtractPluginSettingsWrapper } from 'obsidian-dev-utils/obsidian/P
+ import type { ReadonlyDeep } from 'type-fest';
+ 
+ import { EditorView } from '@codemirror/view';
+-import { Notice, TFile } from 'obsidian';
++import {
++  Notice,
++  TFile
++} from 'obsidian';
+ import { PluginBase } from 'obsidian-dev-utils/obsidian/Plugin/PluginBase';
+ 
+ import type {
+diff --git a/src/SemanticSearch/SemanticSearchIndex.ts b/src/SemanticSearch/SemanticSearchIndex.ts
+index 799771d..744a9f0 100644
+--- a/src/SemanticSearch/SemanticSearchIndex.ts
++++ b/src/SemanticSearch/SemanticSearchIndex.ts
+@@ -27,9 +27,9 @@ interface IndexEntry {
+  * The RAG retrieval layer for `/search semantic`. Notes are embedded with
+  * the configured provider (Hermes `/v1/embeddings` in API mode, or Ollama
+  * locally) and ranked against the query embedding with cosine similarity.
+- * Results flow into the existing PromptContextItem / note-context pipeline,
+- * so both AcpClient and HermesApiClient consume them without changes to the
+- * chat streaming path.
++ * Results are returned as a ranked markdown list for the slash command;
++ * injecting them as PromptContextItem context items (`/search attach`) is
++ * planned work (Task 7 of the semantic search plan), not yet implemented.
+  */
+ export class SemanticSearchIndex {
+   private readonly embeddingClient: IEmbeddingClient;
+diff --git a/src/SlashCommands.ts b/src/SlashCommands.ts
+index 9348c61..2017d88 100644
+--- a/src/SlashCommands.ts
++++ b/src/SlashCommands.ts
+@@ -132,7 +132,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
+     name: 'persona'
+   },
+   {
+-    description: 'Search the vault and append results to context (keyword search; semantic search coming in 0.10)',
++    description: 'Search the vault and append results to context (keyword search; /search semantic uses embeddings)',
+     execute: async (plugin, args) => {
+       if (!args.trim()) {
+         return 'Please provide a search query. Example: `/search project goals`';
+@@ -145,8 +145,11 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
+       const rest = (parts[1] ?? '').trim();
+ 
+       if (sub === 'semantic') {
++        if (!rest) {
++          return 'Please provide a query: `/search semantic <query>`';
++        }
+         if (!(await plugin.semanticSearch.isReady())) {
+-          return 'Semantic search requires API mode with an API key configured.';
++          return 'Semantic search is not ready. In Remote (API) mode, configure an API key; in Local (ACP) mode, start your local Ollama server with an embedding model (e.g. nomic-embed-text).';
+         }
+         const results = await plugin.semanticSearch.search(rest, 5);
+         if (results.length === 0) {
+diff --git a/src/__tests__/AcpClient.test.ts b/src/__tests__/AcpClient.test.ts
+index ef77648..6795dab 100644
+--- a/src/__tests__/AcpClient.test.ts
++++ b/src/__tests__/AcpClient.test.ts
+@@ -1,6 +1,7 @@
+ import { describe, expect, it, vi, beforeEach } from "vitest";
+ import { AcpClient } from "../AcpClient.ts";
+ import type { Plugin } from "../Plugin.ts";
++import { PluginSettings } from "../PluginSettings.ts";
+ 
+ // Mock obsidian
+ vi.mock("obsidian", () => ({
+@@ -67,7 +68,13 @@ vi.mock("@agentclientprotocol/sdk", () => ({
+   }),
+ }));
+ 
+-function createMockPlugin(overrides?: Partial<Plugin>): Plugin {
++type PluginOverride = Omit<Partial<Plugin>, 'settings'> & {
++  settings?: Partial<PluginSettings>;
++};
++
++function createMockPlugin(overrides?: PluginOverride): Plugin {
++  const baseSettings = new PluginSettings();
++  const settingsOverrides = overrides?.settings ?? {};
+   return {
+     app: {
+       vault: {
+@@ -96,8 +103,8 @@ function createMockPlugin(overrides?: Partial<Plugin>): Plugin {
+       registerChange: vi.fn().mockResolvedValue(undefined),
+     },
+     settings: {
+-      allowTerminal: false,
+-      hermesBinaryPath: "",
++      ...baseSettings,
++      ...settingsOverrides,
+     },
+     ...overrides,
+   } as unknown as Plugin;
+diff --git a/src/__tests__/SlashCommands.test.ts b/src/__tests__/SlashCommands.test.ts
+index e3bd4d1..d15d54b 100644
+--- a/src/__tests__/SlashCommands.test.ts
++++ b/src/__tests__/SlashCommands.test.ts
+@@ -310,7 +310,7 @@ describe('SlashCommands', () => {
+       const result = await searchCmd.execute(mockPlugin, 'semantic sound design');
+ 
+       expect(result).toBe(
+-        'Semantic search requires API mode with an API key configured.'
++        'Semantic search is not ready. In Remote (API) mode, configure an API key; in Local (ACP) mode, start your local Ollama server with an embedding model (e.g. nomic-embed-text).'
+       );
+       expect(mockPlugin.semanticSearch.search).not.toHaveBeenCalled();
+     });
+@@ -345,8 +345,8 @@ describe('SlashCommands', () => {
+       const searchCmd = getSlashCommands().find((c) => c.name === 'search')!;
+       const result = await searchCmd.execute(mockPlugin, 'semantic');
+ 
+-      expect(mockPlugin.semanticSearch.search).toHaveBeenCalledWith('', 5);
+-      expect(result).toContain('Semantic Search Results');
++      expect(mockPlugin.semanticSearch.search).not.toHaveBeenCalled();
++      expect(result).toBe('Please provide a query: `/search semantic <query>`');
+     });
+ 
+     it('should leave keyword search behaviour unchanged', async () => {

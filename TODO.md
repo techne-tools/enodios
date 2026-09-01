@@ -70,7 +70,7 @@
 - [x] Phase 3: Canvas Integration via `/canvas` command (16 May 2026)
 - [x] Phase 3: Terminal Streaming & Control with "Abort" button (16 May 2026)
 - [x] Phase 3: Conversation Branching with message editing (16 May 2026)
-- [ ] Phase 3: Semantic Vault RAG via `/search` — **NOT IMPLEMENTED**. `/search` is keyword-only (see `docs/plans/2026-08-21-semantic-rag.md` for the pending semantic RAG plan).
+- [x] Phase 3: Semantic Vault RAG via `/search` — implemented 2026-08-21 (`/search semantic`: Hermes embeddings in API mode, Ollama fallback; keyword remains the default).
 - [x] Added bulk actions (Approve All / Reject All) for file changes and permissions (16 May 2026)
 - [x] Supported file deletions via `FileChangeManager` (16 May 2026)
 - [x] Added Session-specific Tool Execution (per-chat capabilities) (16 May 2026)
@@ -155,7 +155,7 @@
 
 ### Chat History Persistence
 
-- Save conversations to vault folder (e.g., `.hermes/chats/`)
+- Save conversations to vault folder (e.g., `enodios/chats/`)
 - Format: Markdown files with frontmatter
 - Leverage Obsidian's native file management
 - Enable export via Obsidian tools/plugins
@@ -447,7 +447,7 @@ Based on analysis of both codebases, the following Zotero features could usefull
 
 ### 🔴 Critical — Before Public Release
 
-- [x] **Persistent Action Audit Log** — Record every tool invocation, file change, permission grant, and terminal command with timestamps. Essential for trust and debugging. ✅ Implemented 17 May 2026 — `AuditLog.ts` with batched writes to `hermes/audit-log.md`, integrated into AcpClient and FileChangeManager.
+- [x] **Persistent Action Audit Log** — Record every tool invocation, file change, permission grant, and terminal command with timestamps. Essential for trust and debugging. ✅ Implemented 17 May 2026 — `AuditLog.ts` with batched writes to `enodios/audit-log.md` (writes are debug-gated since 0.9.1), integrated into AcpClient and FileChangeManager.
 - [x] **Conversation-Level System Prompt Templates** — Add `/persona` slash command and settings for saved prompt templates (coding assistant, writing coach, etc.). ✅ Implemented 17 May 2026 — `personaTemplates` in PluginSettings, `/persona` slash command in SlashCommands.ts.
 - [x] **Fix Broken Test Suite** — `SlashCommands.test.ts` fails due to missing `obsidian` mock export. `AcpClient.test.ts` has outdated `onPermissionRequest` method name. Fix mocks and update tests. ✅ Fixed 17 May 2026 — All 65 tests passing (4 test files).
 

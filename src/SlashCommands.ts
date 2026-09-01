@@ -132,7 +132,7 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
     name: 'persona'
   },
   {
-    description: 'Search the vault and append results to context (keyword search; semantic search coming in 0.10)',
+    description: 'Search the vault and append results to context (keyword search; /search semantic uses embeddings)',
     execute: async (plugin, args) => {
       if (!args.trim()) {
         return 'Please provide a search query. Example: `/search project goals`';
@@ -145,8 +145,11 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
       const rest = (parts[1] ?? '').trim();
 
       if (sub === 'semantic') {
+        if (!rest) {
+          return 'Please provide a query: `/search semantic <query>`';
+        }
         if (!(await plugin.semanticSearch.isReady())) {
-          return 'Semantic search requires API mode with an API key configured.';
+          return 'Semantic search is not ready. In Remote (API) mode, configure an API key; in Local (ACP) mode, start your local Ollama server with an embedding model (e.g. nomic-embed-text).';
         }
         const results = await plugin.semanticSearch.search(rest, 5);
         if (results.length === 0) {

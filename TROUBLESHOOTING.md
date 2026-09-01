@@ -7,7 +7,7 @@ If you run into issues using the Obsidian Hermes plugin, consult this guide for 
 ### ❌ "ACP connection failed: spawn hermes ENOENT"
 **Cause**: The plugin is trying to spawn the local Hermes subprocess, but cannot find the `hermes` binary in your system's PATH.
 **Solution**:
-1. Go to `Settings > Hermes`.
+1. Go to `Settings > Enodios`.
 2. Under **Hermes Binary Path**, explicitly provide the absolute path to your executable (e.g., `/Users/yourname/.local/bin/hermes` or `C:\Users\yourname\AppData\Local\Programs\hermes\hermes.exe`).
 
 ### ❌ "ACP connection failed: Connection closed"
@@ -19,14 +19,14 @@ If you run into issues using the Obsidian Hermes plugin, consult this guide for 
 ### ❌ "Hermes API error 401: Unauthorized"
 **Cause**: Your REST API key is missing or incorrect.
 **Solution**:
-1. Go to `Settings > Hermes`.
+1. Go to `Settings > Enodios`.
 2. Switch Connection Mode to **API**.
 3. Re-enter your API key and ensure the agent server is configured to accept it.
 
 ### ❌ "API key is not configured"
 **Cause**: You are using API mode but have not set an API key.
 **Solution**:
-1. Go to `Settings > Hermes`.
+1. Go to `Settings > Enodios`.
 2. Switch Connection Mode to **API**.
 3. Enter your API key in the **API Key** field. The key is stored securely and never shown again after saving.
 
@@ -36,7 +36,7 @@ If you run into issues using the Obsidian Hermes plugin, consult this guide for 
 **Cause**: Hermes attempted to run a terminal command, but terminal access is restricted.
 **Solution**:
 By default, terminal execution is disabled for security (as it bypasses the Obsidian File Diff approval UI). To enable it:
-1. Go to `Settings > Hermes` and toggle on **Allow Terminal Access**.
+1. Go to `Settings > Enodios` and toggle on **Allow Terminal Access**.
 2. Open the chat, click the **Session Tools** (wrench icon), and ensure `createTerminal` is checked for that specific chat session.
 
 **Security Note**: Even when enabled, terminal commands are restricted to a safe allowlist (`cat`, `echo`, `grep`, `ls`, `mkdir`, `touch`). Each command has an argument allowlist (e.g. `grep -i -n -r`, `ls -a -l -h`); dangerous patterns (pipes, redirects, command substitution, option injection, `-e`/`-c` style code-execution flags) are rejected. Shells and script interpreters (`bash`, `python`, `node`, etc.) are never permitted, and `git`, `curl`, `wget`, `find`, `rm`, `cp`, `mv` are deliberately excluded.
@@ -85,11 +85,11 @@ Conversation export (HTML/JSON/Markdown) was removed in 0.4.1-beta1. Saved conve
 
 ### 🔊 Typing sounds aren't playing
 **Cause**: Browser autoplay policies block AudioContext creation until user interaction.
-**Solution**: Click anywhere in the Obsidian window first to establish audio context permission. The setting is off by default — enable it in `Settings > Hermes > Enable Typing Sound`.
+**Solution**: Click anywhere in the Obsidian window first to establish audio context permission. The setting is off by default — enable it in `Settings > Enodios > Enable Typing Sound`.
 
 ### 📂 Conversations aren't organized into date folders
 **Cause**: The conversation organization setting is set to `flat` (default).
-**Solution**: Go to `Settings > Hermes` and change **Conversation Organization** to `by-date`. New conversations will be saved in `enodios/2026-05/` style subfolders. Existing conversations are not moved.
+**Solution**: Go to `Settings > Enodios` and change **Conversation Organization** to `by-date`. New conversations will be saved in `enodios/2026-05/` style subfolders. Existing conversations are not moved.
 
 ### 👻 Ghost text shows "...Hermes is thinking..." but never completes
 **Cause**: The inline suggestion request timed out or the API returned an empty completion.
@@ -108,7 +108,7 @@ The audit log is stored at `enodios/audit-log.md` in your vault (or whatever fol
 
 ### 🔍 How do I view debug logs?
 1. Open the Obsidian DevTools console (`Cmd/Ctrl + Option + I`)
-2. Enable debug mode in `Settings > Hermes > Debug Mode`
+2. Enable debug mode in `Settings > Enodios > Debug Mode`
 3. Look for logs prefixed with `[Hermes]`
 
 **Security Note**: Debug logs automatically redact Bearer tokens, API keys, and passwords, but may still contain sensitive file paths. Do not share debug output publicly.

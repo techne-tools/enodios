@@ -2,7 +2,6 @@ name: Bug report
 description: Report a bug and help improve the plugin
 title: "[BUG] Short description of the bug"
 labels: bug
-assignees: prismatic7
 body:
   - type: markdown
     attributes:

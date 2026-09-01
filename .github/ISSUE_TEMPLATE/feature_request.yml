@@ -1,8 +1,7 @@
 name: Feature request
 description: Request a feature and help improve the plugin
-title: "[FR] Short description of the feature"
+title: "[Feature request] Short description of the feature"
 labels: enhancement
-assignees: prismatic7
 body:
   - type: markdown
     attributes:

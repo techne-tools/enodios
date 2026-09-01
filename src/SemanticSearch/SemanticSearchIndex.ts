@@ -1,4 +1,5 @@
 import { TFile } from 'obsidian';
+import type { Vault } from 'obsidian';
 
 import type { IEmbeddingClient } from './EmbeddingClient.ts';
 
@@ -27,16 +28,18 @@ interface IndexEntry {
  * The RAG retrieval layer for `/search semantic`. Notes are embedded with
  * the configured provider (Hermes `/v1/embeddings` in API mode, or Ollama
  * locally) and ranked against the query embedding with cosine similarity.
- * Results flow into the existing PromptContextItem / note-context pipeline,
- * so both AcpClient and HermesApiClient consume them without changes to the
- * chat streaming path.
+ * Results are returned as a ranked markdown list for the slash command;
+ * injecting them as PromptContextItem context items (`/search attach`) is
+ * planned work (Task 7 of the semantic search plan), not yet implemented.
  */
 export class SemanticSearchIndex {
   private readonly embeddingClient: IEmbeddingClient;
+  private readonly vault: Vault;
   private entries = new Map<string, IndexEntry>();
 
-  constructor(embeddingClient: IEmbeddingClient) {
+  constructor(embeddingClient: IEmbeddingClient, vault: Vault) {
     this.embeddingClient = embeddingClient;
+    this.vault = vault;
   }
 
   /**
@@ -63,6 +66,40 @@ export class SemanticSearchIndex {
   public async indexNoteFromFile(file: TFile): Promise<void> {
     const content = await file.vault.read(file);
     await this.indexNote(file.path, content);
+  }
+
+  /**
+   * Index every markdown file currently in the vault.
+   *
+   * Used once shortly after plugin load so `/search semantic` covers
+   * existing notes, not only notes created/modified after startup.
+   * Reads are processed with bounded concurrency (`limit`) so a large
+   * vault doesn't stampede the embedding provider with parallel requests.
+   * Unchanged files are skipped by the content-hash guard inside
+   * `indexNote`, so re-running (or the steady-state `modify`/`create`
+   * hooks) is cheap.
+   */
+  public async indexVault(limit = 8): Promise<void> {
+    const queue = this.vault.getMarkdownFiles().slice();
+    const workers = Array.from(
+      { length: Math.max(1, Math.min(limit, queue.length)) },
+      async () => {
+        while (queue.length > 0) {
+          const file = queue.shift();
+          if (!file) {
+            return;
+          }
+          try {
+            await this.indexNoteFromFile(file);
+          } catch {
+            // Keep going: one unembeddable note (e.g. provider down mid-run)
+            // must not abort the rest of the bulk index. Errors from the
+            // per-note `create`/`modify` hooks are logged by the caller.
+          }
+        }
+      }
+    );
+    await Promise.all(workers);
   }
 
   /**

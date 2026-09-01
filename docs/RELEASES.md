@@ -1,6 +1,29 @@
 # Release Notes
 
-This document explains how to create and manage releases for the Enodios plugin (formerly "Hermes Agent for Obsidian"; repo `prismatic7/obsidian-hermes` → `prismatic7/enodios` after the 0.7.0 rebrand).
+This document explains how to create and manage releases for the Enodios plugin (formerly "Hermes Agent for Obsidian"; repo `prismatic7/obsidian-hermes` → `prismatic7/enodios` after the 0.7.0 rebrand → **`techne-tools/enodios`** for the 1.0.0 public release).
+
+## v0.9.3 — 25 August 2026
+
+### Bug Fixes
+
+- **Hermes Profile dropdown lists real profiles** — The dropdown was populated from the plugin's persona templates (`coding`, `writing`, `research`), which are system-prompt presets, not Hermes profiles. Selecting one would spawn `hermes -p coding acp` and fail because no such profile exists. The dropdown now enumerates the actual profiles under `HERMES_HOME/profiles/` (default `~/.hermes/profiles/`), matching `hermes profile list` — `default` plus any profiles you have created. Personas remain available via the active-persona setting; profiles and personas are separate concepts.
+
+## v0.9.2 — 25 August 2026
+
+### Bug Fixes
+
+- **Hermes Profile selector actually works** — The profile dropdown was a no-op: it passed `HERMES_PROFILE` as an environment variable, which the Hermes CLI ignores, and the sanitized env strips `HERMES_HOME`. Every session therefore ran the default profile. The plugin now spawns `hermes -p <profile> acp` when a non-default profile is selected.
+
+## v0.9.1 — 24 August 2026
+
+### Settings Pane Declutter
+
+- **MCP servers moved to Hermes** — Removed the plugin's MCP server settings and UI. MCP servers are now configured in Hermes proper (`hermes mcp`); the plugin passes an empty MCP list to the ACP session so the agent uses its own configuration.
+- **Hermes Profile selector** — Agent Personality now includes a profile dropdown (alongside Display Name). The selected profile is passed to the local ACP connection via `hermes -p <profile> acp`.
+- **Harvard citations** — Added Harvard (Cite Them Right) to the citation style dropdown, `/cite style`, and the settings validator.
+- **'By Project' conversation organization removed** — Removed the dropdown entry and all by-project code paths.
+- **Audit log gated on Debug Mode** — The audit log only records while Debug Mode is enabled; the "View Audit Log" button appears only when debug is on.
+- **Audit log shows useful information** — The audit trace panel renders structured metadata instead of raw JSON.
 
 ## v0.9.0 — 20 August 2026
 
@@ -153,7 +176,7 @@ Beta testers should use the **BRAT plugin**:
 
 1. Install [BRAT](https://obsidian.md/plugins?id=obsidian42-brat) from Obsidian's Community Plugins.
 2. Open **Settings → BRAT → Add Beta plugin**.
-3. Paste the repository URL: `https://github.com/prismatic7/enodios`
+3. Paste the repository URL: `https://github.com/techne-tools/enodios`
 4. Enable Enodios in **Settings → Community Plugins**.
 
 BRAT will automatically check for new beta releases and prompt to update.

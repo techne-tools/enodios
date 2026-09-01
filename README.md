@@ -27,7 +27,7 @@ MCP servers are configured in Hermes itself (`hermes mcp`), not in this plugin. 
 The plugin isn't in the official Community Plugins list yet. To install the beta:
 
 1. Install and enable the [BRAT plugin](https://obsidian.md/plugins?id=obsidian42-brat).
-2. Click [Install via BRAT](https://intradeus.github.io/http-protocol-redirector?r=obsidian://brat?plugin=https://github.com/prismatic7/enodios).
+2. Click [Install via BRAT](https://intradeus.github.io/http-protocol-redirector?r=obsidian://brat?plugin=https://github.com/techne-tools/enodios).
 3. In the Obsidian popup, click `Add plugin` and wait a few seconds.
 
 ## Getting started
@@ -38,4 +38,4 @@ The plugin isn't in the official Community Plugins list yet. To install the beta
 
 ## License
 
-© prismatic7
+© Enodios contributors

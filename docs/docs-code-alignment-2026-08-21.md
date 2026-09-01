@@ -1,6 +1,6 @@
 # Docs–Code Alignment Audit — Enodios (obsidian-hermes)
 
-**Audited:** 2026-08-21 · **Repo:** prismatic7/enodios · **Version checked:** 0.9.0
+**Audited:** 2026-08-21 · **Repo:** prismatic7/enodios (now techne-tools/enodios) · **Version checked:** 0.9.0
 **Method:** cross-checked README, CHANGELOG, DEVELOPERS, TROUBLESHOOTING, TODO, project skill, source docstrings and git history (incl. full test run: 224/224 pass).
 
 ## Status summary

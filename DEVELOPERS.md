@@ -17,8 +17,8 @@ Welcome! This document outlines the architecture, tech stack, and workflows for 
 1. **Clone the repository** directly into a test vault for the easiest workflow:
    ```bash
    cd /path/to/your/test-vault/.obsidian/plugins/
-   git clone https://github.com/prismatic7/obsidian-hermes.git hermes
-   cd hermes
+   git clone https://github.com/techne-tools/enodios.git enodios
+   cd enodios
    ```
 2. **Install dependencies**:
    ```bash

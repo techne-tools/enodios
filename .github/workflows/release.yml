@@ -58,7 +58,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref_name }}
-          name: "Hermes ${{ steps.version.outputs.version }}"
+          name: "Enodios ${{ steps.version.outputs.version }}"
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           files: |
@@ -66,7 +66,7 @@ jobs:
             dist/build/styles.css
             manifest.json
           body: |
-            ## Hermes ${{ steps.version.outputs.version }}
+            ## Enodios ${{ steps.version.outputs.version }}
 
             **Minimum Obsidian Version:** `${{ steps.version.outputs.minAppVersion }}`
 
@@ -74,7 +74,7 @@ jobs:
 
             ## 📦 Installation
 
-            Download the release files and place them in your vault's `.obsidian/plugins/hermes/` directory:
+            Download the release files and place them in your vault's `.obsidian/plugins/enodios/` directory:
 
             | File | Purpose |
             |------|---------|
