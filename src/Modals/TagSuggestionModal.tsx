@@ -38,7 +38,7 @@ function TagSuggestionComponent({
           }
         });
         setSelectedTags(initialSelected);
-      } catch (_err) {
+      } catch {
         new Notice("Failed to generate tag suggestions");
       } finally {
         setLoading(false);
@@ -82,7 +82,7 @@ function TagSuggestionComponent({
         `Successfully applied ${String(tagsToApply.length)} tag(s) to ${file.basename}`,
       );
       close();
-    } catch (_err) {
+    } catch {
       new Notice("Failed to apply tags to note.");
     }
   };

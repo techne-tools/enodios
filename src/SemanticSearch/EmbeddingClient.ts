@@ -1,3 +1,5 @@
+import { requestUrl } from 'obsidian';
+
 import type { Plugin } from '../Plugin.ts';
 import type { SecretsManager } from '../SecretsManager.ts';
 import { OllamaEmbeddingClient } from './OllamaEmbeddingClient.ts';
@@ -83,8 +85,9 @@ export interface IEmbeddingClient {
  * the sibling embedding endpoint on the same server, authenticated with
  * the same API key from SecretsManager.
  *
- * NOTE ON `fetch`: this runs inside Obsidian's sandbox, which provides a
- * global `fetch` at runtime. Tests mock the global `fetch`.
+ * NOTE ON `requestUrl`: this runs inside Obsidian's app context, which
+ * provides the `requestUrl` HTTP helper. Tests mock `requestUrl` (see the
+ * obsidian mock in `src/__tests__/__mocks__/obsidian.ts`).
  */
 export class EmbeddingClient implements IEmbeddingClient {
   private readonly plugin: Plugin;
@@ -101,7 +104,8 @@ export class EmbeddingClient implements IEmbeddingClient {
       throw new Error('API key is not configured for embeddings.');
     }
     const url = `${this.plugin.settings.hermesApiUrl.replace(/\/$/, '')}/v1/embeddings`;
-    const response = await fetch(url, {
+    const response = await requestUrl({
+      url,
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -110,12 +114,13 @@ export class EmbeddingClient implements IEmbeddingClient {
       body: JSON.stringify({
         input: texts,
         model: this.plugin.settings.hermesAgentName
-      })
+      }),
+      throw: false
     });
-    if (!response.ok) {
+    if (response.status >= 400) {
       throw new Error(`Embedding API error ${response.status}`);
     }
-    const data = (await response.json()) as { data: { embedding: number[] }[] };
+    const data = response.json as { data: { embedding: number[] }[] };
     return data.data.map((d) => d.embedding);
   }
 

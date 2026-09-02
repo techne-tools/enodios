@@ -1,3 +1,5 @@
+import { requestUrl } from 'obsidian';
+
 import type { Plugin } from '../Plugin.ts';
 
 import type { IEmbeddingClient } from './EmbeddingClient.ts';
@@ -18,8 +20,9 @@ export const DEFAULT_OLLAMA_EMBEDDING_MODEL = 'nomic-embed-text';
  * running on the user's machine (`http://localhost:11434`). Requires
  * Ollama to be running with an embedding model installed.
  *
- * NOTE ON `fetch`: this runs inside Obsidian's sandbox, which provides a
- * global `fetch` at runtime. Tests mock the global `fetch`.
+ * NOTE ON `requestUrl`: this runs inside Obsidian's app context, which
+ * provides the `requestUrl` HTTP helper. Tests mock `requestUrl` (see the
+ * obsidian mock in `src/__tests__/__mocks__/obsidian.ts`).
  */
 export class OllamaEmbeddingClient implements IEmbeddingClient {
   private readonly plugin: Plugin;
@@ -35,17 +38,19 @@ export class OllamaEmbeddingClient implements IEmbeddingClient {
     const vectors: number[][] = [];
     for (const text of texts) {
       // Ollama's API embeds one prompt per request.
-      const response = await fetch(`${this.baseUrl}/api/embeddings`, {
+      const response = await requestUrl({
+        url: `${this.baseUrl}/api/embeddings`,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ model, prompt: text })
+        body: JSON.stringify({ model, prompt: text }),
+        throw: false
       });
-      if (!response.ok) {
+      if (response.status >= 400) {
         throw new Error(`Ollama embedding API error ${response.status}`);
       }
-      const data = (await response.json()) as { embedding: number[] };
+      const data = response.json as { embedding: number[] };
       vectors.push(data.embedding);
     }
     return vectors;
@@ -56,8 +61,12 @@ export class OllamaEmbeddingClient implements IEmbeddingClient {
    */
   public async isReady(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`);
-      return response.ok;
+      const response = await requestUrl({
+        url: `${this.baseUrl}/api/tags`,
+        method: 'GET',
+        throw: false
+      });
+      return response.status < 400;
     } catch {
       return false;
     }

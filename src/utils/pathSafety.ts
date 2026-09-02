@@ -35,7 +35,7 @@ export function isLexicallySafePath(filePath: string): boolean {
     return false;
   }
   // Reject null bytes and control characters
-  if (/[\x00-\x1f]/.test(normalized)) {
+  if (/[\u0000-\u001f]/.test(normalized)) {
     return false;
   }
   // Reject Windows absolute paths

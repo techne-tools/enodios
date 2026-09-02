@@ -21,6 +21,12 @@ import type { Plugin } from './Plugin.ts';
  * All other levels are gated by `enableDebugMode` to keep the console clean
  * during normal use.
  *
+ * CONSOLE ROUTING:
+ * Obsidian's plugin lint rules only permit `console.warn` and `console.error`
+ * (and forbid disabling that rule), so all non-error levels are routed through
+ * `console.warn`; the level token in the formatted message ([Hermes DEBUG],
+ * [Hermes INFO], ...) preserves the severity distinction for filtering.
+ *
  * USAGE:
  *   const debug = new DebugLogger(plugin);
  *   debug.info('Connection established');
@@ -40,8 +46,7 @@ export class DebugLogger {
   /** Detailed diagnostics — only shown when debug mode is on. */
   public debug(message: string, ...args: unknown[]): void {
     if (this.isEnabled) {
-      // eslint-disable-next-line no-console -- debug logger intentionally uses console.debug
-      console.debug(this.format('DEBUG', message, ...args));
+      console.warn(this.format('DEBUG', message, ...args));
     }
   }
 
@@ -53,24 +58,15 @@ export class DebugLogger {
   /** Group related logs together. Only outputs if debug mode is on. */
   public group(label: string, fn: () => void): void {
     if (this.isEnabled) {
-      // eslint-disable-next-line no-console -- debug logger intentionally uses console.group
-      console.group(this.format('DEBUG', label));
-      try {
-        fn();
-      } finally {
-        // eslint-disable-next-line no-console -- debug logger intentionally uses console.groupEnd
-        console.groupEnd();
-      }
-    } else {
-      fn();
+      console.warn(this.format('GROUP', label));
     }
+    fn();
   }
 
   /** General information — only shown when debug mode is on. */
   public info(message: string, ...args: unknown[]): void {
     if (this.isEnabled) {
-      // eslint-disable-next-line no-console -- debug logger intentionally uses console.info
-      console.info(this.format('INFO', message, ...args));
+      console.warn(this.format('INFO', message, ...args));
     }
   }
 

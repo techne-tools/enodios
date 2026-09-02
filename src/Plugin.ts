@@ -155,7 +155,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.slidesManager = new SlidesManager(this);
 
     this.statusBarItemEl = this.addStatusBarItem();
-    this.statusBarItemEl.style.display = 'none';
+    this.statusBarItemEl.setCssStyles({ display: 'none' });
 
     const handleSessionUpdate = (update: ChatSessionUpdate) => {
       if (update.type === 'stop') {
@@ -221,7 +221,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     // Add ribbon icon for Enodios chat
     const ribbonIconEl = this.addRibbonIcon(
       'message-square',
-      'Open Enodios Chat',
+      'Open Chat',
       () => {
         this.openView(ENODIOS_CHAT_VIEW_TYPE).catch((err: unknown) => {
           this.debug.error('Failed to open view', err);
@@ -233,7 +233,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     this.ribbonBadgeEl = ribbonIconEl.createSpan({
       cls: 'enodios-ribbon-badge'
     });
-    this.ribbonBadgeEl.style.display = 'none';
+    this.ribbonBadgeEl.setCssStyles({ display: 'none' });
 
     const updateBadge = (): void => {
       const fileChanges = this.fileChangeManager.getPendingChanges().length;
@@ -255,8 +255,8 @@ export class Plugin extends PluginBase<PluginTypes> {
           this.debug.error('Failed to open view', err);
         });
       },
-      id: 'open-enodios-chat',
-      name: 'Open Enodios Chat'
+      id: 'open-chat',
+      name: 'Open Chat'
     });
 
     // Add command to toggle Enodios chat view
@@ -266,14 +266,8 @@ export class Plugin extends PluginBase<PluginTypes> {
           this.debug.error('Failed to toggle view', err);
         });
       },
-      hotkeys: [
-        {
-          key: 'H',
-          modifiers: ['Mod']
-        }
-      ],
-      id: 'toggle-enodios-chat',
-      name: 'Toggle Enodios Chat'
+      id: 'toggle-chat',
+      name: 'Toggle Chat'
     });
 
     // Add command to focus Enodios chat input (when chat is open)
@@ -283,14 +277,8 @@ export class Plugin extends PluginBase<PluginTypes> {
           this.debug.error('Failed to focus input', err);
         });
       },
-      hotkeys: [
-        {
-          key: 'H',
-          modifiers: ['Mod', 'Shift']
-        }
-      ],
-      id: 'focus-enodios-chat-input',
-      name: 'Focus Enodios Chat Input'
+      id: 'focus-chat-input',
+      name: 'Focus Chat Input'
     });
 
     // Add command to trigger inline completion (Ghost Text)
@@ -348,7 +336,7 @@ export class Plugin extends PluginBase<PluginTypes> {
           cmView.dispatch({ effects: setGhostTextEffect.of(null) });
         }
       },
-      id: 'enodios-inline-suggest',
+      id: 'inline-suggest',
       name: 'Trigger Inline Suggestion'
     });
 
@@ -397,8 +385,8 @@ export class Plugin extends PluginBase<PluginTypes> {
           contextItems
         );
       },
-      id: 'enodios-ask-selection',
-      name: 'Ask Enodios about selection'
+      id: 'ask-selection',
+      name: 'Ask about selection'
     });
 
     // Command Palette: Summarize current note
@@ -433,8 +421,8 @@ export class Plugin extends PluginBase<PluginTypes> {
           contextItems
         );
       },
-      id: 'enodios-summarize-note',
-      name: 'Summarize current note with Enodios'
+      id: 'summarize-note',
+      name: 'Summarize current note'
     });
 
     // Command Palette: Generate tags for current note
@@ -469,7 +457,7 @@ export class Plugin extends PluginBase<PluginTypes> {
           contextItems
         );
       },
-      id: 'enodios-generate-tags',
+      id: 'generate-tags',
       name: 'Generate tags for current note'
     });
 
@@ -479,7 +467,7 @@ export class Plugin extends PluginBase<PluginTypes> {
         const items = await this.citationManager.loadBibliography();
         new CitationSuggestModal(this, items).open();
       },
-      id: 'enodios-insert-citation',
+      id: 'insert-citation',
       name: 'Insert Citation'
     });
 
@@ -528,7 +516,7 @@ export class Plugin extends PluginBase<PluginTypes> {
         await this.app.vault.modify(activeFile, newContent);
         new Notice('Bibliography generated successfully');
       },
-      id: 'enodios-generate-bibliography',
+      id: 'generate-bibliography',
       name: 'Generate Bibliography for Current Note'
     });
 
@@ -537,7 +525,7 @@ export class Plugin extends PluginBase<PluginTypes> {
       callback: () => {
         new TagSuggestionModal(this).open();
       },
-      id: 'enodios-suggest-tags',
+      id: 'suggest-tags',
       name: 'Suggest Tags for Current Note'
     });
 
@@ -572,7 +560,7 @@ export class Plugin extends PluginBase<PluginTypes> {
           contextItems
         );
       },
-      id: 'enodios-generate-slides',
+      id: 'generate-slides',
       name: 'Generate Slides from active note'
     });
 
@@ -590,7 +578,7 @@ export class Plugin extends PluginBase<PluginTypes> {
         }
         await this.slidesManager.openPresentationMode(activeFile);
       },
-      id: 'enodios-present-slides',
+      id: 'present-slides',
       name: 'Present active note with Slides'
     });
   }
@@ -631,7 +619,7 @@ export class Plugin extends PluginBase<PluginTypes> {
 
     // Cancel the deferred startup semantic-index run, if it hasn't fired yet.
     if (this.semanticIndexTimer) {
-      clearTimeout(this.semanticIndexTimer);
+      window.clearTimeout(this.semanticIndexTimer);
       this.semanticIndexTimer = null;
     }
 
@@ -674,7 +662,7 @@ export class Plugin extends PluginBase<PluginTypes> {
     if (!firstLeaf) return;
     await this.app.workspace.revealLeaf(firstLeaf);
     // Focus the textarea after a short delay to allow the view to render
-    setTimeout(() => {
+    window.setTimeout(() => {
       const container = firstLeaf.view.containerEl;
       const textarea = container.querySelector('.enodios-input');
       if (textarea instanceof HTMLElement) {
@@ -722,11 +710,11 @@ export class Plugin extends PluginBase<PluginTypes> {
     if (!this.statusBarItemEl) return;
     if (isActive) {
       this.statusBarItemEl.textContent = '● Hermes';
-      this.statusBarItemEl.style.display = 'inline-block';
+      this.statusBarItemEl.setCssStyles({ display: 'inline-block' });
       this.statusBarItemEl.classList.add('enodios-status-pulsing');
     } else {
       this.statusBarItemEl.textContent = '';
-      this.statusBarItemEl.style.display = 'none';
+      this.statusBarItemEl.setCssStyles({ display: 'none' });
       this.statusBarItemEl.classList.remove('enodios-status-pulsing');
     }
   }

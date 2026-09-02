@@ -185,6 +185,59 @@ dependency tree is identical), pin the CI Node version, and never hand-edit
 `main.js` after building or upload a locally built asset — let the workflow
 build and attach it.
 
+#### Build verification failed *while running* the build script (clean env)
+
+> **Warning**: Build verification failed while running the build script —
+> `npm/pnpm/yarn/bun run build` must complete successfully in a clean
+> environment. Build output: `Error: Command failed with exit code 1`
+
+This is the other build-verification flavour: the scorecard's clean runner
+cannot **install/compile at all**, usually because dependency build scripts
+(esbuild's `postinstall` above all) never run. Symptom: a `pnpm:onlyBuiltDependencies`
+warning in the clean build output, then a nested `Command failed with exit code
+1: pnpm install` stack from `obsidian-dev-utils`.
+
+**Cause (pnpm allowlist drift)**: newer pnpm (11+) reads the dependency build
+allowlist from the `allowBuilds` map in `pnpm-workspace.yaml`; older pnpm
+(9/10 — including the review bot's runner) reads `onlyBuiltDependencies`
+(`--allow-build` flag / `pnpm` field in `package.json`). If only `allowBuilds`
+is declared, the older pnpm *silently skips every project build script*:
+esbuild's `postinstall` never runs, so `esbuild` has no platform binary and
+`obsidian-dev-utils` fails deep in the build. The plugin builds fine on the
+author's machine when their local pnpm is 11+, which is why it ships broken.
+
+**Fix**: declare the allowlist in **both** formats, kept in sync:
+
+```yaml
+# pnpm-workspace.yaml
+onlyBuiltDependencies:          # pnpm 9/10 (incl. review-bot runner)
+  - '@parcel/watcher'
+  - dprint
+  - esbuild
+  - obsidian-dev-skills
+  - obsidian-typings
+  - svelte-preprocess
+  - unrs-resolver
+
+allowBuilds:                    # pnpm 11+
+  '@parcel/watcher': true
+  dprint: true
+  esbuild: true
+  obsidian-dev-skills: true
+  obsidian-typings: true
+  svelte-preprocess: true
+  unrs-resolver: true
+```
+
+Verify by reproducing the clean install with an **old** pnpm, not just the
+local one: `npx -y pnpm@10 install --frozen-lockfile && npx -y pnpm@10 run build`
+in a fresh checkout. If `node_modules/esbuild/bin/esbuild` is missing after
+install, the allowlist is not being honoured.
+
+Also: do not ship placeholder values in the allowlist
+(`unicode-animations: set this to true or false` was committed at 1.0.0 and is
+dead config).
+
 ### Duplicate CSS selectors
 
 > Unexpected duplicate selector ".foo .bar", first used at line N.

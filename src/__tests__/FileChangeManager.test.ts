@@ -40,6 +40,9 @@ function createMockPlugin(): Plugin {
           view: { file: null },
         }),
       },
+      fileManager: {
+        trashFile: vi.fn().mockResolvedValue(undefined),
+      },
     },
     auditLog: {
       record: vi.fn(),
@@ -156,7 +159,7 @@ describe("FileChangeManager", () => {
       const change = await manager.registerChange("todelete.md", null);
       await manager.approveChange(change.id);
 
-      expect(plugin.app.vault.trash).toHaveBeenCalledWith(existingFile, true);
+      expect(plugin.app.fileManager.trashFile).toHaveBeenCalledWith(existingFile);
     });
   });
 
@@ -174,7 +177,7 @@ describe("FileChangeManager", () => {
       await manager.rejectChange(change.id);
 
       expect(plugin.app.vault.create).toHaveBeenCalledWith("test.md", ""); // Created empty
-      expect(plugin.app.vault.trash).toHaveBeenCalledWith(file, true); // Then trashed
+      expect(plugin.app.fileManager.trashFile).toHaveBeenCalledWith(file); // Then trashed
       expect(manager.getPendingChanges()).toHaveLength(0);
       expect(manager.getAllChanges()[0]?.status).toBe("rejected");
     });

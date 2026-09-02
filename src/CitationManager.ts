@@ -369,7 +369,7 @@ export class CitationManager {
     val = val.replace(/\\~[{}a-zA-Z]/g, (m) => m[m.length - 1] ?? '');
     val = val.replace(/\\=/g, '');
     val = val.replace(/\\./g, '');
-    val = val.replace(/[\{\}]/g, '');
+    val = val.replace(/[{}\\]/g, '');
     return val.trim();
   }
 

@@ -155,14 +155,14 @@ export function useStreamBuffer(
           flushBuffer();
         });
       } else {
-        flushAnimationFrameRef.current = requestAnimationFrame(flushBuffer);
+        flushAnimationFrameRef.current = window.requestAnimationFrame(flushBuffer);
       }
     }
   }, [flushBuffer, options?.disableAnimationFrame]);
 
   const flushNow = useCallback(() => {
     if (flushAnimationFrameRef.current !== null) {
-      cancelAnimationFrame(flushAnimationFrameRef.current);
+      window.cancelAnimationFrame(flushAnimationFrameRef.current);
     }
     flushBuffer();
   }, [flushBuffer]);
@@ -204,7 +204,7 @@ export function useStreamBuffer(
   useEffect(() => {
     return () => {
       if (flushAnimationFrameRef.current !== null) {
-        cancelAnimationFrame(flushAnimationFrameRef.current);
+        window.cancelAnimationFrame(flushAnimationFrameRef.current);
       }
     };
   }, []);
@@ -244,7 +244,7 @@ function playTypingSound(): void {
     oscillator.stop(audioCtx.currentTime + 0.05);
 
     // Clean up
-    setTimeout(() => {
+    window.setTimeout(() => {
       oscillator.disconnect();
       gainNode.disconnect();
       audioCtx.close().catch(() => {

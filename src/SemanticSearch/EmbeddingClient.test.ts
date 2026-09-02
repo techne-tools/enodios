@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
+
+import * as obsidianModule from 'obsidian';
+import type { RequestUrlParam } from 'obsidian';
 
 import type { Plugin } from '../Plugin.ts';
 import type { SecretsManager } from '../SecretsManager.ts';
@@ -9,19 +13,39 @@ import {
   EmbeddingProvider
 } from './EmbeddingClient.ts';
 
-// The embedding clients call `fetch`, which Obsidian's sandbox provides at
-// runtime. In tests we mock the global fetch.
+// The embedding clients call `requestUrl`, Obsidian's HTTP helper (mocked in
+// src/__tests__/__mocks__/obsidian.ts). `vi.spyOn` on the module export makes
+// the source-side `import { requestUrl }` binding hit the spy via Vite's ESM
+// live bindings, so tests can drive per-test responses and assert params.
+function okRequestUrlResponse(json: unknown): {
+  status: number;
+  headers: Record<string, string>;
+  arrayBuffer: ArrayBuffer;
+  json: unknown;
+  text: string;
+} {
+  return {
+    status: 200,
+    headers: {},
+    arrayBuffer: new ArrayBuffer(0),
+    json,
+    text: ""
+  };
+}
+
 describe('EmbeddingClient (Hermes /v1/embeddings)', () => {
   let client: EmbeddingClient;
-  const fetchMock = vi.fn();
+  let requestUrlSpy: MockInstance;
 
   beforeEach(() => {
-    vi.stubGlobal('fetch', fetchMock);
-    fetchMock.mockReset();
+    vi.restoreAllMocks();
+    requestUrlSpy = vi
+      .spyOn(obsidianModule, 'requestUrl')
+      .mockResolvedValue(okRequestUrlResponse({ data: [{ embedding: [1] }] }));
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   function makePlugin(overrides: Record<string, unknown> = {}): Plugin {
@@ -43,15 +67,14 @@ describe('EmbeddingClient (Hermes /v1/embeddings)', () => {
 
   it('should embed texts and return the vectors from the response', async () => {
     client = new EmbeddingClient(makePlugin(), makeSecrets('test-key'));
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
+    requestUrlSpy.mockResolvedValueOnce(
+      okRequestUrlResponse({
         data: [
           { embedding: [0.1, 0.2, 0.3] },
           { embedding: [0.4, 0.5, 0.6] }
         ]
       })
-    });
+    );
 
     const vectors = await client.embed(['first note', 'second note']);
 
@@ -64,34 +87,26 @@ describe('EmbeddingClient (Hermes /v1/embeddings)', () => {
   it('should POST to `${baseUrl}/v1/embeddings`', async () => {
     const plugin = makePlugin({ hermesApiUrl: 'http://localhost:8642/' });
     const client = new EmbeddingClient(plugin, makeSecrets('test-key'));
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ data: [{ embedding: [1] }] })
-    });
 
     await client.embed(['note']);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(url).toBe('http://localhost:8642/v1/embeddings');
-    expect(init).toMatchObject({
-      method: 'POST'
-    });
+    expect(requestUrlSpy).toHaveBeenCalledTimes(1);
+    const [params] = requestUrlSpy.mock.calls[0] ?? [];
+    expect(params && typeof params === 'object' ? params.url : '').toBe(
+      'http://localhost:8642/v1/embeddings'
+    );
+    expect(params).toMatchObject({ method: 'POST' });
   });
 
   it('should send the API key from SecretsManager as a Bearer Authorization header', async () => {
     const secrets = makeSecrets('super-secret-key');
     const client = new EmbeddingClient(makePlugin(), secrets);
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ data: [{ embedding: [1] }] })
-    });
 
     await client.embed(['note']);
 
     expect(secrets.get).toHaveBeenCalledWith('apiKey');
-    const [, init] = fetchMock.mock.calls[0] ?? [];
-    expect(init?.headers).toMatchObject({
+    const [params] = requestUrlSpy.mock.calls[0] ?? [];
+    expect(params && typeof params === 'object' ? params.headers : undefined).toMatchObject({
       Authorization: 'Bearer super-secret-key',
       'Content-Type': 'application/json'
     });
@@ -102,15 +117,13 @@ describe('EmbeddingClient (Hermes /v1/embeddings)', () => {
       makePlugin({ hermesAgentName: 'my-agent' }),
       makeSecrets('test-key')
     );
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ data: [{ embedding: [1] }] })
-    });
 
     await client.embed(['note']);
 
-    const [, init] = fetchMock.mock.calls[0] ?? [];
-    const body = JSON.parse(String(init?.body));
+    const [params] = requestUrlSpy.mock.calls[0] ?? [];
+    const body = JSON.parse(
+      String(params && typeof params === 'object' ? params.body : '')
+    );
     expect(body).toMatchObject({
       input: ['note'],
       model: 'my-agent'
@@ -121,12 +134,18 @@ describe('EmbeddingClient (Hermes /v1/embeddings)', () => {
     const client = new EmbeddingClient(makePlugin(), makeSecrets(''));
 
     await expect(client.embed(['note'])).rejects.toThrow('API key');
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(requestUrlSpy).not.toHaveBeenCalled();
   });
 
   it('should throw on a non-OK response', async () => {
     const client = new EmbeddingClient(makePlugin(), makeSecrets('test-key'));
-    fetchMock.mockResolvedValue({ ok: false, status: 401 });
+    requestUrlSpy.mockResolvedValueOnce({
+      status: 401,
+      headers: {},
+      arrayBuffer: new ArrayBuffer(0),
+      json: {},
+      text: ""
+    });
 
     await expect(client.embed(['note'])).rejects.toThrow(
       'Embedding API error 401'
@@ -152,16 +171,17 @@ describe('EmbeddingClient (Hermes /v1/embeddings)', () => {
 });
 
 describe('createEmbeddingClient (provider factory)', () => {
-  const fetchMock = vi.fn();
+  let requestUrlSpy: MockInstance;
 
   beforeEach(() => {
-    vi.stubGlobal('fetch', fetchMock);
-    fetchMock.mockReset();
-    fetchMock.mockResolvedValue({ ok: true });
+    vi.restoreAllMocks();
+    requestUrlSpy = vi
+      .spyOn(obsidianModule, 'requestUrl')
+      .mockResolvedValue(okRequestUrlResponse({}));
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   function makePlugin(overrides: Record<string, unknown> = {}): Plugin {
@@ -191,7 +211,7 @@ describe('createEmbeddingClient (provider factory)', () => {
 
     await expect(client.isReady()).resolves.toBe(true);
     // No Ollama probe should have happened
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(requestUrlSpy).not.toHaveBeenCalled();
   });
 
   it('auto: falls back to Ollama when in ACP mode and Ollama is reachable', async () => {
@@ -201,11 +221,13 @@ describe('createEmbeddingClient (provider factory)', () => {
     );
 
     await expect(client.isReady()).resolves.toBe(true);
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:11434/api/tags');
+    expect(requestUrlSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'http://localhost:11434/api/tags' })
+    );
   });
 
   it('auto: not ready when ACP mode and Ollama is unreachable', async () => {
-    fetchMock.mockRejectedValue(new Error('connection refused'));
+    requestUrlSpy.mockRejectedValue(new Error('connection refused'));
     const client = createEmbeddingClient(
       makePlugin({ connectionMode: 'acp' }),
       makeSecrets('')
@@ -221,7 +243,9 @@ describe('createEmbeddingClient (provider factory)', () => {
     );
 
     await expect(client.isReady()).resolves.toBe(true);
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:11434/api/tags');
+    expect(requestUrlSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'http://localhost:11434/api/tags' })
+    );
   });
 
   it('explicit hermes: not ready when API mode is off', async () => {
@@ -243,7 +267,7 @@ describe('createEmbeddingClient (provider factory)', () => {
   });
 
   it('explicit ollama: not ready when Ollama is down', async () => {
-    fetchMock.mockRejectedValue(new Error('refused'));
+    requestUrlSpy.mockRejectedValue(new Error('refused'));
     const client = createEmbeddingClient(
       makePlugin({ embeddingProvider: 'ollama' }),
       makeSecrets('')

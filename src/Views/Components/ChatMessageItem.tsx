@@ -24,11 +24,11 @@ function HelixSpinner({
 
   useEffect(() => {
     if (!isRunning) return;
-    const interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       setFrame((f) => (f + 1) % HELIX_FRAMES.length);
     }, 80);
     return () => {
-      clearInterval(interval);
+      window.clearInterval(interval);
     };
   }, [isRunning]);
 
@@ -68,7 +68,7 @@ export const ChatMessageItem = memo(
         .writeText(message.content)
         .then(() => {
           setIsCopied(true);
-          setTimeout(() => {
+          window.setTimeout(() => {
             setIsCopied(false);
           }, 2000);
         })
@@ -566,7 +566,7 @@ export const MarkdownContent = memo(
                       copyBtn.innerHTML =
                         '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><polyline points="20 6 9 17 4 12" /></svg>';
                       copyBtn.classList.add("copied");
-                      setTimeout(() => {
+                      window.setTimeout(() => {
                         copyBtn.innerHTML =
                           '<svg fill="none" height="12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><rect height="13" rx="2" ry="2" width="13" x="9" y="9" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>';
                         copyBtn.classList.remove("copied");

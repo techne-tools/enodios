@@ -49,8 +49,6 @@ function buildSanitizedEnv(): Record<string, string> {
     'LC_CTYPE',
     'TERM',
     'SHELL',
-    'USER',
-    'LOGNAME',
     'TMPDIR',
     'TZ',
     'PWD'

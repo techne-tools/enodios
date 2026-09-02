@@ -20,6 +20,22 @@ overrides:
   undici@>=7.23.0 <7.28.0: ^7.28.0
   vite: ^8.0.16
 
+# Dependency build-scripts allowlist.
+# IMPORTANT: keep BOTH blocks in sync. Newer pnpm (11+) reads `allowBuilds`,
+# older pnpm (9/10 — including the Obsidian review bot's runner) reads
+# `onlyBuiltDependencies`. If they drift, the old pnpm silently skips every
+# project build script and `pnpm run build` dies inside obsidian-dev-utils
+# (esbuild's postinstall never runs). The review bot's "Build verification
+# failed" for 1.0.0 was exactly this.
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - dprint
+  - esbuild
+  - obsidian-dev-skills
+  - obsidian-typings
+  - svelte-preprocess
+  - unrs-resolver
+
 allowBuilds:
   '@parcel/watcher': true
   dprint: true
@@ -27,7 +43,6 @@ allowBuilds:
   obsidian-dev-skills: true
   obsidian-typings: true
   svelte-preprocess: true
-  unicode-animations: set this to true or false
   unrs-resolver: true
 
 minimumReleaseAgeExclude:

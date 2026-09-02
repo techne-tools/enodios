@@ -56,7 +56,7 @@ export interface AuditEntry {
  */
 export class AuditLog {
   private readonly FLUSH_DELAY_MS = 500;
-  private flushTimeout: null | ReturnType<typeof setTimeout> = null;
+  private flushTimeout: number | null = null;
   private readonly maxEntries = 1000;
   private readonly plugin: Plugin;
   private writeQueue: AuditEntry[] = [];
@@ -140,7 +140,7 @@ export class AuditLog {
           // Exponential backoff: 500ms, 1000ms, 2000ms
           const delay = 500 * 2 ** (attempts - 1);
           await new Promise<void>((resolve) => {
-            setTimeout(resolve, delay);
+            window.setTimeout(resolve, delay);
           });
         }
       }
@@ -339,9 +339,9 @@ export class AuditLog {
 
   private scheduleFlush(): void {
     if (this.flushTimeout !== null) {
-      clearTimeout(this.flushTimeout);
+      window.clearTimeout(this.flushTimeout);
     }
-    this.flushTimeout = setTimeout(() => {
+    this.flushTimeout = window.setTimeout(() => {
       this.flushTimeout = null;
 
       void this.flush();

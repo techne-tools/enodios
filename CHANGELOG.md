@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [1.1.0] - 2026-09-02
+
+### Review-Bot Compliance & API Cleanup
+
+- **Review-bot lint errors resolved** — `no-console` disables removed (DebugLogger routes through `warn`/`error`), native `window.confirm` replaced with an Obsidian `Confirm` modal, static style assignments converted to `setCssStyles()`, and directive comments described. Global timers now use `window.*` prefixes; regex escapes use Unicode control characters.
+- **`requestUrl` migration** — Plain JSON API calls (inline completions, available tools, Hermes embeddings, Ollama embeddings) now go through Obsidian's `requestUrl` instead of raw `fetch`, per developer-policy guidance. The SSE chat stream intentionally stays on `fetch` — Obsidian's `requestUrl` cannot stream (no response body reader) and doesn't support abort/timeout signals. Documented at the call site.
+- **Command IDs & names simplified** — Stripped `enodios-` prefixes from all 12 command IDs (`open-chat`, `ask-selection`, `generate-tags`, …) and removed redundant names ("Open Enodios Chat" → "Open Chat"). Removed the default `Mod+H` / `Mod+Shift+H` hotkeys to avoid clashes; assign your own in Settings → Hotkeys. As the sole user of this plugin, muscle memory on command IDs is a deliberate trade-off for cleaner palette naming.
+- **`Vault.trash()` → `FileManager.trashFile()`** — Deletions now respect the user's Obsidian trash preference instead of forcing System Trash.
+- **Flaky test fixed** — `SemanticSearchIndex` asserted per-file embed order, but `indexVault` reads with bounded concurrency; now asserts coverage, not order.
+- **Clean-environment build fixed** — The Obsidian review bot's build verification failed on 1.0.0 because its pnpm ignores the newer `allowBuilds` key in `pnpm-workspace.yaml` and silently skipped every dependency build script (esbuild's `postinstall`), so the clean build died inside `obsidian-dev-utils`. `pnpm-workspace.yaml` now declares the allowlist in both formats (`onlyBuiltDependencies` for pnpm ≤10, `allowBuilds` for pnpm ≥11) and the dead `unicode-animations` placeholder was removed. Verified with a fresh `npx -y pnpm@10` install + build.
+
 ## [1.0.0] - 2026-09-01
 
 ### New Features

@@ -79,7 +79,7 @@ export class FileChangeManager {
    * race conditions or overlapping writes on the exact same file.
    */
   private processingPaths = new Set<string>();
-  private notifyTimeout: null | ReturnType<typeof setTimeout> = null;
+  private notifyTimeout: number | null = null;
 
   constructor(plugin: Plugin) {
     this.plugin = plugin;
@@ -90,7 +90,7 @@ export class FileChangeManager {
    */
   public destroy(): void {
     if (this.notifyTimeout !== null) {
-      clearTimeout(this.notifyTimeout);
+      window.clearTimeout(this.notifyTimeout);
       this.notifyTimeout = null;
     }
     this.callbacks = [];
@@ -122,7 +122,7 @@ export class FileChangeManager {
           );
           if (change.action === 'delete') {
             if (existingFile instanceof TFile) {
-              await this.plugin.app.vault.trash(existingFile, true);
+              await this.plugin.app.fileManager.trashFile(existingFile);
             }
           } else if (
             existingFile instanceof TFile
@@ -198,7 +198,7 @@ export class FileChangeManager {
 
       if (change.action === 'delete') {
         if (existingFile instanceof TFile) {
-          await this.plugin.app.vault.trash(existingFile, true); // Send to system trash
+          await this.plugin.app.fileManager.trashFile(existingFile);
         }
       } else if (existingFile instanceof TFile && contentToWrite !== null) {
         await this.plugin.app.vault.modify(existingFile, contentToWrite);
@@ -404,7 +404,7 @@ export class FileChangeManager {
           }
         ).cm;
         if (cmView) {
-          setTimeout(() => {
+          window.setTimeout(() => {
             this.triggerInlineDiff(change, cmView);
           }, 100);
         }
@@ -433,7 +433,7 @@ export class FileChangeManager {
         }
       ).cm;
       if (cmView) {
-        setTimeout(() => {
+        window.setTimeout(() => {
           this.triggerInlineDiff(change, cmView);
         }, 100);
       }
@@ -675,10 +675,10 @@ export class FileChangeManager {
         if (file instanceof TFile) {
           const content = await this.plugin.app.vault.read(file);
           if (content === '') {
-            await this.plugin.app.vault.trash(file, true);
+            await this.plugin.app.fileManager.trashFile(file);
           }
         }
-      } catch (_e) {
+      } catch {
         // Ignore errors during cleanup
       }
     }
@@ -686,9 +686,9 @@ export class FileChangeManager {
 
   private notify(): void {
     if (this.notifyTimeout !== null) {
-      clearTimeout(this.notifyTimeout);
+      window.clearTimeout(this.notifyTimeout);
     }
-    this.notifyTimeout = setTimeout(() => {
+    this.notifyTimeout = window.setTimeout(() => {
       this.notifyTimeout = null;
       const all = this.getAllChanges();
       for (const callback of this.callbacks) {

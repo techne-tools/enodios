@@ -2,9 +2,10 @@ import type { WorkspaceLeaf } from "obsidian";
 import type { ReactElement } from "react";
 
 import { ItemView, MarkdownView, Notice, TFile } from "obsidian";
+import { Confirm } from "obsidian-dev-utils/obsidian/Modals";
 import { highlight, languages } from "prismjs";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-/* eslint-disable import-x/no-unassigned-import */
+/* eslint-disable import-x/no-unassigned-import -- prismjs language grammars are loaded for their side effect on the highlighter */
 import "prismjs/components/prism-bash";
 import "prismjs/components/prism-c";
 import "prismjs/components/prism-cpp";
@@ -12,7 +13,7 @@ import "prismjs/components/prism-csharp";
 import "prismjs/components/prism-go";
 import "prismjs/components/prism-python";
 import "prismjs/components/prism-rust";
-/* eslint-enable import-x/no-unassigned-import */
+/* eslint-enable import-x/no-unassigned-import -- prismjs language grammars loaded above for side effects */
 import { createRoot } from "react-dom/client";
 
 import type { PendingPermission, PromptContextItem } from "../AcpClient.ts";
@@ -114,10 +115,10 @@ function highlightLine(line: string, path: string): string {
  */
 function stripAnsi(text: string): string {
   return text
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "") // CSI sequences (colors, cursor, etc.)
-    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x07|\x1b\\)/g, "") // OSC sequences
-    .replace(/\x1b[()[\]{}#~%@\^=\/>!]/g, "") // Single-char escape sequences
-    .replace(/\x1b\x1b/g, ""); // Double escapes
+    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences (colors, cursor, etc.)
+    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '') // OSC sequences
+    .replace(/\u001b[()[\]{}#~%@^=/>!]/g, '') // Single-char escape sequences
+    .replace(/\u001b\u001b/g, ''); // Double escapes
 }
 
 export const ENODIOS_CHAT_VIEW_TYPE = "enodios-chat-view";
@@ -425,7 +426,7 @@ export function EnodiosChatViewComponent({
     const handleLoadTemplate = (e: Event) => {
       const prompt = (e as CustomEvent<unknown>).detail;
       setInput(typeof prompt === "string" ? prompt : "");
-      setTimeout(() => {
+      window.setTimeout(() => {
         textareaRef.current?.focus();
       }, 0);
     };
@@ -471,7 +472,7 @@ export function EnodiosChatViewComponent({
   }, [settings.showReasoning]);
 
   const lastChunkTimeRef = useRef<number>(0);
-  const typingTimeoutRef = useRef<null | ReturnType<typeof setTimeout>>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
   const isPromptActiveRef = useRef<boolean>(false);
 
   // Ref to track the latest volatile state for stable callbacks.
@@ -551,14 +552,14 @@ export function EnodiosChatViewComponent({
 
   const clearTypingTimeout = useCallback((): void => {
     if (typingTimeoutRef.current !== null) {
-      clearTimeout(typingTimeoutRef.current);
+      window.clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
     }
   }, []);
 
   // Debounced save to prevent duplicate writes when multiple events fire rapidly
   const debouncedSaveRef = useRef<{
-    timeoutId: null | ReturnType<typeof setTimeout>;
+    timeoutId: number | null;
     lastSaveTime: number;
   }>({
     timeoutId: null,
@@ -576,15 +577,15 @@ export function EnodiosChatViewComponent({
 
       // Clear any pending save
       if (debouncedSaveRef.current.timeoutId !== null) {
-        clearTimeout(debouncedSaveRef.current.timeoutId);
+        window.clearTimeout(debouncedSaveRef.current.timeoutId);
       }
 
       // Schedule a new save with debounce
-      debouncedSaveRef.current.timeoutId = setTimeout(() => {
+      debouncedSaveRef.current.timeoutId = window.setTimeout(() => {
         // Skip if too soon after last save
         if (now - debouncedSaveRef.current.lastSaveTime < MIN_SAVE_INTERVAL) {
           // Schedule for later
-          debouncedSaveRef.current.timeoutId = setTimeout(() => {
+          debouncedSaveRef.current.timeoutId = window.setTimeout(() => {
             debouncedSaveRef.current.lastSaveTime = Date.now();
             void saveConversation(
               currentMessages,
@@ -608,7 +609,7 @@ export function EnodiosChatViewComponent({
 
   const resetTypingTimeout = useCallback((): void => {
     clearTypingTimeout();
-    typingTimeoutRef.current = setTimeout(() => {
+    typingTimeoutRef.current = window.setTimeout(() => {
       // If a prompt is still actively executing (e.g. running a tool or waiting for permission),
       // we reschedule the timeout instead of prematurely resetting the typing state.
       if (isPromptActiveRef.current) {
@@ -897,7 +898,7 @@ export function EnodiosChatViewComponent({
           if (next) {
             setIsConversationListOpen(false);
             setIsSessionSettingsOpen(false);
-            setTimeout(() => searchInputRef.current?.focus(), 0);
+            window.setTimeout(() => searchInputRef.current?.focus(), 0);
           } else {
             setSearchQuery("");
             setSearchMatches([]);
@@ -912,7 +913,7 @@ export function EnodiosChatViewComponent({
       clearTypingTimeout();
       // Clear any pending debounced save
       if (debouncedSaveRef.current.timeoutId !== null) {
-        clearTimeout(debouncedSaveRef.current.timeoutId);
+        window.clearTimeout(debouncedSaveRef.current.timeoutId);
       }
       unsubscribeChanges();
       unsubscribePermissions();
@@ -995,7 +996,7 @@ export function EnodiosChatViewComponent({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const onLoadTemplate = useCallback((prompt: string) => {
     setInput(prompt);
-    setTimeout(() => {
+    window.setTimeout(() => {
       textareaRef.current?.focus();
     }, 0);
   }, []);
@@ -1005,20 +1006,33 @@ export function EnodiosChatViewComponent({
 
   const handleNewChat = useCallback((): void => {
     if (conversationFilePath) {
-      // Native confirm is appropriate here: it is a destructive action
-      // (deleting the conversation file) and Obsidian's modal system would be
-      // heavier than warranted for a single yes/no decision.
-      // eslint-disable-next-line no-alert -- Intentional destructive-action confirmation.
-      const shouldDelete = window.confirm(
-        "Do you want to delete the current conversation file? Click Cancel to keep it and just start a new chat.",
-      );
-      if (shouldDelete) {
-        void plugin.vaultManager
-          .deleteConversation(conversationFilePath)
-          .catch(() => {
-            // Ignore deletion errors — the new chat still starts.
-          });
-      }
+      // Use Obsidian's confirm modal (review rule: no window.confirm) for the
+      // destructive action of deleting the current conversation file.
+      void Confirm.confirm({
+        app: plugin.app,
+        cancelButtonText: "Keep file",
+        message:
+          "The current conversation file will be deleted. Click Delete to remove it and start a new chat.",
+        okButtonText: "Delete",
+        title: "Start new chat?",
+      }).then((shouldDelete) => {
+        if (shouldDelete) {
+          void plugin.vaultManager
+            .deleteConversation(conversationFilePath)
+            .catch(() => {
+              // Ignore deletion errors — the new chat still starts.
+            });
+        }
+        setMessages([]);
+        setError(null);
+        setConversationFilePath(null);
+        setConversationTitle("");
+        setContextItems([]);
+        setActiveCommand(null);
+        setAllowedTools(null);
+        view.clearConversation();
+      });
+      return;
     }
     setMessages([]);
     setError(null);
@@ -1172,7 +1186,7 @@ export function EnodiosChatViewComponent({
     if (elapsed < RATE_LIMIT_MS) {
       const remaining = Math.ceil((RATE_LIMIT_MS - elapsed) / 1000);
       setRateLimitSeconds(remaining);
-      setTimeout(() => {
+      window.setTimeout(() => {
         setRateLimitSeconds(0);
       }, RATE_LIMIT_MS - elapsed);
       return;
@@ -1415,7 +1429,7 @@ export function EnodiosChatViewComponent({
       setAutocompleteSuggestions([]);
       setAutocompleteSelectionIndex(0);
 
-      setTimeout(() => {
+      window.setTimeout(() => {
         textareaRef.current?.focus();
       }, 0);
     },
@@ -1575,7 +1589,7 @@ export function EnodiosChatViewComponent({
       // Sanitize file names to prevent path traversal / unexpected nesting.
       const sanitizeFileName = (name: string): string => {
         const base = name.split(/[\\/]/).pop() ?? name;
-        return base.replace(/[\x00-\x1f]/g, "").trim();
+        return base.replace(/[\u0000-\u001f]/g, "").trim();
       };
 
       for (const file of Array.from(files)) {
@@ -1958,8 +1972,8 @@ export function EnodiosChatViewComponent({
       handleSlashInput(value);
 
       const target = e.target;
-      target.style.height = "auto";
-      target.style.height = `${target.scrollHeight}px`;
+      target.setCssStyles({ height: "auto" });
+      target.setCssStyles({ height: `${target.scrollHeight}px` });
     },
     [setInput, handleSlashInput],
   );
@@ -2003,7 +2017,7 @@ export function EnodiosChatViewComponent({
         if (el) {
           el.scrollIntoView({ behavior: "smooth", block: "center" });
           el.classList.add("enodios-search-highlight");
-          setTimeout(() => {
+          window.setTimeout(() => {
             el.classList.remove("enodios-search-highlight");
           }, 2000);
         }
@@ -2057,7 +2071,7 @@ export function EnodiosChatViewComponent({
           setIsSessionSettingsOpen(false);
           setIsAuditLogOpen(false);
           if (!isSearchOpen) {
-            setTimeout(() => searchInputRef.current?.focus(), 0);
+            window.setTimeout(() => searchInputRef.current?.focus(), 0);
           }
         }}
         onToggleSessionSettings={() => {
@@ -2292,7 +2306,7 @@ export function EnodiosChatViewComponent({
         onInputKeyDown={handleInputKeyDown}
         onRemoveCommand={() => {
           setActiveCommand(null);
-          setTimeout(() => textareaRef.current?.focus(), 0);
+          window.setTimeout(() => textareaRef.current?.focus(), 0);
         }}
         onRemoveContextItem={removeContextItem}
         onSelectAutocomplete={insertAutocomplete}
@@ -2301,7 +2315,7 @@ export function EnodiosChatViewComponent({
           setInput("");
           setIsSlashOpen(false);
           setSlashSuggestions([]);
-          setTimeout(() => textareaRef.current?.focus(), 0);
+          window.setTimeout(() => textareaRef.current?.focus(), 0);
         }}
         onSend={() => void handleSend()}
         onStop={() => {
@@ -2470,8 +2484,8 @@ const ChatInput = memo(
     useEffect(() => {
       const textarea = textareaRef.current;
       if (textarea) {
-        textarea.style.height = "auto";
-        textarea.style.height = `${textarea.scrollHeight}px`;
+        textarea.setCssStyles({ height: "auto" });
+        textarea.setCssStyles({ height: `${textarea.scrollHeight}px` });
       }
     }, [input, textareaRef]);
 
@@ -3598,14 +3612,16 @@ const OnboardingPanel = memo(
                       onLoadTemplate(tpl.prompt);
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "var(--text-accent)";
-                      e.currentTarget.style.backgroundColor =
-                        "var(--background-modifier-hover)";
+                      e.currentTarget.setCssStyles({
+                        borderColor: "var(--text-accent)",
+                        backgroundColor: "var(--background-modifier-hover)",
+                      });
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border-color)";
-                      e.currentTarget.style.backgroundColor =
-                        "var(--background-secondary)";
+                      e.currentTarget.setCssStyles({
+                        borderColor: "var(--border-color)",
+                        backgroundColor: "var(--background-secondary)",
+                      });
                     }}
                     style={{
                       display: "flex",

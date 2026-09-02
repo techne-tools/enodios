@@ -117,6 +117,32 @@ export const MarkdownRenderer = {
   },
 };
 
+/** Minimal `requestUrl` stub matching the real obsidian.d.ts signature. */
+export function requestUrl(
+  _params: {
+    url: string;
+    method?: string;
+    contentType?: string;
+    body?: string | ArrayBuffer;
+    headers?: Record<string, string>;
+    throw?: boolean;
+  },
+): Promise<{
+  status: number;
+  headers: Record<string, string>;
+  arrayBuffer: ArrayBuffer;
+  json: unknown;
+  text: string;
+}> {
+  return Promise.resolve({
+    status: 200,
+    headers: {},
+    arrayBuffer: new ArrayBuffer(0),
+    json: {},
+    text: "",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Vault / files
 // ---------------------------------------------------------------------------

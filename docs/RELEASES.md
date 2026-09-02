@@ -2,6 +2,17 @@
 
 This document explains how to create and manage releases for the Enodios plugin (formerly "Hermes Agent for Obsidian"; repo `prismatic7/obsidian-hermes` → `prismatic7/enodios` after the 0.7.0 rebrand → **`techne-tools/enodios`** for the 1.0.0 public release).
 
+## v1.1.0 — 02 September 2026
+
+### Review-Bot Compliance & Cleanup
+
+- **Review-bot lint errors resolved** — `no-console` disables removed, native `window.confirm` replaced with an Obsidian `Confirm` modal, static style assignments converted to `setCssStyles()`, directed comments described, and all global timers `window.*`-prefixed.
+- **`requestUrl` migration** — Plain JSON API calls (inline completions, available tools, Hermes embeddings, Ollama embeddings) now use Obsidian's `requestUrl`. The SSE chat stream intentionally remains on `fetch` (no streaming support in `requestUrl`).
+- **Command IDs & names simplified** — `enodios-` prefixes stripped from all command IDs; redundant names removed. Default `Mod+H` / `Mod+Shift+H` hotkeys removed.
+- **`Vault.trash()` → `FileManager.trashFile()`** — respects the user's trash preference.
+- **Flaky test fixed** — `SemanticSearchIndex` no longer asserts concurrency-determined embed order.
+- **Clean-environment build fixed** — review-bot build verification now succeeds: `pnpm-workspace.yaml` declares the dependency-build allowlist in both `onlyBuiltDependencies` (pnpm ≤10) and `allowBuilds` (pnpm ≥11) formats, so esbuild's `postinstall` runs even on the review bot's older pnpm. Verified with a fresh `pnpm@10` install + build.
+
 ## v0.9.3 — 25 August 2026
 
 ### Bug Fixes

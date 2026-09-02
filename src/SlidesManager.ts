@@ -159,7 +159,7 @@ export class SlidesManager {
 
     // Small delay to let the view render before triggering presentation mode
     await new Promise<void>((resolve) => {
-      setTimeout(resolve, 150);
+      window.setTimeout(resolve, 150);
     });
 
     // Try triggering Obsidian's built-in Slides command

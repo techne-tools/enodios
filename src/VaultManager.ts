@@ -96,7 +96,7 @@ export class VaultManager {
     if (!(file instanceof TFile)) return false;
 
     try {
-      await this.vault.trash(file, true);
+      await this.plugin.app.fileManager.trashFile(file);
       return true;
     } catch {
       return false;
@@ -113,7 +113,7 @@ export class VaultManager {
     if (!(file instanceof TFile)) return false;
 
     try {
-      await this.vault.trash(file, true);
+      await this.plugin.app.fileManager.trashFile(file);
       return true;
     } catch {
       return false;
@@ -474,7 +474,7 @@ export class VaultManager {
         : 'system';
 
       // Extract message id if present
-      const idMatch = /^id:\s*([a-f0-9\-]+)\n\n/m.exec(trimmed);
+      const idMatch = /^id:\s*([a-f0-9-]+)\n\n/m.exec(trimmed);
       const messageId = idMatch?.[1] ?? generateMessageId();
 
       const contentText = trimmed.slice(

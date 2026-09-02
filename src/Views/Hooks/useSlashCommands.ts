@@ -56,7 +56,7 @@ export function useSlashCommands(
             setInput(`/${selected.name} `);
             setIsSlashOpen(false);
             setSlashSuggestions([]);
-            setTimeout(() => textareaRef.current?.focus(), 0);
+            window.setTimeout(() => textareaRef.current?.focus(), 0);
           }
           return true;
         }

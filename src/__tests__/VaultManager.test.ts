@@ -49,6 +49,7 @@ function createMockPlugin(overrides?: Partial<Plugin>): Plugin {
       },
       fileManager: {
         renameFile: vi.fn(),
+        trashFile: vi.fn().mockResolvedValue(undefined),
       },
     },
     settings: {
@@ -317,12 +318,12 @@ How are you?
       plugin.app.vault.getAbstractFileByPath = vi
         .fn()
         .mockReturnValue(mockFile);
-      plugin.app.vault.trash = vi.fn().mockResolvedValue(undefined);
+      plugin.app.fileManager.trashFile = vi.fn().mockResolvedValue(undefined);
 
       const result = await vaultManager.deleteConversation("hermes/test.md");
 
       expect(result).toBe(true);
-      expect(plugin.app.vault.trash).toHaveBeenCalledWith(mockFile, true);
+      expect(plugin.app.fileManager.trashFile).toHaveBeenCalledWith(mockFile);
     });
 
     it("should return false for non-existent file", async () => {

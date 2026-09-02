@@ -1,6 +1,7 @@
 import {
   FileSystemAdapter,
   Notice,
+  requestUrl,
   TFile
 } from 'obsidian';
 
@@ -68,7 +69,7 @@ export class HermesApiClient implements ChatClient {
   private readonly plugin: Plugin;
   // Auto-reconnection state
   private reconnectAttempts = 0;
-  private reconnectTimeout: null | ReturnType<typeof setTimeout> = null;
+  private reconnectTimeout: number | null = null;
   private readonly secrets: SecretsManager;
   // Rate limiting: prevent accidental or malicious prompt flooding
   private lastPromptTime = 0;
@@ -165,11 +166,9 @@ export class HermesApiClient implements ChatClient {
     // SECURITY: Warn if the API URL is insecure (plain HTTP to a remote host).
     this.validateApiUrl();
 
-    // Create a local abort controller for this request
-    const abortController = new AbortController();
-
     try {
-      const response = await fetch(url, {
+      const response = await requestUrl({
+        url,
         body: JSON.stringify({
           messages: [
             { content: systemPrompt, role: 'system' },
@@ -184,12 +183,15 @@ export class HermesApiClient implements ChatClient {
           'Content-Type': 'application/json'
         },
         method: 'POST',
-        signal: abortController.signal
+        throw: false
       });
 
-      if (!response.ok) return null;
+      // The API returns 400+ for provider errors (e.g. unknown model);
+      // treat any non-OK status as "no completions" rather than crashing.
+      if (response.status >= 400) return null;
+      if (typeof response.json !== 'object' || response.json === null) return null;
 
-      const data = (await response.json()) as {
+      const data = response.json as {
         choices?: { message?: { content?: string } }[];
       };
 
@@ -508,6 +510,11 @@ export class HermesApiClient implements ChatClient {
     ]);
 
     try {
+      // NOTE: this call intentionally uses `fetch`, not `requestUrl`.
+      // Obsidian's `requestUrl` cannot stream (no response body reader), and
+      // the SSE chat path depends on incremental delivery from
+      // `response.body.getReader()`. It also carries the abort/timeout signals
+      // below, which requestUrl does not support.
       const response = await fetch(url, {
         body: JSON.stringify({
           messages,
@@ -727,7 +734,7 @@ export class HermesApiClient implements ChatClient {
       if (change.action === 'create') {
         // The file was created by the agent; delete it.
         if (existing instanceof TFile) {
-          await this.plugin.app.vault.trash(existing, true);
+          await this.plugin.app.fileManager.trashFile(existing);
         }
       } else if (change.action === 'delete') {
         // The file was deleted by the agent; recreate it with snapshot content.
@@ -761,7 +768,7 @@ export class HermesApiClient implements ChatClient {
    */
   private cancelReconnect(): void {
     if (this.reconnectTimeout !== null) {
-      clearTimeout(this.reconnectTimeout);
+      window.clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
     this.isReconnecting = false;
@@ -789,18 +796,21 @@ export class HermesApiClient implements ChatClient {
     const url = `${this.getBaseUrl()}/v1/tools`;
 
     try {
-      const response = await fetch(url, {
+      const response = await requestUrl({
+        url,
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
-        }
+        },
+        method: 'GET',
+        throw: false
       });
 
-      if (!response.ok) {
+      if (response.status >= 400) {
         return;
       }
 
-      const data = (await response.json()) as {
+      const data = response.json as {
         tools?: { description?: string; name: string }[];
       };
 
@@ -896,7 +906,7 @@ export class HermesApiClient implements ChatClient {
       `attempt ${String(this.reconnectAttempts)}/${String(this.MAX_RECONNECT_ATTEMPTS)}`
     );
 
-    this.reconnectTimeout = setTimeout(() => {
+    this.reconnectTimeout = window.setTimeout(() => {
       this.reconnectTimeout = null;
       this.connect()
         .then(() => {

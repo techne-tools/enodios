@@ -72,12 +72,13 @@ export class PDFAnnotationManager {
 
   /**
    * Resolve the built-in PDF.js library exposed by Obsidian.
+   *
+   * The plugin is desktop-only (`isDesktopOnly: true`), so a DOM `window` is
+   * guaranteed to exist at runtime. The `typeof window` guard is therefore
+   * unnecessary here — Obsidian always exposes `pdfjsLib` on the window.
    */
   private getPdfJs(): PdfJsLib {
-    const globalObj = (typeof window !== 'undefined'
-      ? window
-      : globalThis) as unknown as PdfJsGlobal;
-    const pdfjs = globalObj.pdfjsLib;
+    const pdfjs = (window as unknown as PdfJsGlobal).pdfjsLib;
     if (!pdfjs) {
       throw new Error(
         'Obsidian PDF.js library is not available in this environment.'

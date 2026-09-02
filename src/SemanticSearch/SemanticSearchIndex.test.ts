@@ -192,8 +192,11 @@ describe('SemanticSearchIndex', () => {
 
       expect(vaultIndex.size()).toBe(2);
       expect(embeddingClient.calls.length).toBe(2);
-      expect(embeddingClient.calls[0]?.[0]).toContain('notes/a.md');
-      expect(embeddingClient.calls[1]?.[0]).toContain('notes/b.md');
+      // indexVault reads with bounded concurrency (default limit 8), so the
+      // per-file embed order is not deterministic — assert coverage, not order.
+      const embedded = embeddingClient.calls.flat().join(' ');
+      expect(embedded).toContain('notes/a.md');
+      expect(embedded).toContain('notes/b.md');
     });
 
     it('does not re-embed notes whose content hash is unchanged', async () => {

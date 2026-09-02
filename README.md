@@ -15,6 +15,17 @@ Chat with the Hermes autonomous AI agent inside Obsidian. Enodios connects your 
 
 The agent can create and modify files, but every change appears in a diff view for you to approve or reject — individually or in bulk. Terminal access is off by default, and the agent's actions are logged to `enodios/audit-log.md` while Debug Mode is enabled.
 
+## Security & permissions
+
+Enodios is a **local agent bridge** — it runs a subprocess and reads data from outside the vault. Please read this before installing:
+
+- **Shell execution (off by default)**: In ACP mode, Enodios spawns your local Hermes binary. Terminal access is disabled unless you enable it, and the plugin never enables it on your behalf.
+- **Filesystem access**: Enodios reads `~/.hermes/` to discover your Hermes profiles and locate the Hermes binary. It does not otherwise read or write files outside the vault — the *agent it spawns* decides what to access, and its file changes appear in the diff view for approval.
+- **Vault enumeration**: Enodios indexes and enumerates your vault (`getMarkdownFiles`, `getFiles`) to power semantic search, tag management, templates, and slash commands. Your notes do not leave your machine unless you connect via API mode to a remote Hermes agent.
+- **Privacy**: The plugin sends no telemetry and makes no network requests of its own. In API mode, requests go only to the Hermes agent URL you configure.
+
+All file changes are gated behind the review-and-approve diff flow described above.
+
 ## Connections
 
 - **ACP**: runs a local Hermes subprocess (requires the Hermes binary).
@@ -34,7 +45,7 @@ The plugin isn't in the official Community Plugins list yet. To install the beta
 
 1. Open **Settings > Enodios**.
 2. Choose a connection mode (ACP for local, API for remote) and click **Test Connection**.
-3. Open the chat from the ribbon icon, or run the "Open Enodios Chat" command.
+3. Open the chat from the ribbon icon, or run the "Open Chat" command.
 
 ## License
 

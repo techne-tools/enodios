@@ -173,8 +173,6 @@ function buildSanitizedEnv(): Record<string, string> {
     'LC_CTYPE',
     'TERM',
     'SHELL',
-    'USER',
-    'LOGNAME',
     'TMPDIR',
     'TZ',
     'PWD',
@@ -298,7 +296,7 @@ export class AcpClient implements ChatClient {
   // Rate limiting: prevent accidental or malicious prompt flooding
   private lastPromptTime = 0;
   private readonly PROMPT_RATE_LIMIT_MS = 1000;
-  private disconnectKillTimeout: null | ReturnType<typeof setTimeout> = null;
+  private disconnectKillTimeout: number | null = null;
   private errorCallbacks: ((error: string) => void)[] = [];
   private isReconnecting = false;
   private isIntentionalDisconnect = false;
@@ -312,8 +310,8 @@ export class AcpClient implements ChatClient {
   private readonly plugin: Plugin;
   // Auto-reconnection state
   private reconnectAttempts = 0;
-  private reconnectTimeout: null | ReturnType<typeof setTimeout> = null;
-  private startupTimeout: null | ReturnType<typeof setTimeout> = null;
+  private reconnectTimeout: number | null = null;
+  private startupTimeout: number | null = null;
   private processExited = false;
   private stderrHandler: ((chunk: Buffer) => void) | null = null;
   private lastExitDiagnostic = '';
@@ -394,7 +392,7 @@ export class AcpClient implements ChatClient {
    */
   public cancelReconnect(): void {
     if (this.reconnectTimeout !== null) {
-      clearTimeout(this.reconnectTimeout);
+      window.clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
     this.isReconnecting = false;
@@ -477,14 +475,14 @@ export class AcpClient implements ChatClient {
     this.clientConnection = null;
 
     if (this.disconnectKillTimeout) {
-      clearTimeout(this.disconnectKillTimeout);
+      window.clearTimeout(this.disconnectKillTimeout);
       this.disconnectKillTimeout = null;
     }
 
     if (this.childProcess && !this.childProcess.killed) {
       this.childProcess.kill('SIGTERM');
       // Force kill after 2 seconds if still running
-      this.disconnectKillTimeout = setTimeout(() => {
+      this.disconnectKillTimeout = window.setTimeout(() => {
         if (this.childProcess && !this.childProcess.killed) {
           this.childProcess.kill('SIGKILL');
         }
@@ -1029,7 +1027,7 @@ export class AcpClient implements ChatClient {
           );
 
           // Self-cleanup after 60 seconds to prevent memory leaks if agent forgets to release
-          setTimeout(() => {
+          window.setTimeout(() => {
             this.activeTerminals.delete(terminalId);
           }, 60000);
         });
@@ -1267,7 +1265,7 @@ export class AcpClient implements ChatClient {
     this.isIntentionalDisconnect = false;
     // Clear any stale startup timeout from a previous attempt
     if (this.startupTimeout) {
-      clearTimeout(this.startupTimeout);
+      window.clearTimeout(this.startupTimeout);
       this.startupTimeout = null;
     }
 
@@ -1277,10 +1275,10 @@ export class AcpClient implements ChatClient {
     this.lastExitDiagnostic = '';
 
     // Heartbeat timer to re-emit progress when stderr is quiet
-    let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+    let heartbeatTimer: number | null = null;
     const stopHeartbeat = (): void => {
       if (heartbeatTimer) {
-        clearTimeout(heartbeatTimer);
+        window.clearTimeout(heartbeatTimer);
         heartbeatTimer = null;
       }
     };
@@ -1321,7 +1319,7 @@ export class AcpClient implements ChatClient {
       >();
       const recentStderr: string[] = [];
       const MAX_RECENT_STDERR = 20;
-      let mcpStatusTimer: ReturnType<typeof setTimeout> | null = null;
+      let mcpStatusTimer: number | null = null;
 
       // Periodic heartbeat: if no stderr output arrives for 5s, re-emit the
       // current progress so the UI doesn't look stuck.
@@ -1335,16 +1333,16 @@ export class AcpClient implements ChatClient {
               state: 'loading'
             });
           }
-          heartbeatTimer = setTimeout(beat, 5000);
+          heartbeatTimer = window.setTimeout(beat, 5000);
         };
-        heartbeatTimer = setTimeout(beat, 5000);
+        heartbeatTimer = window.setTimeout(beat, 5000);
       };
       startHeartbeat();
 
       // Debounced status emitter: coalesces rapid stderr updates into one UI refresh
       const emitMcpProgress = (): void => {
-        if (mcpStatusTimer) clearTimeout(mcpStatusTimer);
-        mcpStatusTimer = setTimeout(() => {
+        if (mcpStatusTimer) window.clearTimeout(mcpStatusTimer);
+        mcpStatusTimer = window.setTimeout(() => {
           let connected = 0;
           let failed = 0;
           let connecting = 0;
@@ -1629,7 +1627,7 @@ export class AcpClient implements ChatClient {
         // Exponential backoff: 1s, 2s, 4s, 8s, ... up to 10s max
         const delay = Math.min(1000 * 2 ** (attempt - 1), 10000);
         await new Promise<void>((resolve) => {
-          setTimeout(resolve, delay);
+          window.setTimeout(resolve, delay);
         });
       }
     }
@@ -1913,7 +1911,7 @@ export class AcpClient implements ChatClient {
       `attempt ${String(this.reconnectAttempts)}/${String(this.MAX_RECONNECT_ATTEMPTS)}`
     );
 
-    this.reconnectTimeout = setTimeout(() => {
+    this.reconnectTimeout = window.setTimeout(() => {
       this.reconnectTimeout = null;
       this.connect()
         .then(() => {
@@ -1947,7 +1945,7 @@ function sanitizeShellCommand(command: string): string {
     );
   }
   // Extract the base command (first token before any whitespace)
-  const baseMatch = /^([a-zA-Z0-9_\-\.]+)/.exec(trimmed);
+  const baseMatch = /^([a-zA-Z0-9_.-]+)/.exec(trimmed);
   const base = baseMatch?.[1] ?? '';
 
   if (!ALLOWED_SHELL_COMMANDS.has(base.toLowerCase())) {
@@ -2017,8 +2015,8 @@ function sanitizeShellArguments(command: string, args: string[]): void {
  */
 function stripAnsi(text: string): string {
   return text
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences (colors, cursor, etc.)
-    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
-    .replace(/\x1b[()[\]{}#~%@\^=\/>!]/g, '') // Single-char escape sequences
-    .replace(/\x1b\x1b/g, ''); // Double escapes
+    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences (colors, cursor, etc.)
+    .replace(/\u001b\][0-9;]*[^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '') // OSC sequences
+    .replace(/\u001b[()[\]{}#~%@^=/>!]/g, '') // Single-char escape sequences
+    .replace(/\u001b\u001b/g, ''); // Double escapes
 }
