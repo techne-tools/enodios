@@ -114,6 +114,26 @@ If `gh api .../runs` is empty for the tag, the trigger was dropped. Recovery opt
 - **Re-push the tag**: `git push origin :refs/tags/0.1.0 && git push origin 0.1.0`.
 - **Manually create the release** in the GitHub UI. The release will exist but it will not have the build provenance attestation, which costs scorecard points until the next release.
 
+### If a tag-push workflow run fails after the tag is out
+
+The tag exists remotely but the release was not created. Two recovery shapes:
+
+- **Tag still points at the same commit that failed.** Fix the code (new commit), then **move** the tag to the fixed commit and re-push: `git tag -d 1.1.0`, `git push upstream :refs/tags/1.1.0`, `git tag -m "release: 1.1.0" 1.1.0`, `git push upstream 1.1.0`. No release was published at the old tag (the job bailed before `gh release create`), so force-move semantics are safe. Push the fixed commit to the default branch first so the new run starts from `head_sha` of the fixed commit.
+- **Release was already published.** Never move that tag — cut a new version instead (`1.1.1`) and release that. The review bot's "Build verified" and release rows are historical artifacts of the old tag.
+
+The release workflow's step list is visible without admin:
+`gh api repos/:owner/:repo/actions/runs/<id>/jobs --jq '.jobs[] | {name, conclusion, steps: [.steps[] | {name, conclusion}]}'` — this shows the failing step by name (Lint / Test / Build / ...). It does **not** expose the logs (403 without admin scope), so reproduce the failing step locally with CI's exact conditions.
+
+### CI "Test" step fails when the local suite passed
+
+Known environmental divergence for this repo, in addition to pnpm version drift:
+
+- **Hermes sessions force `NODE_ENV=production`** (vitest behaves differently under production; e.g. it skipped failures this repo's suite does not expect). Reproduce CI exactly with `env -u NODE_ENV pnpm run test` — never trust a Hermes-terminal run that kept `NODE_ENV=production`.
+- **jsdom never runs Obsidian's `HTMLElement.prototype` patches.** The `no-static-styles` scorecard rule pushes `.style` assignments toward `element.setCssStyles(...)`, which is valid in the real app (Obsidian patches the prototype at runtime; obsidian-typings declares it `@official`) but breaks in jsdom with `setCssStyles is not a function`. The mirror lives in `src/__tests__/setup.ts`: it patches `setCssStyles`/`setCssProps` onto `HTMLElement.prototype` when running in a jsdom environment. When the suite fails with that error, extend that shim for any new Obsidian prototype helper the source picks up — do not revert the source to `.style`.
+- "14 pre-existing UI/hook test failures" was a mistaken diagnosis from early sessions — with the right env (`env -u NODE_ENV`) and the prototype shim, the full suite is 268/268.
+
+Full local gate before pushing a release: `env -u NODE_ENV pnpm run test && npx eslint src/ && pnpm exec tsc --build --force && pnpm run build`.
+
 ### Recovery trigger
 
 It is worth adding a manual trigger alongside the tag-push trigger so future "the workflow didn't fire" situations have a one-click fix:
