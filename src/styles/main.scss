@@ -1832,7 +1832,10 @@
 .enodios-pending-permission {
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius);
-  overflow: hidden;
+  /* NOTE: no overflow: hidden here — the permission options row uses
+     position: sticky within the scrolling panel, so the card must not
+     establish its own clip. Corner clipping is handled by the header's
+     own border-radius. */
   background-color: var(--background-primary);
   flex-shrink: 0;
 
@@ -1843,6 +1846,8 @@
     gap: 6px;
     border-bottom: 1px solid var(--background-modifier-border);
     background-color: var(--background-secondary-alt);
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
   }
 
   &-tool {
@@ -1940,6 +1945,12 @@
     padding: 8px 12px;
     flex-wrap: wrap;
     border-top: 1px solid var(--background-modifier-border);
+    background-color: var(--background-primary);
+    /* Stick the approve/deny choices to the panel's visible bottom edge
+       while the card's details (long patches, locations) scroll past. */
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
   }
 }
 

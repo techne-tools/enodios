@@ -1743,6 +1743,18 @@ export function EnodiosChatViewComponent({
     };
   }, [messages]);
 
+  // When an approval panel (permissions or file changes) mounts/unmounts below
+  // the message list, the scroll container's viewport height changes. Explicitly
+  // re-clamp to the bottom so the newest messages stay visible — the effect
+  // above only re-runs on message changes, and the ResizeObserver can miss this
+  // sibling-driven resize.
+  useEffect(() => {
+    const container = chatContainerRef.current;
+    if (container && isAtBottomRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [fileChanges, pendingPermissions]);
+
   // Auto-add context when active file changes — use Obsidian event instead of useEffect polling
   useEffect(() => {
     if (!settings.contextEntireNote) {
