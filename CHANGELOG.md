@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [1.1.1] - 2026-09-06
+
+### Bug Fixes
+
+- **"Approve All" no longer reports coalesced writes as denied** — When the agent made rapid sequential edits to the same file, `FileChangeManager.registerChange()` coalesced the pending changes but immediately rejected the *earlier* write's promise with "Superceded by new change." The agent saw this as a denial even after the user approved the final content (e.g. via "Approve All"), producing hallucinated "permission denied" narratives. Superseded changes now chain their `resolve`/`reject` callbacks onto the coalesced change instead, so the agent sees a single, correct outcome.
+- **Backgrounded tool indicator text hardened against clipping** — `.enodios-chat-content` now reserves scrollbar gutter space (`scrollbar-gutter: stable`) so the scrollbar can't render over message text, and the backgrounded tool status line now forces `overflow-wrap: anywhere` so long tool names/paths wrap instead of overflowing.
+
 ## [1.1.0] - 2026-09-02
 
 ### Review-Bot Compliance & API Cleanup
