@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FileChangeManager } from "../FileChangeManager.ts";
 import type { Plugin } from "../Plugin.ts";
 import { makeTFile } from "./mocks/obsidianFiles.ts";
@@ -104,6 +104,52 @@ describe("FileChangeManager", () => {
       const change = await manager.registerChange("todelete.md", null);
       expect(change.action).toBe("delete");
     });
+
+    it("should chain superseded change callbacks instead of rejecting them", async () => {
+      // When the agent makes multiple sequential edits to the same file, the
+      // later change coalesces over the earlier one. The earlier change's
+      // promise must NOT be rejected prematurely (which would surface a
+      // "denied" to the agent even when the user later approves). Instead its
+      // resolve/reject callbacks are chained onto the coalesced change.
+      const firstResolve = vi.fn();
+      const firstReject = vi.fn();
+      const secondResolve = vi.fn();
+      const secondReject = vi.fn();
+
+      const file = makeTFile("coalesce.md");
+      plugin.app.vault.getAbstractFileByPath = vi.fn().mockReturnValue(file);
+      plugin.app.vault.read = vi.fn().mockResolvedValue("original");
+
+      await manager.registerChange(
+        "coalesce.md",
+        "first edit",
+        firstResolve,
+        firstReject,
+      );
+      const coalesced = await manager.registerChange(
+        "coalesce.md",
+        "second edit",
+        secondResolve,
+        secondReject,
+      );
+
+      // The first change's reject must NOT have been called on coalescing.
+      expect(firstReject).not.toHaveBeenCalled();
+
+      // Only one pending change remains for the path.
+      const pending = manager.getPendingChanges();
+      expect(pending).toHaveLength(1);
+      expect(pending[0]?.id).toBe(coalesced.id);
+      expect(pending[0]?.newContent).toBe("second edit");
+
+      // Approving the coalesced change resolves BOTH the first and second
+      // promises, so the agent sees a single approved outcome.
+      await manager.approveChange(coalesced.id);
+      expect(firstResolve).toHaveBeenCalledTimes(1);
+      expect(secondResolve).toHaveBeenCalledTimes(1);
+      expect(firstReject).not.toHaveBeenCalled();
+      expect(secondReject).not.toHaveBeenCalled();
+    });
   });
 
   describe("approveChange", () => {
@@ -159,7 +205,9 @@ describe("FileChangeManager", () => {
       const change = await manager.registerChange("todelete.md", null);
       await manager.approveChange(change.id);
 
-      expect(plugin.app.fileManager.trashFile).toHaveBeenCalledWith(existingFile);
+      expect(plugin.app.fileManager.trashFile).toHaveBeenCalledWith(
+        existingFile,
+      );
     });
   });
 
