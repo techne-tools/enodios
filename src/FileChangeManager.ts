@@ -349,12 +349,34 @@ export class FileChangeManager {
     };
 
     if (existingPendingIndex !== -1) {
-      // Coalesce / overwrite the existing pending change to prevent rapid duplicates
-      // Reject the previous pending change if it has callbacks
+      // Coalesce / overwrite the existing pending change to prevent rapid duplicates.
+      //
+      // IMPORTANT: Do NOT reject the superseded change's promise here. Rejecting it
+      // surfaces a "denied" to the agent even when the user later approves the final
+      // content (e.g. "Approve All"), which makes the agent believe its earlier writes
+      // were rejected. Instead, chain the superseded change's resolve/reject callbacks
+      // onto the new change so the agent sees a single outcome: approved if the user
+      // approves the final state, rejected only if they actually reject it.
       const oldChange = this.changes[existingPendingIndex];
-      if (oldChange?.reject) {
-        oldChange.reject(new Error('Superceded by new change'));
-      }
+      const oldResolve = oldChange?.resolve;
+      const oldReject = oldChange?.reject;
+
+      const combinedResolve = oldResolve || resolveCallback
+        ? (): void => {
+          if (oldResolve) oldResolve();
+          if (resolveCallback) resolveCallback();
+        }
+        : undefined;
+      const combinedReject = oldReject || rejectCallback
+        ? (err: Error): void => {
+          if (oldReject) oldReject(err);
+          if (rejectCallback) rejectCallback(err);
+        }
+        : undefined;
+
+      change.resolve = combinedResolve;
+      change.reject = combinedReject;
+
       new Notice(
         `Pending change to ${path} was superseded by an update from the agent.`
       );
