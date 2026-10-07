@@ -17,16 +17,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # pnpm must exist before setup-node runs: `cache: pnpm` makes setup-node
+      # shell out to `pnpm store path`, and it fails with "Unable to locate
+      # executable file: pnpm" when pnpm is not yet on PATH. The other three
+      # workflows already order these correctly; this one was reversed.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: package.json
           cache: pnpm
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 11
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
