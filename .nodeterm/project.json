@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "rev": 3,
-  "savedAt": "2026-10-23T20:35:44.269Z",
+  "rev": 5,
+  "savedAt": "2026-10-23T20:38:35.466Z",
   "id": "project-b9fjea",
   "name": "enodios",
   "color": "#bf5af2",
@@ -15,8 +15,8 @@
       "id": "term-mvlfiy1g-43c64be4",
       "kind": "terminal",
       "position": {
-        "x": 40,
-        "y": 40
+        "x": 96,
+        "y": 96
       },
       "size": {
         "width": 624,
@@ -30,6 +30,40 @@
       "collapsed": false,
       "cwd": ".",
       "agentId": "antigravity"
+    },
+    {
+      "id": "term-mvlfmwug-3df040db",
+      "kind": "terminal",
+      "position": {
+        "x": 96,
+        "y": 640
+      },
+      "size": {
+        "width": 624,
+        "height": 432
+      },
+      "title": "Terminal 2",
+      "color": "#32d74b",
+      "group": null,
+      "tags": [],
+      "cwd": "."
+    },
+    {
+      "id": "group-0333d772-4824c888",
+      "kind": "group",
+      "position": {
+        "x": 48,
+        "y": 48
+      },
+      "size": {
+        "width": 760,
+        "height": 1030
+      },
+      "title": "enodios",
+      "titleAuto": true,
+      "color": "#6ac4dc",
+      "group": null,
+      "collapsed": false
     }
   ],
   "bridges": [],
