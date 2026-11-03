@@ -1460,9 +1460,31 @@ export function EnodiosChatViewComponent({
     const activeFile = resolveActiveFile();
     let selectedText = "";
 
-    const allViews = plugin.app.workspace.getLeavesOfType("markdown");
-    for (const leaf of allViews) {
-      if (leaf.view instanceof MarkdownView) {
+    // Prefer the focused editor when it is still a markdown view. Clicking "@"
+    // usually moves focus to the chat view first, so this is best effort only.
+    const focusedView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+    if (focusedView) {
+      selectedText = focusedView.editor.getSelection();
+    }
+
+    // Fallback: only scan markdown leaves that are actually visible.
+    // getLeavesOfType() returns every markdown leaf, including tabs hidden
+    // behind another tab, and a hidden tab keeps its CodeMirror selection
+    // state. Taking the first non-empty selection in leaf order therefore lets
+    // a stale selection from a background tab shadow the editor the user is
+    // looking at; the de-duplication below then returns early, so "@" appears
+    // to do nothing.
+    if (!selectedText) {
+      const allViews = plugin.app.workspace.getLeavesOfType("markdown");
+      for (const leaf of allViews) {
+        if (!(leaf.view instanceof MarkdownView)) {
+          continue;
+        }
+        // offsetParent is null for anything hidden with display: none, which is
+        // how Obsidian hides the inactive tab of a tab group.
+        if (leaf.view.containerEl.offsetParent === null) {
+          continue;
+        }
         const sel = leaf.view.editor.getSelection();
         if (sel) {
           selectedText = sel;
