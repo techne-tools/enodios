@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "rev": 9,
-  "savedAt": "2026-10-23T21:51:32.649Z",
+  "rev": 10,
+  "savedAt": "2026-10-23T21:52:41.578Z",
   "id": "project-b9fjea",
   "name": "enodios",
   "color": "#bf5af2",
@@ -83,6 +83,7 @@
       "color": "#888888",
       "group": null,
       "tags": [],
+      "collapsed": false,
       "cwd": ".",
       "agentId": "custom:3ef54700-aedf-466e-8dc7-d03a6318f402"
     }

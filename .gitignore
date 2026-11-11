@@ -31,3 +31,7 @@ coverage
 
 # Agent orchestrator capture logs
 .ao-capture/
+
+# Serena MCP state
+.serena/
+
