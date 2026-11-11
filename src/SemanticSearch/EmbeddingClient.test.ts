@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
 
 import * as obsidianModule from 'obsidian';
-import type { RequestUrlParam } from 'obsidian';
 
 import type { Plugin } from '../Plugin.ts';
 import type { SecretsManager } from '../SecretsManager.ts';

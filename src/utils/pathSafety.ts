@@ -83,18 +83,26 @@ export async function isPathSafe(
       `${vaultRoot}/${normalizePath(filePath)}`
     ).catch(() => null);
     if (candidate === null) {
-      // The file may not exist yet (e.g. a create). Check the parent directory.
-      const parent = filePath.split("/").slice(0, -1).join("/");
-      if (!parent) {
-        return true;
+      // The file may not exist yet (e.g. a create). Check ancestor directories
+      // until an existing directory is found on the filesystem to verify that
+      // no intermediate symlink escapes the vault root.
+      let current = normalizePath(filePath);
+      while (current.includes("/")) {
+        current = current.split("/").slice(0, -1).join("/");
+        if (!current) {
+          break;
+        }
+        const ancestorReal = await realpath(
+          `${vaultRoot}/${current}`
+        ).catch(() => null);
+        if (ancestorReal !== null) {
+          return (
+            ancestorReal === vaultRoot ||
+            ancestorReal.startsWith(`${vaultRoot}/`)
+          );
+        }
       }
-      const parentReal = await realpath(
-        `${vaultRoot}/${normalizePath(parent)}`
-      ).catch(() => null);
-      if (parentReal === null) {
-        return true;
-      }
-      return parentReal === vaultRoot || parentReal.startsWith(`${vaultRoot}/`);
+      return true;
     }
     return candidate === vaultRoot || candidate.startsWith(`${vaultRoot}/`);
   } catch {

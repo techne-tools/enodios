@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [1.2.0] - 2026-11-11
+
+### Security & Hardening
+
+- **Symlink directory traversal hardening** — `isPathSafe()` now iteratively traverses parent directories until an existing ancestor directory is located, verifying that candidate files created in nested non-existent paths cannot escape `vaultRoot` through intermediate symlinks.
+- **ACP shell argument sanitization** — `sanitizeShellArguments()` now distinguishes between flags and positional arguments, permitting safe note paths, directory targets, search queries, and message strings while strictly enforcing command flag allowlists and disallowing command chaining/substitution metacharacters. Allowed `-e` flag for `echo`.
+
+### Bug Fixes & Code Quality
+
+- **TypeScript compilation fix** — Removed unused `RequestUrlParam` import in `EmbeddingClient.test.ts` to satisfy strict `noUnusedLocals` compiler checks.
+- **Test suite additions** — Added dedicated tests for vault path safety and shell argument sanitization.
+- **CSpell configuration** — Ignored patch files and added domain-specific terms to `cspell.json`.
+
 ## [1.1.1] - 2026-09-06
 
 ### Bug Fixes

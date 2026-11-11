@@ -1,10 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { AcpClient } from "../AcpClient.ts";
+import {
+  AcpClient,
+  sanitizeShellCommand,
+  sanitizeShellArguments,
+} from "../AcpClient.ts";
 import type { Plugin } from "../Plugin.ts";
 import { PluginSettings } from "../PluginSettings.ts";
 
 // Mock obsidian
 vi.mock("obsidian", () => ({
+  normalizePath: (path: string) =>
+    path.replace(/\\/g, "/").replace(/\/+/g, "/"),
   Notice: class Notice {
     message: string;
     constructor(message: string) {
@@ -383,6 +389,75 @@ describe("AcpClient", () => {
   describe("getLastAvailableCommands", () => {
     it("should return empty array initially", () => {
       expect(acpClient.getLastAvailableCommands()).toEqual([]);
+    });
+  });
+
+  describe("shell sanitization", () => {
+    describe("sanitizeShellCommand", () => {
+      it("allows safe allowed base commands", () => {
+        expect(sanitizeShellCommand("cat")).toBe("cat");
+        expect(sanitizeShellCommand("ls")).toBe("ls");
+        expect(sanitizeShellCommand("echo")).toBe("echo");
+        expect(sanitizeShellCommand("grep")).toBe("grep");
+        expect(sanitizeShellCommand("mkdir")).toBe("mkdir");
+        expect(sanitizeShellCommand("touch")).toBe("touch");
+      });
+
+      it("rejects commands with spaces", () => {
+        expect(() => sanitizeShellCommand("cat file.txt")).toThrow(
+          "Command must be a single executable name"
+        );
+      });
+
+      it("rejects unauthorized commands", () => {
+        expect(() => sanitizeShellCommand("bash")).toThrow(
+          "Disallowed shell command: bash"
+        );
+        expect(() => sanitizeShellCommand("rm")).toThrow(
+          "Disallowed shell command: rm"
+        );
+        expect(() => sanitizeShellCommand("curl")).toThrow(
+          "Disallowed shell command: curl"
+        );
+      });
+    });
+
+    describe("sanitizeShellArguments", () => {
+      it("allows safe flags and positional paths for cat", () => {
+        expect(() =>
+          sanitizeShellArguments("cat", ["-n", "notes/today.md"])
+        ).not.toThrow();
+      });
+
+      it("rejects path traversal in positional arguments", () => {
+        expect(() =>
+          sanitizeShellArguments("cat", ["../../secret.txt"])
+        ).toThrow("Path traversal denied");
+      });
+
+      it("allows echo with safe flags and text", () => {
+        expect(() =>
+          sanitizeShellArguments("echo", ["-n", "Hello World"])
+        ).not.toThrow();
+        expect(() =>
+          sanitizeShellArguments("echo", ["-e", "Line1\\nLine2"])
+        ).not.toThrow();
+      });
+
+      it("rejects disallowed flags", () => {
+        expect(() =>
+          sanitizeShellArguments("cat", ["--unsupported-flag"])
+        ).toThrow("Shell argument not allowed");
+      });
+
+      it("rejects dangerous shell injection metacharacters", () => {
+        expect(() =>
+          sanitizeShellArguments("cat", ["notes/today.md", ";", "rm", "-rf"])
+        ).toThrow("disallowed pattern: ;");
+        expect(() =>
+          sanitizeShellArguments("echo", ["$(whoami)"])
+        ).toThrow("disallowed pattern: $(");
+      });
     });
   });
 });
