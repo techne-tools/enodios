@@ -8,6 +8,7 @@
     "pnpm-workspace.yaml",
     ".agent/**",
     "coverage",
+    "**/*.patch",
     ".superpowers/**",
     ".gemini_security/**",
     ".vscode/**"
@@ -106,7 +107,14 @@
     "OPENROUTER",
     "LOGNAME",
     "PGPASSWORD",
-    "CTYPE"
+    "CTYPE",
+    "techne",
+    "organisation",
+    "worktree",
+    "overclaimed",
+    "vitest",
+    "minilm",
+    "unembeddable"
   ],
   "ignoreWords": [],
   "import": [],

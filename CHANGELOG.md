@@ -1,10 +1,23 @@
 # CHANGELOG
 
+## [1.2.0] - 2026-11-11
+
+### Security & Hardening
+
+- **Symlink directory traversal hardening** — `isPathSafe()` now iteratively traverses parent directories until an existing ancestor directory is located, verifying that candidate files created in nested non-existent paths cannot escape `vaultRoot` through intermediate symlinks.
+- **ACP shell argument sanitization** — `sanitizeShellArguments()` now distinguishes between flags and positional arguments, permitting safe note paths, directory targets, search queries, and message strings while strictly enforcing command flag allowlists and disallowing command chaining/substitution metacharacters. Allowed `-e` flag for `echo`.
+
+### Bug Fixes & Code Quality
+
+- **TypeScript compilation fix** — Removed unused `RequestUrlParam` import in `EmbeddingClient.test.ts` to satisfy strict `noUnusedLocals` compiler checks.
+- **Test suite additions** — Added dedicated tests for vault path safety and shell argument sanitization.
+- **CSpell configuration** — Ignored patch files and added domain-specific terms to `cspell.json`.
+
 ## [1.1.1] - 2026-09-06
 
 ### Bug Fixes
 
-- **"Approve All" no longer reports coalesced writes as denied** — When the agent made rapid sequential edits to the same file, `FileChangeManager.registerChange()` coalesced the pending changes but immediately rejected the *earlier* write's promise with "Superceded by new change." The agent saw this as a denial even after the user approved the final content (e.g. via "Approve All"), producing hallucinated "permission denied" narratives. Superseded changes now chain their `resolve`/`reject` callbacks onto the coalesced change instead, so the agent sees a single, correct outcome.
+- **"Approve All" no longer reports coalesced writes as denied** — When the agent made rapid sequential edits to the same file, `FileChangeManager.registerChange()` coalesced the pending changes but immediately rejected the _earlier_ write's promise with "Superceded by new change." The agent saw this as a denial even after the user approved the final content (e.g. via "Approve All"), producing hallucinated "permission denied" narratives. Superseded changes now chain their `resolve`/`reject` callbacks onto the coalesced change instead, so the agent sees a single, correct outcome.
 - **Backgrounded tool indicator text hardened against clipping** — `.enodios-chat-content` now reserves scrollbar gutter space (`scrollbar-gutter: stable`) so the scrollbar can't render over message text, and the backgrounded tool status line now forces `overflow-wrap: anywhere` so long tool names/paths wrap instead of overflowing.
 
 ## [1.1.0] - 2026-09-02

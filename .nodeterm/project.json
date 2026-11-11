@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "rev": 10,
+  "savedAt": "2026-10-23T21:52:41.578Z",
+  "id": "project-b9fjea",
+  "name": "enodios",
+  "color": "#bf5af2",
+  "viewport": {
+    "x": 32,
+    "y": 32,
+    "zoom": 1
+  },
+  "nodes": [
+    {
+      "id": "group-0333d772-4824c888",
+      "kind": "group",
+      "position": {
+        "x": 48,
+        "y": 48
+      },
+      "size": {
+        "width": 760,
+        "height": 1480
+      },
+      "title": "enodios",
+      "titleAuto": true,
+      "color": "#6ac4dc",
+      "group": null,
+      "collapsed": false
+    },
+    {
+      "id": "term-mvlfiy1g-43c64be4",
+      "kind": "terminal",
+      "position": {
+        "x": 96,
+        "y": 570
+      },
+      "size": {
+        "width": 624,
+        "height": 432
+      },
+      "title": "Antigravity",
+      "titleAuto": true,
+      "color": "#00a3a3",
+      "group": null,
+      "tags": [],
+      "collapsed": false,
+      "cwd": ".",
+      "agentId": "antigravity"
+    },
+    {
+      "id": "term-mvlfmwug-3df040db",
+      "kind": "terminal",
+      "position": {
+        "x": 96,
+        "y": 1044
+      },
+      "size": {
+        "width": 624,
+        "height": 432
+      },
+      "title": "Terminal 2",
+      "titleAuto": true,
+      "color": "#32d74b",
+      "group": null,
+      "tags": [],
+      "collapsed": false,
+      "cwd": "."
+    },
+    {
+      "id": "term-mvli8qav-9051084c",
+      "kind": "terminal",
+      "position": {
+        "x": 96,
+        "y": 96
+      },
+      "size": {
+        "width": 624,
+        "height": 432
+      },
+      "title": "Tekton",
+      "titleAuto": true,
+      "color": "#888888",
+      "group": null,
+      "tags": [],
+      "collapsed": false,
+      "cwd": ".",
+      "agentId": "custom:3ef54700-aedf-466e-8dc7-d03a6318f402"
+    }
+  ],
+  "bridges": [],
+  "ropes": []
+}

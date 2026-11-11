@@ -46,7 +46,10 @@ import type {
 } from './ChatClient.ts';
 import type { Plugin } from './Plugin.ts';
 
-import { isPathSafe } from './utils/pathSafety.ts';
+import {
+  isLexicallySafePath,
+  isPathSafe
+} from './utils/pathSafety.ts';
 import { generateMessageId } from './utils/uuid.ts';
 
 const MAX_TERMINAL_OUTPUT = 1024 * 1024; // 1MB cap on terminal output to prevent memory exhaustion
@@ -102,13 +105,8 @@ const ALLOWED_COMMAND_ARGS: Record<string, string[]> = {
   touch: ['-a', '-c', '-m', '-t', '-r']
 };
 
-// Argument patterns that enable arbitrary code execution even in "safe" commands
-const DANGEROUS_ARG_PATTERNS = [
-  '-c',
-  '--command',
-  '-e',
-  '--eval',
-  '-exec',
+// Shell injection metacharacters and substitution syntax
+const DANGEROUS_SHELL_METACHARACTERS = [
   '|',
   ';',
   '&&',
@@ -118,6 +116,14 @@ const DANGEROUS_ARG_PATTERNS = [
   '${',
   '>>',
   '<('
+];
+
+// Dangerous flag prefixes that trigger arbitrary execution or script evaluation
+const DANGEROUS_EXEC_FLAGS = [
+  '-c',
+  '--command',
+  '--eval',
+  '-exec'
 ];
 
 /**
@@ -1937,7 +1943,7 @@ export class AcpClient implements ChatClient {
  * dangerous argument patterns that could enable injection (pipes, redirects,
  * command substitution, etc.).
  */
-function sanitizeShellCommand(command: string): string {
+export function sanitizeShellCommand(command: string): string {
   const trimmed = command.trim();
   if (trimmed.includes(' ')) {
     throw new Error(
@@ -1954,39 +1960,28 @@ function sanitizeShellCommand(command: string): string {
     );
   }
 
-  // Validate arguments for dangerous patterns that enable arbitrary code execution
-  const argsString = trimmed.slice(base.length).trim();
-  if (argsString) {
-    for (const pattern of DANGEROUS_ARG_PATTERNS) {
-      if (argsString.includes(pattern)) {
-        throw new Error(
-          `Shell argument contains disallowed pattern: ${pattern}`
-        );
-      }
-    }
-  }
-
-  return trimmed;
+  return base.toLowerCase();
 }
 
 /**
  * Validate shell arguments for dangerous patterns AND enforce the per-command
  * argument allowlist.
  *
- * Each argument is checked individually against DANGEROUS_ARG_PATTERNS, then
- * against the command's allowlist. Any argument that does not start with an
- * allowed prefix is rejected. This prevents option injection attacks where a
- * "safe" command is passed a dangerous argument.
+ * Each argument is checked individually against dangerous metacharacters and
+ * option injection attacks. Flags (starting with `-`) are checked against
+ * ALLOWED_COMMAND_ARGS for the given command. Positional arguments (paths, patterns,
+ * strings) are validated against metacharacters injection and directory traversal.
  *
  * SECURITY NOTE: This is a defense-in-depth measure. With `shell: false`,
  * arguments are passed directly to the executable, but some commands have
  * configuration options that enable arbitrary code execution.
  */
-function sanitizeShellArguments(command: string, args: string[]): void {
+export function sanitizeShellArguments(command: string, args: string[]): void {
   const allowedArgs = ALLOWED_COMMAND_ARGS[command] ?? [];
 
   for (const arg of args) {
-    for (const pattern of DANGEROUS_ARG_PATTERNS) {
+    // 1. Check for shell metacharacters in all arguments
+    for (const pattern of DANGEROUS_SHELL_METACHARACTERS) {
       if (arg.includes(pattern)) {
         throw new Error(
           `Shell argument contains disallowed pattern: ${pattern}`
@@ -1994,14 +1989,57 @@ function sanitizeShellArguments(command: string, args: string[]): void {
       }
     }
 
-    // Enforce the per-command argument allowlist.
-    const isAllowed = allowedArgs.some(
-      (prefix) => arg === prefix || arg.startsWith(prefix)
-    );
-    if (!isAllowed) {
-      throw new Error(
-        `Shell argument not allowed for '${command}': ${arg}. Allowed: ${allowedArgs.join(', ') || 'none'}`
+    // 2. Reject control characters and null bytes
+    if (/[\u0000-\u001f]/.test(arg)) {
+      throw new Error('Shell argument contains disallowed control characters');
+    }
+
+    // 3. Flags vs Positional Arguments
+    if (arg.startsWith('-')) {
+      // Check dangerous execution flags
+      const isDangerousFlag = DANGEROUS_EXEC_FLAGS.some(
+        (flag) => arg === flag || arg.startsWith(`${flag}=`)
       );
+      if (isDangerousFlag) {
+        throw new Error(
+          `Shell argument contains disallowed execution flag: ${arg}`
+        );
+      }
+
+      // Special check: -e is only permitted for echo
+      if (
+        command !== 'echo'
+        && (arg === '-e' || arg.startsWith('-e='))
+      ) {
+        throw new Error(
+          `Shell argument contains disallowed pattern: ${arg}`
+        );
+      }
+
+      // Enforce the per-command argument allowlist for flags
+      const isAllowed = allowedArgs.some(
+        (prefix) => arg === prefix || arg.startsWith(prefix)
+      );
+      if (!isAllowed) {
+        throw new Error(
+          `Shell argument not allowed for '${command}': ${arg}. Allowed: ${allowedArgs.join(', ') || 'none'}`
+        );
+      }
+    } else {
+      // Positional argument (file path, pattern, or text string)
+      if (
+        command === 'cat'
+        || command === 'ls'
+        || command === 'mkdir'
+        || command === 'touch'
+      ) {
+        // Must be a lexically safe path inside the vault
+        if (!isLexicallySafePath(arg)) {
+          throw new Error(
+            `Path traversal denied for '${command}': ${arg}`
+          );
+        }
+      }
     }
   }
 }

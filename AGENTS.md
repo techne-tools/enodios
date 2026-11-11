@@ -66,3 +66,10 @@ To optimize development, the following Antigravity plugins and Model Context Pro
 ### 2. Model Context Protocol (MCP) Servers
 * **`zotero-dev`**: Allows direct integration with local Zotero libraries to test and query bibliography/citation tools.
 * **`tavily`**: Used for automated web queries and developer documentation lookups.
+
+
+## Fleet conventions
+
+Stricter-than (never looser than) fleet-wide conventions apply everywhere in the fleet:
+
+@../fleet-conventions.md

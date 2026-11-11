@@ -1,6 +1,6 @@
 {
   "name": "enodios",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "An Obsidian plugin for Enodios, integrating the Hermes autonomous AI agent into your vault.",
   "keywords": [],
   "license": "MIT",
@@ -20,8 +20,6 @@
     "format": "obsidian-dev-utils format",
     "format:check": "obsidian-dev-utils format:check",
     "lint": "obsidian-dev-utils lint",
-
-
     "lint:md:fix": "obsidian-dev-utils lint:md:fix",
     "spellcheck": "obsidian-dev-utils spellcheck",
     "test": "vitest run",
