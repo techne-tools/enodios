@@ -67,7 +67,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.21.1",
-    "markdownlint-cli2": "^0.22.1",
+    "markdownlint-cli2": "^0.24.1",
     "prismjs": "^1.30.0"
   }
 }
