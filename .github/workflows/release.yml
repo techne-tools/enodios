@@ -56,7 +56,7 @@ jobs:
           echo "minAppVersion=$MIN_APP_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/build/main.js
