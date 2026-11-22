@@ -1,0 +1,15 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "*": ref-pin
+
+  # Accepted risk, not an oversight: the release workflows restore a package
+  # cache and then publish a runtime artifact from the same job. Only a tag push
+  # or a manual dispatch runs them, so there is no untrusted writer to poison the
+  # cache. Dropping the cache costs minutes per release.
+  cache-poisoning:
+    ignore:
+      - release.yml
+      - nightly.yml
+      - private-beta-release.yml
